@@ -23,6 +23,13 @@
       position: fixed; bottom: 20px; left: 20px; color: #e0e0e0; font-size: 14px;
       background: rgba(0, 0, 0, 0.6); padding: 12px 16px; border-radius: 8px; font-family: 'Courier New', monospace;
       border: 1px solid rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); line-height: 1.6;
+      display: none; /* Hidden until game starts */
+    }
+    #hud {
+      display: none; /* Hidden until game starts */
+    }
+    .game-active #hud, .game-active #coords {
+      display: block;
     }
   </style>
 </head>

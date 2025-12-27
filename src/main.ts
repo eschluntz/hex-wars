@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { HexUtil, DEFAULT_TERRAIN_COSTS, TEAM_COLORS, type TerrainCosts, type AxialCoord } from './core.js';
-import { GEN_PARAMS, CONFIG } from './config.js';
+import { GEN_PARAMS, CONFIG, MAP_CONFIGS, type MapConfig } from './config.js';
 import { GameMap } from './game-map.js';
 import { Viewport } from './viewport.js';
 import { Renderer } from './renderer.js';
@@ -14,6 +14,8 @@ import { Combat } from './combat.js';
 import { type Building } from './building.js';
 import { getAvailableTemplates, getTemplate } from './unit-templates.js';
 import { ResourceManager } from './resources.js';
+import { GameStats } from './stats.js';
+import { MenuRenderer, type GamePhase, type GameOverData } from './menu.js';
 
 const HOVER_TERRAIN_COSTS: TerrainCosts = {
   ...DEFAULT_TERRAIN_COSTS,
@@ -41,37 +43,122 @@ type GameState =
 
 class Game {
   private canvas: HTMLCanvasElement;
-  private map: GameMap;
-  private viewport: Viewport;
-  private renderer: Renderer;
-  private pathfinder: Pathfinder;
-  private resources: ResourceManager;
+  private ctx: CanvasRenderingContext2D;
+  private map!: GameMap;
+  private viewport!: Viewport;
+  private renderer!: Renderer;
+  private pathfinder!: Pathfinder;
+  private resources!: ResourceManager;
+  private gameStats!: GameStats;
+  private menuRenderer: MenuRenderer;
   private units: Unit[] = [];
   private state: GameState = { type: 'idle' };
   private lastPreviewHex: AxialCoord | null = null;
   private currentTeam: string = TEAMS.PLAYER;
   private turnNumber: number = 1;
   private nextUnitId: number = 1;
+  private gamePhase: GamePhase = 'main_menu';
+  private gameOverData: GameOverData | null = null;
 
   constructor() {
     this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
-    this.map = new GameMap();
+    this.ctx = this.canvas.getContext('2d')!;
+    this.menuRenderer = new MenuRenderer(this.ctx, this.canvas.width, this.canvas.height);
+
+    this.setupInputHandlers();
+    this.resize();
+    window.addEventListener('resize', () => this.resize());
+    this.loop();
+  }
+
+  private resize(): void {
+    this.canvas.width = window.innerWidth;
+    this.canvas.height = window.innerHeight;
+    this.menuRenderer.updateSize(this.canvas.width, this.canvas.height);
+  }
+
+  private currentMapType: string = 'normal';
+
+  private startNewGame(mapType: string = 'normal'): void {
+    this.currentMapType = mapType;
+    const mapConfig = MAP_CONFIGS[mapType];
+
+    this.map = new GameMap(mapConfig);
     this.viewport = new Viewport(this.canvas);
     this.pathfinder = new Pathfinder(this.map);
     this.renderer = new Renderer(this.canvas, this.map, this.viewport);
     this.resources = new ResourceManager([TEAMS.PLAYER, TEAMS.ENEMY]);
+    this.gameStats = new GameStats([TEAMS.PLAYER, TEAMS.ENEMY]);
+
+    // Reset game state
+    this.units = [];
+    this.state = { type: 'idle' };
+    this.lastPreviewHex = null;
+    this.currentTeam = TEAMS.PLAYER;
+    this.turnNumber = 1;
+    this.nextUnitId = 1;
+    this.gameOverData = null;
 
     // Give starting resources
     this.resources.addFunds(TEAMS.PLAYER, 5000);
     this.resources.addFunds(TEAMS.ENEMY, 5000);
 
+    // Setup based on map type
+    if (mapType === 'small') {
+      this.setupSmallMap();
+    } else {
+      this.spawnUnits();
+    }
+
     // Collect initial income for player (first turn)
     this.collectIncome(TEAMS.PLAYER);
 
-    this.spawnUnits();
-    this.setupInputHandlers();
     this.centerViewport();
-    this.loop();
+    this.gamePhase = 'playing';
+
+    // Show UI elements during game
+    const infoEl = document.getElementById('coords');
+    const hudEl = document.getElementById('hud');
+    if (infoEl) infoEl.style.display = 'block';
+    if (hudEl) hudEl.style.display = 'block';
+  }
+
+  private setupSmallMap(): void {
+    const cfg = MAP_CONFIGS.small!;
+    const centerR = Math.floor(cfg.height / 2);
+    // For hex offset coords, use smaller offsets that stay in bounds
+    // At row 5 (centerR), valid q range is roughly -2 to 9 for width=12
+
+    // Player side (left) - q around 1-2
+    this.map.addBuilding({ q: 1, r: centerR, type: 'city', owner: TEAMS.PLAYER });
+    this.map.addBuilding({ q: 1, r: centerR + 1, type: 'factory', owner: TEAMS.PLAYER });
+
+    // Enemy side (right) - q around 7-8
+    this.map.addBuilding({ q: 8, r: centerR, type: 'city', owner: TEAMS.ENEMY });
+    this.map.addBuilding({ q: 8, r: centerR + 1, type: 'factory', owner: TEAMS.ENEMY });
+
+    // Spawn one infantry each
+    const playerUnit = new Unit('infantry', TEAMS.PLAYER, 3, centerR, {
+      speed: 3,
+      attack: 4,
+      range: 1,
+      terrainCosts: DEFAULT_TERRAIN_COSTS,
+      color: TEAM_COLORS[TEAMS.PLAYER]!.unitColor,
+      canCapture: true
+    });
+    this.units.push(playerUnit);
+
+    const enemyUnit = new Unit('infantry', TEAMS.ENEMY, 6, centerR, {
+      speed: 3,
+      attack: 4,
+      range: 1,
+      terrainCosts: DEFAULT_TERRAIN_COSTS,
+      color: TEAM_COLORS[TEAMS.ENEMY]!.unitColor,
+      canCapture: true
+    });
+    this.units.push(enemyUnit);
+
+    console.log('Small map setup: 1 city, 1 factory, 1 infantry per team');
   }
 
   private collectIncome(team: string): void {
@@ -80,11 +167,14 @@ class Game {
     if (income.funds > 0 || income.science > 0) {
       console.log(`${team} collected: $${income.funds} funds, ${income.science} science`);
     }
+    // Record income in stats
+    this.gameStats.recordIncome(team, income.funds, income.science);
   }
 
   private spawnUnits(): void {
-    const centerQ = Math.floor(GEN_PARAMS.mapWidth / 2);
-    const centerR = Math.floor(GEN_PARAMS.mapHeight / 2);
+    const cfg = MAP_CONFIGS[this.currentMapType];
+    const centerQ = Math.floor((cfg?.width ?? GEN_PARAMS.mapWidth) / 2);
+    const centerR = Math.floor((cfg?.height ?? GEN_PARAMS.mapHeight) / 2);
 
     // Filter tiles near center that are passable
     const centerTiles = this.map.getAllTiles().filter(t => {
@@ -95,12 +185,12 @@ class Game {
 
     const unitConfigs = [
       // Player units on left side of center
-      { id: 'scout', team: TEAMS.PLAYER, speed: 6, attack: 4, range: 1, terrainCosts: DEFAULT_TERRAIN_COSTS, color: '#ffeb3b', offsetQ: -2, offsetR: 0 },
-      { id: 'tank', team: TEAMS.PLAYER, speed: 3, attack: 7, range: 1, terrainCosts: DEFAULT_TERRAIN_COSTS, color: '#4caf50', offsetQ: -2, offsetR: 1 },
-      { id: 'hover', team: TEAMS.PLAYER, speed: 4, attack: 5, range: 2, terrainCosts: HOVER_TERRAIN_COSTS, color: '#2196f3', offsetQ: -2, offsetR: -1 },
+      { id: 'scout', team: TEAMS.PLAYER, speed: 6, attack: 4, range: 1, terrainCosts: DEFAULT_TERRAIN_COSTS, color: '#ffeb3b', offsetQ: -2, offsetR: 0, canCapture: true },
+      { id: 'tank', team: TEAMS.PLAYER, speed: 3, attack: 7, range: 1, terrainCosts: DEFAULT_TERRAIN_COSTS, color: '#4caf50', offsetQ: -2, offsetR: 1, canCapture: false },
+      { id: 'hover', team: TEAMS.PLAYER, speed: 4, attack: 5, range: 2, terrainCosts: HOVER_TERRAIN_COSTS, color: '#2196f3', offsetQ: -2, offsetR: -1, canCapture: false },
       // Enemy units on right side of center
-      { id: 'enemy1', team: TEAMS.ENEMY, speed: 4, attack: 5, range: 1, terrainCosts: DEFAULT_TERRAIN_COSTS, color: '#f44336', offsetQ: 2, offsetR: 0 },
-      { id: 'enemy2', team: TEAMS.ENEMY, speed: 4, attack: 6, range: 2, terrainCosts: DEFAULT_TERRAIN_COSTS, color: '#ff5722', offsetQ: 2, offsetR: 1 },
+      { id: 'enemy1', team: TEAMS.ENEMY, speed: 4, attack: 5, range: 1, terrainCosts: DEFAULT_TERRAIN_COSTS, color: '#f44336', offsetQ: 2, offsetR: 0, canCapture: true },
+      { id: 'enemy2', team: TEAMS.ENEMY, speed: 4, attack: 6, range: 2, terrainCosts: DEFAULT_TERRAIN_COSTS, color: '#ff5722', offsetQ: 2, offsetR: 1, canCapture: false },
     ];
 
     for (const config of unitConfigs) {
@@ -109,7 +199,7 @@ class Game {
       let r = centerR + config.offsetR;
 
       const tile = this.map.getTile(q, r);
-      if (!tile || (tile.type !== 'grass' && tile.type !== 'road' && tile.type !== 'building')) {
+      if (!tile || (tile.type !== 'grass' && tile.type !== 'road')) {
         // Find nearest valid tile from center tiles
         const fallback = centerTiles.find(t => !this.units.some(u => u.q === t.q && u.r === t.r));
         if (fallback) {
@@ -123,7 +213,8 @@ class Game {
         attack: config.attack,
         range: config.range,
         terrainCosts: config.terrainCosts,
-        color: config.color
+        color: config.color,
+        canCapture: config.canCapture
       });
       this.units.push(unit);
     }
@@ -225,7 +316,30 @@ class Game {
   // --- Input handlers ---
 
   private setupInputHandlers(): void {
+    this.canvas.addEventListener('mousemove', e => {
+      this.menuRenderer.updateMouse(e.clientX, e.clientY);
+    });
+
     this.canvas.addEventListener('click', e => {
+      // Handle menu clicks
+      if (this.gamePhase === 'main_menu') {
+        const action = this.menuRenderer.getClickedAction();
+        if (action === 'new_game_small') {
+          this.startNewGame('small');
+        } else if (action === 'new_game_normal') {
+          this.startNewGame('normal');
+        }
+        return;
+      }
+      if (this.gamePhase === 'game_over') {
+        const action = this.menuRenderer.getClickedAction();
+        if (action === 'main_menu') {
+          this.gamePhase = 'main_menu';
+        }
+        return;
+      }
+
+      // Handle game clicks
       if (this.viewport.isDragging) return;
 
       const world = this.viewport.screenToWorld(e.clientX, e.clientY);
@@ -236,10 +350,29 @@ class Game {
 
     this.canvas.addEventListener('contextmenu', e => {
       e.preventDefault();
-      this.handleCancel();
+      if (this.gamePhase === 'playing') {
+        this.handleCancel();
+      }
     });
 
     window.addEventListener('keydown', e => {
+      // Menu shortcuts
+      if (this.gamePhase === 'main_menu') {
+        if (e.key === '1') {
+          this.startNewGame('small');
+        } else if (e.key === '2' || e.key === 'Enter' || e.key === ' ') {
+          this.startNewGame('normal');
+        }
+        return;
+      }
+      if (this.gamePhase === 'game_over') {
+        if (e.key === 'Enter' || e.key === ' ') {
+          this.gamePhase = 'main_menu';
+        }
+        return;
+      }
+
+      // Game shortcuts
       if (e.key === 'Escape') {
         this.handleCancel();
       } else if (e.key === 'Tab') {
@@ -256,6 +389,17 @@ class Game {
   private endTurn(): void {
     // Cancel any current action
     this.setState({ type: 'idle' });
+
+    // Record turn stats for the team that just finished
+    this.recordTurnStats(this.currentTeam);
+
+    // Check for game over before switching
+    const loser = this.checkGameOver();
+    if (loser) {
+      const winner = loser === TEAMS.PLAYER ? TEAMS.ENEMY : TEAMS.PLAYER;
+      this.triggerGameOver(winner, loser);
+      return;
+    }
 
     // Reset hasActed for current team's units (un-grey them immediately)
     for (const unit of this.units) {
@@ -276,6 +420,65 @@ class Game {
     }
 
     console.log(`Turn ${this.turnNumber}: ${this.currentTeam}'s turn`);
+  }
+
+  private recordTurnStats(team: string): void {
+    const teamUnits = this.units.filter(u => u.team === team && u.isAlive()).length;
+    const teamBuildings = this.map.getBuildingsByOwner(team).length;
+    const res = this.resources.getResources(team);
+
+    this.gameStats.endTurn(
+      this.turnNumber,
+      team,
+      teamUnits,
+      teamBuildings,
+      res.funds,
+      res.science
+    );
+  }
+
+  private checkGameOver(): string | null {
+    // A team loses if they have no cities AND no units
+    for (const team of [TEAMS.PLAYER, TEAMS.ENEMY]) {
+      const hasCities = this.map.getBuildingsByOwner(team).some(b => b.type === 'city');
+      const hasUnits = this.units.some(u => u.team === team && u.isAlive());
+
+      if (!hasCities && !hasUnits) {
+        return team; // This team lost
+      }
+    }
+    return null;
+  }
+
+  private checkAndTriggerGameOver(): void {
+    const loser = this.checkGameOver();
+    if (loser) {
+      const winner = loser === TEAMS.PLAYER ? TEAMS.ENEMY : TEAMS.PLAYER;
+      this.triggerGameOver(winner, loser);
+    }
+  }
+
+  private triggerGameOver(winner: string, loser: string): void {
+    // Record final stats for both teams
+    this.recordTurnStats(TEAMS.PLAYER);
+    this.recordTurnStats(TEAMS.ENEMY);
+
+    this.gameOverData = {
+      winner,
+      loser,
+      turnCount: this.turnNumber,
+      stats: this.gameStats.getAllStats()
+    };
+
+    this.gamePhase = 'game_over';
+
+    // Hide UI elements
+    const infoEl = document.getElementById('coords');
+    const hudEl = document.getElementById('hud');
+    if (infoEl) infoEl.style.display = 'none';
+    if (hudEl) hudEl.style.display = 'none';
+
+    console.log(`Game Over! ${winner.toUpperCase()} wins in ${this.turnNumber} turns!`);
   }
 
   private getActiveUnitsCount(): number {
@@ -364,10 +567,14 @@ class Game {
       if (building && building.owner !== unit.team) {
         const previousOwner = building.owner ?? 'neutral';
         this.map.setBuildingOwner(unit.q, unit.r, unit.team);
+        this.gameStats.recordBuildingCaptured(unit.team);
         console.log(`${unit.id} captured ${building.type} from ${previousOwner}!`);
       }
       unit.hasActed = true;
       this.setState({ type: 'idle' });
+
+      // Check for game over after capture (enemy may have lost last city)
+      this.checkAndTriggerGameOver();
     }
   }
 
@@ -423,6 +630,9 @@ class Game {
           this.executeAttack(unit, target);
           unit.hasActed = true;
           this.setState({ type: 'idle' });
+
+          // Check for game over after combat
+          this.checkAndTriggerGameOver();
         }
         break;
       }
@@ -537,10 +747,12 @@ class Game {
     console.log(`  ${attacker.id} deals ${result.attackerDamage} damage`);
     if (result.defenderDied) {
       console.log(`  ${defender.id} destroyed!`);
+      this.gameStats.recordUnitKilled(attacker.team, defender.team);
     } else if (result.defenderDamage > 0) {
       console.log(`  ${defender.id} counter-attacks for ${result.defenderDamage} damage`);
       if (result.attackerDied) {
         console.log(`  ${attacker.id} destroyed!`);
+        this.gameStats.recordUnitKilled(defender.team, attacker.team);
       }
     }
   }
@@ -600,21 +812,28 @@ class Game {
   // --- Game loop ---
 
   private centerViewport(): void {
-    const centerQ = Math.floor(GEN_PARAMS.mapWidth / 2);
-    const centerR = Math.floor(GEN_PARAMS.mapHeight / 2);
+    const cfg = MAP_CONFIGS[this.currentMapType];
+    const centerQ = Math.floor((cfg?.width ?? GEN_PARAMS.mapWidth) / 2);
+    const centerR = Math.floor((cfg?.height ?? GEN_PARAMS.mapHeight) / 2);
     this.viewport.centerOn(centerQ, centerR);
   }
 
   private loop = (): void => {
-    this.viewport.update();
-    this.updatePathPreview();
-    this.renderer.units = this.units.filter(u => u.isAlive());
-    this.renderer.currentTeam = this.currentTeam;
-    this.renderer.turnNumber = this.turnNumber;
-    this.renderer.activeUnits = this.getActiveUnitsCount();
-    this.renderer.totalUnits = this.getTotalUnitsCount();
-    this.renderer.resources = this.resources.getResources(this.currentTeam);
-    this.renderer.render();
+    if (this.gamePhase === 'main_menu') {
+      this.menuRenderer.renderMainMenu();
+    } else if (this.gamePhase === 'game_over' && this.gameOverData) {
+      this.menuRenderer.renderGameOver(this.gameOverData);
+    } else if (this.gamePhase === 'playing') {
+      this.viewport.update();
+      this.updatePathPreview();
+      this.renderer.units = this.units.filter(u => u.isAlive());
+      this.renderer.currentTeam = this.currentTeam;
+      this.renderer.turnNumber = this.turnNumber;
+      this.renderer.activeUnits = this.getActiveUnitsCount();
+      this.renderer.totalUnits = this.getTotalUnitsCount();
+      this.renderer.resources = this.resources.getResources(this.currentTeam);
+      this.renderer.render();
+    }
     requestAnimationFrame(this.loop);
   };
 }

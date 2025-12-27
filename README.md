@@ -115,6 +115,22 @@ Buildings have ownership displayed via colored backgrounds:
 - Captured buildings immediately switch to the capturing team's ownership
 - Buildings are visible underneath units (ring + small icon in corner)
 
+### Win/Lose Conditions
+- A team loses when they have **no cities AND no units**
+- Game ends immediately when a team is eliminated
+- Victory screen shows the winner and detailed statistics
+
+### Main Menu & Game Over
+- **Main Menu**: Click "New Game" or press Enter/Space to start
+- **Game Over Screen**: Shows winner, turn count, and performance graphs
+- **Statistics Tracked**:
+  - Units over time (per team)
+  - Buildings owned
+  - Funds accumulated
+  - Units killed (cumulative)
+  - Buildings captured (cumulative)
+  - Science collected
+
 ### UI & Controls
 - **Click** unit to select
 - **Click** tile to move (shows action menu after)
@@ -147,6 +163,8 @@ hex-dominion/
 │   ├── game-map.ts      # Map and building generation
 │   ├── viewport.ts      # Camera and input
 │   ├── renderer.ts      # Drawing, UI, action/production menus
+│   ├── stats.ts         # Game statistics tracking
+│   ├── menu.ts          # Main menu and game over screen
 │   └── main.ts          # Game state machine, turn management, production
 ├── tests/
 │   ├── framework.ts     # Test runner
@@ -156,7 +174,8 @@ hex-dominion/
 │   ├── combat.test.ts   # Combat system tests
 │   ├── building.test.ts # Building system tests
 │   ├── resources.test.ts # Resource management tests
-│   └── production.test.ts # Unit template tests
+│   ├── production.test.ts # Unit template tests
+│   └── stats.test.ts    # Statistics tracking tests
 ├── dist/                # Built output (git-ignored)
 ├── index.html           # Browser game
 ├── test.ts              # CLI test runner
@@ -169,7 +188,7 @@ hex-dominion/
 npm run watch      # Build + serve with auto-rebuild
 npm run build      # One-time build
 npm run typecheck  # Check types without building
-npm test           # Run tests (102 tests)
+npm test           # Run tests (111 tests)
 ```
 
 ### Test Map Helper
@@ -201,10 +220,15 @@ Combat tests use injectable variance parameters for deterministic results.
 - [x] Resource system (funds, science)
 - [x] Unit production from factories (Infantry, Tank templates)
 - [x] Building capture by units with `canCapture` ability
+- [x] Win/lose conditions (no cities + no units = defeat)
+- [x] Main menu and New Game functionality
+- [x] Game over screen with statistics graphs
 
 ### Upcoming
-- [ ] Win/lose conditions
 - [ ] AI opponent
+- [ ] Improving road generation
+- [ ] satisfying battle animations
+- [ ] more complex battle dynamics (armor + armor-piercing) 
 - [ ] Tech tree (spend science)
 - [ ] Unit component system (chassis, weapon, system slots)
 - [ ] More unit types

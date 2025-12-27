@@ -4,14 +4,16 @@
 
 import { TILE_TYPES, HexUtil, type Tile, type TileType } from './core.js';
 import { PerlinNoise, SeededRandom } from './noise.js';
-import { GEN_PARAMS } from './config.js';
+import { GEN_PARAMS, type MapConfig } from './config.js';
 import { type Building, type BuildingType, createBuilding, getBuildingKey } from './building.js';
 
 export class GameMap {
   private tiles = new Map<string, Tile>();
   private buildings = new Map<string, Building>();
+  private config: MapConfig | null = null;
 
-  constructor() {
+  constructor(config?: MapConfig) {
+    this.config = config ?? null;
     this.generate();
   }
 
@@ -50,6 +52,10 @@ export class GameMap {
     }
   }
 
+  addBuilding(building: Building): void {
+    this.buildings.set(getBuildingKey(building.q, building.r), building);
+  }
+
   isValidLandTile(q: number, r: number): boolean {
     const tile = this.getTile(q, r);
     return tile !== undefined && tile.type !== TILE_TYPES.WATER && tile.type !== TILE_TYPES.MOUNTAIN;
@@ -59,56 +65,75 @@ export class GameMap {
     this.tiles.clear();
     this.buildings.clear();
 
-    const altitudeNoise = new PerlinNoise(GEN_PARAMS.seed);
-    const vegNoise = new PerlinNoise(GEN_PARAMS.seed + 1000);
-    const rng = new SeededRandom(GEN_PARAMS.seed + 2000);
+    const cfg = this.config;
+    const seed = cfg?.seed ?? GEN_PARAMS.seed;
+    const width = cfg?.width ?? GEN_PARAMS.mapWidth;
+    const height = cfg?.height ?? GEN_PARAMS.mapHeight;
 
-    const width = GEN_PARAMS.mapWidth;
-    const height = GEN_PARAMS.mapHeight;
+    const rng = new SeededRandom(seed + 2000);
 
-    // Step 1: Generate base terrain from altitude
-    for (let r = 0; r < height; r++) {
-      const rOffset = Math.floor(r / 2);
-      for (let q = -rOffset; q < width - rOffset; q++) {
-        const altitude = altitudeNoise.fbm(
-          q * GEN_PARAMS.altitudeScale,
-          r * GEN_PARAMS.altitudeScale,
-          GEN_PARAMS.altitudeOctaves
-        );
+    // Step 1: Generate base terrain
+    if (cfg?.terrain) {
+      // Procedural terrain
+      const altitudeNoise = new PerlinNoise(seed);
+      const vegNoise = new PerlinNoise(seed + 1000);
 
-        let type: TileType;
-        if (altitude <= GEN_PARAMS.waterThreshold) {
-          type = TILE_TYPES.WATER;
-        } else if (altitude >= GEN_PARAMS.mountainThreshold) {
-          type = TILE_TYPES.MOUNTAIN;
-        } else {
-          const vegetation = vegNoise.fbm(
-            q * GEN_PARAMS.vegScale,
-            r * GEN_PARAMS.vegScale,
-            GEN_PARAMS.vegOctaves
+      for (let r = 0; r < height; r++) {
+        const rOffset = Math.floor(r / 2);
+        for (let q = -rOffset; q < width - rOffset; q++) {
+          const altitude = altitudeNoise.fbm(
+            q * cfg.terrain.altitudeScale,
+            r * cfg.terrain.altitudeScale,
+            cfg.terrain.altitudeOctaves
           );
 
-          if (vegetation >= GEN_PARAMS.forestThreshold) {
-            type = TILE_TYPES.WOODS;
+          let type: TileType;
+          if (altitude <= cfg.terrain.waterThreshold) {
+            type = TILE_TYPES.WATER;
+          } else if (altitude >= cfg.terrain.mountainThreshold) {
+            type = TILE_TYPES.MOUNTAIN;
           } else {
-            type = TILE_TYPES.GRASS;
-          }
-        }
+            const vegetation = vegNoise.fbm(
+              q * cfg.terrain.vegScale,
+              r * cfg.terrain.vegScale,
+              cfg.terrain.vegOctaves
+            );
 
-        this.setTile(q, r, type);
+            if (vegetation >= cfg.terrain.forestThreshold) {
+              type = TILE_TYPES.WOODS;
+            } else {
+              type = TILE_TYPES.GRASS;
+            }
+          }
+
+          this.setTile(q, r, type);
+        }
+      }
+    } else {
+      // All grass (simple test map)
+      for (let r = 0; r < height; r++) {
+        const rOffset = Math.floor(r / 2);
+        for (let q = -rOffset; q < width - rOffset; q++) {
+          this.setTile(q, r, TILE_TYPES.GRASS);
+        }
       }
     }
 
     // Step 2: Generate roads
-    this.generateRoads(rng, width, height);
+    const roadCount = cfg?.roadCount ?? GEN_PARAMS.roadCount;
+    if (roadCount > 0) {
+      this.generateRoads(rng, width, height, cfg);
+    }
 
     // Step 3: Generate buildings
-    this.generateBuildings(rng, width, height);
+    if (cfg?.buildings) {
+      this.generateBuildings(rng, width, height, cfg);
+    }
 
-    console.log(`Generated map: ${this.tiles.size} tiles, ${this.buildings.size} buildings, seed ${GEN_PARAMS.seed}`);
+    console.log(`Generated map: ${this.tiles.size} tiles, ${this.buildings.size} buildings`);
   }
 
-  private generateRoads(rng: SeededRandom, width: number, height: number): void {
+  private generateRoads(rng: SeededRandom, width: number, height: number, cfg?: MapConfig | null): void {
     const directions = [
       { q: 1, r: 0 },
       { q: 1, r: -1 },
@@ -118,7 +143,12 @@ export class GameMap {
       { q: 0, r: 1 }
     ];
 
-    for (let i = 0; i < GEN_PARAMS.roadCount; i++) {
+    const roadCount = cfg?.roadCount ?? GEN_PARAMS.roadCount;
+    const roadMinLength = cfg?.roadMinLength ?? GEN_PARAMS.roadMinLength;
+    const roadMaxLength = cfg?.roadMaxLength ?? GEN_PARAMS.roadMaxLength;
+    const roadCurviness = cfg?.roadCurviness ?? GEN_PARAMS.roadCurviness;
+
+    for (let i = 0; i < roadCount; i++) {
       let startQ: number, startR: number;
       let attempts = 0;
       do {
@@ -130,7 +160,7 @@ export class GameMap {
 
       if (attempts >= 100) continue;
 
-      const length = rng.nextInt(GEN_PARAMS.roadMinLength, GEN_PARAMS.roadMaxLength);
+      const length = rng.nextInt(roadMinLength, roadMaxLength);
       let direction = rng.nextInt(0, 5);
 
       let q = startQ;
@@ -141,7 +171,7 @@ export class GameMap {
           this.setTile(q, r, TILE_TYPES.ROAD);
         }
 
-        if (rng.next() < GEN_PARAMS.roadCurviness) {
+        if (rng.next() < roadCurviness) {
           direction = (direction + (rng.next() < 0.5 ? 1 : 5)) % 6;
         }
 
@@ -157,8 +187,11 @@ export class GameMap {
     }
   }
 
-  private generateBuildings(rng: SeededRandom, width: number, height: number): void {
+  private generateBuildings(rng: SeededRandom, width: number, height: number, cfg?: MapConfig | null): void {
     const candidates: Array<{ q: number; r: number; nearRoad: boolean }> = [];
+
+    const density = cfg?.buildings?.density ?? GEN_PARAMS.buildingDensity;
+    const roadAffinity = cfg?.buildings?.roadAffinity ?? GEN_PARAMS.buildingRoadAffinity;
 
     this.tiles.forEach(tile => {
       if (tile.type === TILE_TYPES.GRASS || tile.type === TILE_TYPES.WOODS) {
@@ -174,13 +207,12 @@ export class GameMap {
       }
     });
 
-    const buildingTypes: BuildingType[] = ['city', 'factory', 'lab'];
     const centerQ = Math.floor(width / 2);
 
     for (const c of candidates) {
-      let chance = GEN_PARAMS.buildingDensity;
+      let chance = density;
       if (c.nearRoad) {
-        chance += GEN_PARAMS.buildingRoadAffinity * GEN_PARAMS.buildingDensity * 5;
+        chance += roadAffinity * density * 5;
       }
 
       if (rng.next() < chance) {
