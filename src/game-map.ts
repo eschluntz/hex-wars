@@ -5,9 +5,11 @@
 import { TILE_TYPES, HexUtil, type Tile, type TileType } from './core.js';
 import { PerlinNoise, SeededRandom } from './noise.js';
 import { GEN_PARAMS } from './config.js';
+import { type Building, type BuildingType, createBuilding, getBuildingKey } from './building.js';
 
 export class GameMap {
   private tiles = new Map<string, Tile>();
+  private buildings = new Map<string, Building>();
 
   constructor() {
     this.generate();
@@ -25,6 +27,22 @@ export class GameMap {
     this.tiles.set(this.key(q, r), { q, r, type });
   }
 
+  getBuilding(q: number, r: number): Building | undefined {
+    return this.buildings.get(getBuildingKey(q, r));
+  }
+
+  getAllBuildings(): Building[] {
+    return Array.from(this.buildings.values());
+  }
+
+  getBuildingsByOwner(owner: string): Building[] {
+    return this.getAllBuildings().filter(b => b.owner === owner);
+  }
+
+  getBuildingsByType(type: BuildingType): Building[] {
+    return this.getAllBuildings().filter(b => b.type === type);
+  }
+
   isValidLandTile(q: number, r: number): boolean {
     const tile = this.getTile(q, r);
     return tile !== undefined && tile.type !== TILE_TYPES.WATER && tile.type !== TILE_TYPES.MOUNTAIN;
@@ -32,6 +50,7 @@ export class GameMap {
 
   generate(): void {
     this.tiles.clear();
+    this.buildings.clear();
 
     const altitudeNoise = new PerlinNoise(GEN_PARAMS.seed);
     const vegNoise = new PerlinNoise(GEN_PARAMS.seed + 1000);
@@ -77,9 +96,9 @@ export class GameMap {
     this.generateRoads(rng, width, height);
 
     // Step 3: Generate buildings
-    this.generateBuildings(rng);
+    this.generateBuildings(rng, width, height);
 
-    console.log(`Generated map: ${this.tiles.size} tiles, seed ${GEN_PARAMS.seed}`);
+    console.log(`Generated map: ${this.tiles.size} tiles, ${this.buildings.size} buildings, seed ${GEN_PARAMS.seed}`);
   }
 
   private generateRoads(rng: SeededRandom, width: number, height: number): void {
@@ -131,7 +150,7 @@ export class GameMap {
     }
   }
 
-  private generateBuildings(rng: SeededRandom): void {
+  private generateBuildings(rng: SeededRandom, width: number, height: number): void {
     const candidates: Array<{ q: number; r: number; nearRoad: boolean }> = [];
 
     this.tiles.forEach(tile => {
@@ -148,6 +167,9 @@ export class GameMap {
       }
     });
 
+    const buildingTypes: BuildingType[] = ['city', 'factory', 'lab'];
+    const centerQ = Math.floor(width / 2);
+
     for (const c of candidates) {
       let chance = GEN_PARAMS.buildingDensity;
       if (c.nearRoad) {
@@ -155,7 +177,35 @@ export class GameMap {
       }
 
       if (rng.next() < chance) {
-        this.setTile(c.q, c.r, TILE_TYPES.BUILDING);
+        // Set tile to grass (buildings are passable like grass)
+        this.setTile(c.q, c.r, TILE_TYPES.GRASS);
+
+        // Pick random building type with weighted distribution
+        // 50% city, 30% factory, 20% lab
+        const typeRoll = rng.next();
+        let buildingType: BuildingType;
+        if (typeRoll < 0.5) {
+          buildingType = 'city';
+        } else if (typeRoll < 0.8) {
+          buildingType = 'factory';
+        } else {
+          buildingType = 'lab';
+        }
+
+        // Assign ownership based on horizontal position
+        // Left third = player, right third = enemy, middle = neutral
+        let owner: string | null;
+        const relativeQ = c.q + Math.floor(c.r / 2); // Normalize for offset rows
+        if (relativeQ < centerQ - 8) {
+          owner = 'player';
+        } else if (relativeQ > centerQ + 8) {
+          owner = 'enemy';
+        } else {
+          owner = null; // Neutral
+        }
+
+        const building = createBuilding(c.q, c.r, buildingType, owner);
+        this.buildings.set(getBuildingKey(c.q, c.r), building);
       }
     }
   }

@@ -127,3 +127,26 @@ export const HexUtil = {
     return (Math.abs(q1 - q2) + Math.abs(q1 + r1 - q2 - r2) + Math.abs(r1 - r2)) / 2;
   }
 };
+
+// ============================================================================
+// TEAM COLORS
+// ============================================================================
+
+export interface TeamColors {
+  primary: string;
+  secondary: string;
+  unitColor: string;
+}
+
+export const TEAM_COLORS: Record<string, TeamColors> = {
+  player: {
+    primary: '#4caf50',    // Green
+    secondary: '#2e7d32',
+    unitColor: '#4caf50'
+  },
+  enemy: {
+    primary: '#f44336',    // Red
+    secondary: '#c62828',
+    unitColor: '#f44336'
+  }
+};
