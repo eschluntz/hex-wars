@@ -48,6 +48,16 @@ runner.describe('Unit', () => {
       assertEqual(unit.hasActed, false);
     });
 
+    runner.it('should default canCapture to false', () => {
+      const unit = new Unit('test5', TEST_TEAM, 0, 0);
+      assertEqual(unit.canCapture, false);
+    });
+
+    runner.it('should accept canCapture in stats', () => {
+      const unit = new Unit('infantry', TEST_TEAM, 0, 0, { canCapture: true });
+      assertEqual(unit.canCapture, true);
+    });
+
   });
 
   runner.describe('isAlive', () => {

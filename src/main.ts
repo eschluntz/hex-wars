@@ -184,9 +184,17 @@ class Game {
       this.renderer.pathPreview = null;
       const enemies = this.getEnemiesOf(newState.unit);
       const targets = Combat.getTargetsInRange(newState.unit, enemies);
+
+      // Check if unit can capture a building at current position
+      const building = this.map.getBuilding(newState.unit.q, newState.unit.r);
+      const canCapture = newState.unit.canCapture &&
+        building !== undefined &&
+        building.owner !== newState.unit.team;
+
       this.renderer.actionMenu = {
         unit: newState.unit,
-        canAttack: targets.length > 0
+        canAttack: targets.length > 0,
+        canCapture
       };
       this.renderer.attackTargets = null;
       this.renderer.productionMenu = null;
@@ -351,6 +359,15 @@ class Game {
       this.setState({ type: 'selected', unit });
     } else if (action === 'attack') {
       this.setState({ type: 'attacking', unit, fromQ: this.state.fromQ, fromR: this.state.fromR });
+    } else if (action === 'capture') {
+      const building = this.map.getBuilding(unit.q, unit.r);
+      if (building && building.owner !== unit.team) {
+        const previousOwner = building.owner ?? 'neutral';
+        this.map.setBuildingOwner(unit.q, unit.r, unit.team);
+        console.log(`${unit.id} captured ${building.type} from ${previousOwner}!`);
+      }
+      unit.hasActed = true;
+      this.setState({ type: 'idle' });
     }
   }
 
@@ -453,7 +470,8 @@ class Game {
           attack: template.attack,
           range: template.range,
           terrainCosts: template.terrainCosts,
-          color: teamColors.unitColor
+          color: teamColors.unitColor,
+          canCapture: template.canCapture
         }
       );
       unit.hasActed = true; // New units can't act this turn

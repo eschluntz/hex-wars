@@ -11,6 +11,7 @@ export interface UnitStats {
   range: number;
   terrainCosts: TerrainCosts;
   color: string;
+  canCapture: boolean;
 }
 
 const DEFAULT_STATS: UnitStats = {
@@ -18,7 +19,8 @@ const DEFAULT_STATS: UnitStats = {
   attack: 5,
   range: 1,
   terrainCosts: DEFAULT_TERRAIN_COSTS,
-  color: '#ffffff'
+  color: '#ffffff',
+  canCapture: false
 };
 
 export class Unit {
@@ -32,6 +34,7 @@ export class Unit {
   health: number;
   terrainCosts: TerrainCosts;
   color: string;
+  canCapture: boolean;
   hasActed: boolean = false;
 
   constructor(id: string, team: string, q: number, r: number, stats: Partial<UnitStats> = {}) {
@@ -45,6 +48,7 @@ export class Unit {
     this.health = 10;
     this.terrainCosts = stats.terrainCosts ?? DEFAULT_STATS.terrainCosts;
     this.color = stats.color ?? DEFAULT_STATS.color;
+    this.canCapture = stats.canCapture ?? DEFAULT_STATS.canCapture;
   }
 
   isAlive(): boolean {

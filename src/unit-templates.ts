@@ -12,6 +12,7 @@ export interface UnitTemplate {
   attack: number;
   range: number;
   terrainCosts: TerrainCosts;
+  canCapture: boolean;
 }
 
 export const UNIT_TEMPLATES: Record<string, UnitTemplate> = {
@@ -22,7 +23,8 @@ export const UNIT_TEMPLATES: Record<string, UnitTemplate> = {
     speed: 3,
     attack: 4,
     range: 1,
-    terrainCosts: DEFAULT_TERRAIN_COSTS
+    terrainCosts: DEFAULT_TERRAIN_COSTS,
+    canCapture: true
   },
   tank: {
     id: 'tank',
@@ -34,7 +36,8 @@ export const UNIT_TEMPLATES: Record<string, UnitTemplate> = {
     terrainCosts: {
       ...DEFAULT_TERRAIN_COSTS,
       woods: 2 // Tanks are slower in woods
-    }
+    },
+    canCapture: false
   }
 };
 

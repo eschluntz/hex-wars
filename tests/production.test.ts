@@ -113,6 +113,20 @@ runner.describe('Unit Templates', () => {
 
   });
 
+  runner.describe('capture ability', () => {
+
+    runner.it('infantry should be able to capture', () => {
+      const infantry = getTemplate('infantry');
+      assertEqual(infantry.canCapture, true);
+    });
+
+    runner.it('tank should not be able to capture', () => {
+      const tank = getTemplate('tank');
+      assertEqual(tank.canCapture, false);
+    });
+
+  });
+
 });
 
 export default runner;

@@ -43,6 +43,13 @@ export class GameMap {
     return this.getAllBuildings().filter(b => b.type === type);
   }
 
+  setBuildingOwner(q: number, r: number, owner: string | null): void {
+    const building = this.buildings.get(getBuildingKey(q, r));
+    if (building) {
+      building.owner = owner;
+    }
+  }
+
   isValidLandTile(q: number, r: number): boolean {
     const tile = this.getTile(q, r);
     return tile !== undefined && tile.type !== TILE_TYPES.WATER && tile.type !== TILE_TYPES.MOUNTAIN;

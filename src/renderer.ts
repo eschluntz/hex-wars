@@ -19,6 +19,7 @@ export interface PathPreview {
 export interface ActionMenu {
   unit: Unit;
   canAttack: boolean;
+  canCapture: boolean;
 }
 
 export interface AttackTargets {
@@ -282,7 +283,8 @@ export class Renderer {
     // Check for building at this tile
     const building = this.map.getBuilding(tile.q, tile.r);
     if (building) {
-      this.drawBuilding(cx, cy, building, zoom);
+      const hasUnit = this.units.some(u => u.q === tile.q && u.r === tile.r);
+      this.drawBuilding(cx, cy, building, zoom, hasUnit);
     } else {
       // Only draw terrain icon if no building
       const icon = TILE_ICONS[tile.type];
@@ -303,40 +305,58 @@ export class Renderer {
     }
   }
 
-  private drawBuilding(cx: number, cy: number, building: Building, zoom: number): void {
+  private drawBuilding(cx: number, cy: number, building: Building, zoom: number, hasUnit: boolean): void {
     const ctx = this.ctx;
     const size = CONFIG.hexSize * zoom * 0.6;
 
-    // Draw team color background circle
+    // Draw team color background - larger ring if unit is on top
+    const ringSize = hasUnit ? CONFIG.hexSize * zoom * 0.85 : size * 0.9;
+    const ringWidth = hasUnit ? 4 * zoom : 2 * zoom;
+
     if (building.owner) {
       const teamColor = TEAM_COLORS[building.owner];
       if (teamColor) {
         ctx.beginPath();
-        ctx.arc(cx, cy, size * 0.9, 0, Math.PI * 2);
-        ctx.fillStyle = teamColor.primary + '60'; // 60 = ~37% opacity
-        ctx.fill();
+        ctx.arc(cx, cy, ringSize, 0, Math.PI * 2);
+        if (!hasUnit) {
+          ctx.fillStyle = teamColor.primary + '60'; // 60 = ~37% opacity
+          ctx.fill();
+        }
         ctx.strokeStyle = teamColor.primary;
-        ctx.lineWidth = 2 * zoom;
+        ctx.lineWidth = ringWidth;
         ctx.stroke();
       }
     } else {
       // Neutral building - gray background
       ctx.beginPath();
-      ctx.arc(cx, cy, size * 0.9, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(128, 128, 128, 0.4)';
-      ctx.fill();
+      ctx.arc(cx, cy, ringSize, 0, Math.PI * 2);
+      if (!hasUnit) {
+        ctx.fillStyle = 'rgba(128, 128, 128, 0.4)';
+        ctx.fill();
+      }
       ctx.strokeStyle = '#666666';
-      ctx.lineWidth = 2 * zoom;
+      ctx.lineWidth = ringWidth;
       ctx.stroke();
     }
 
-    // Draw building icon
+    // Draw building icon (smaller and offset if unit present)
     if (zoom > 0.3) {
       const icon = BUILDING_ICONS[building.type];
-      ctx.font = `${size}px Arial`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(icon, cx, cy);
+      if (hasUnit) {
+        // Draw small icon in corner
+        const iconSize = size * 0.6;
+        const offsetX = CONFIG.hexSize * zoom * 0.5;
+        const offsetY = -CONFIG.hexSize * zoom * 0.5;
+        ctx.font = `${iconSize}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(icon, cx + offsetX, cy + offsetY);
+      } else {
+        ctx.font = `${size}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(icon, cx, cy);
+      }
     }
   }
 
@@ -565,6 +585,10 @@ export class Renderer {
       buttons.push({ label: 'Attack', action: 'attack' });
     }
 
+    if (menu.canCapture) {
+      buttons.push({ label: 'Capture', action: 'capture' });
+    }
+
     // Draw menu background
     const menuWidth = buttonWidth + padding * 2;
     const menuHeight = buttons.length * (buttonHeight + padding) + padding;
@@ -611,7 +635,7 @@ export class Renderer {
       ctx.fillText(`${i + 1}`, btnX + 8, btnY + buttonHeight / 2);
 
       // Button text
-      ctx.fillStyle = btn.action === 'attack' ? '#ff9800' : '#ffffff';
+      ctx.fillStyle = btn.action === 'attack' ? '#ff9800' : btn.action === 'capture' ? '#4caf50' : '#ffffff';
       ctx.font = 'bold 14px Arial';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -712,7 +736,17 @@ export class Renderer {
     // Action menu hint
     if (this.actionMenu) {
       lines.push('');
-      lines.push('1=Wait 2=Cancel' + (this.actionMenu.canAttack ? ' 3=Attack' : '') + ' | Arrows+Enter');
+      let hint = '1=Wait 2=Cancel';
+      let num = 3;
+      if (this.actionMenu.canAttack) {
+        hint += ` ${num}=Attack`;
+        num++;
+      }
+      if (this.actionMenu.canCapture) {
+        hint += ` ${num}=Capture`;
+      }
+      hint += ' | Arrows+Enter';
+      lines.push(hint);
     }
 
     // Attack mode hint

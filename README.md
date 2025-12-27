@@ -104,10 +104,16 @@ Buildings have ownership displayed via colored backgrounds:
 ### Unit Production
 - Click on an owned factory (when no unit is on it) to open the production menu
 - Two unit templates available:
-  - **Infantry** ($1000): Speed 3, Attack 4, Range 1
-  - **Tank** ($3000): Speed 5, Attack 7, Range 1 (slower in woods)
+  - **Infantry** ($1000): Speed 3, Attack 4, Range 1, can capture buildings
+  - **Tank** ($3000): Speed 5, Attack 7, Range 1 (slower in woods), cannot capture
 - Newly built units appear on the factory, deactivated for the current turn
 - Use number keys or arrow keys + Enter to select
+
+### Building Capture
+- Units with `canCapture` ability (e.g., Infantry) can capture neutral or enemy buildings
+- Move the unit onto a building, then select "Capture" from the action menu
+- Captured buildings immediately switch to the capturing team's ownership
+- Buildings are visible underneath units (ring + small icon in corner)
 
 ### UI & Controls
 - **Click** unit to select
@@ -163,7 +169,7 @@ hex-dominion/
 npm run watch      # Build + serve with auto-rebuild
 npm run build      # One-time build
 npm run typecheck  # Check types without building
-npm test           # Run tests (95 tests)
+npm test           # Run tests (102 tests)
 ```
 
 ### Test Map Helper
@@ -194,9 +200,9 @@ Combat tests use injectable variance parameters for deterministic results.
 - [x] Building types (city, factory, lab) with ownership display
 - [x] Resource system (funds, science)
 - [x] Unit production from factories (Infantry, Tank templates)
+- [x] Building capture by units with `canCapture` ability
 
 ### Upcoming
-- [ ] Building capture by units
 - [ ] Win/lose conditions
 - [ ] AI opponent
 - [ ] Tech tree (spend science)

@@ -75,6 +75,43 @@ runner.describe('Building', () => {
 
   });
 
+  runner.describe('capture mechanics', () => {
+
+    runner.it('neutral building can be captured', () => {
+      const building = createBuilding(0, 0, 'city', null);
+      assertEqual(building.owner, null);
+
+      // Simulate capture by changing owner
+      building.owner = 'player';
+      assertEqual(building.owner, 'player');
+    });
+
+    runner.it('enemy building can be captured', () => {
+      const building = createBuilding(0, 0, 'factory', 'enemy');
+      assertEqual(building.owner, 'enemy');
+
+      // Simulate capture by changing owner
+      building.owner = 'player';
+      assertEqual(building.owner, 'player');
+    });
+
+    runner.it('all building types are capturable', () => {
+      const city = createBuilding(0, 0, 'city', 'enemy');
+      const factory = createBuilding(1, 0, 'factory', 'enemy');
+      const lab = createBuilding(2, 0, 'lab', null);
+
+      // All can have their owner changed
+      city.owner = 'player';
+      factory.owner = 'player';
+      lab.owner = 'player';
+
+      assertEqual(city.owner, 'player');
+      assertEqual(factory.owner, 'player');
+      assertEqual(lab.owner, 'player');
+    });
+
+  });
+
 });
 
 export default runner;
