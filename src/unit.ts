@@ -2,24 +2,28 @@
 // HEX DOMINION - Unit Module
 // ============================================================================
 
-import { MOVEMENT_COSTS, type AxialCoord, type TileType } from './core.js';
+import { DEFAULT_TERRAIN_COSTS, type AxialCoord, type TerrainCosts } from './core.js';
 import { Pathfinder, type GameMap } from './pathfinder.js';
 
 export class Unit {
   id: string;
+  team: string;
   q: number;
   r: number;
   speed: number;
+  terrainCosts: TerrainCosts;
   goalQ: number | null = null;
   goalR: number | null = null;
   currentPath: AxialCoord[] | null = null;
   movementRemaining: number;
 
-  constructor(id: string, q: number, r: number, speed: number = 4) {
+  constructor(id: string, team: string, q: number, r: number, speed: number = 4, terrainCosts: TerrainCosts = DEFAULT_TERRAIN_COSTS) {
     this.id = id;
+    this.team = team;
     this.q = q;
     this.r = r;
     this.speed = speed;
+    this.terrainCosts = terrainCosts;
     this.movementRemaining = speed;
   }
 
@@ -27,7 +31,7 @@ export class Unit {
     this.goalQ = q;
     this.goalR = r;
 
-    const result = pathfinder.findPath(this.q, this.r, q, r);
+    const result = pathfinder.findPath(this.q, this.r, q, r, this.terrainCosts);
     if (result) {
       this.currentPath = result.path;
       // Remove the starting position from path
@@ -63,7 +67,7 @@ export class Unit {
 
       if (!tile) break;
 
-      const cost = MOVEMENT_COSTS[tile.type];
+      const cost = this.terrainCosts[tile.type];
       if (cost > movementLeft) break;
 
       movementLeft -= cost;
@@ -93,5 +97,22 @@ export class Unit {
 
   getRemainingPathLength(): number {
     return this.currentPath ? this.currentPath.length : 0;
+  }
+
+  getReachableIndex(path: AxialCoord[], map: GameMap, occupied?: Set<string>): number {
+    let movementLeft = this.movementRemaining;
+    let reachable = 0;
+    for (let i = 1; i < path.length; i++) {
+      const pos = path[i]!;
+      const tile = map.getTile(pos.q, pos.r)!;
+      const cost = this.terrainCosts[tile.type];
+      if (cost > movementLeft) break;
+      movementLeft -= cost;
+      // Can only stop on unoccupied tiles
+      if (!occupied?.has(`${pos.q},${pos.r}`)) {
+        reachable = i;
+      }
+    }
+    return reachable;
   }
 }

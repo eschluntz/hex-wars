@@ -53,7 +53,9 @@ export const TILE_ICONS: Partial<Record<TileType, string>> = {
   building: '🏠'
 };
 
-export const MOVEMENT_COSTS: Record<TileType, number> = {
+export type TerrainCosts = Record<TileType, number>;
+
+export const DEFAULT_TERRAIN_COSTS: TerrainCosts = {
   grass: 1,
   woods: 1.5,
   road: 0.5,

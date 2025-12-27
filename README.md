@@ -46,7 +46,6 @@ Weapon types include line-piercing lasers, arc-over-obstacles missiles, and area
 - Procedural generation using layered 2D Perlin noise (altitude + vegetation)
 - Terrain: grass, woods, mountain, water, road, building
 - Roads as contiguous paths, buildings clustered near roads
-- GUI for tweaking all generation parameters
 
 ### Viewport
 - WASD + mouse drag panning
@@ -74,32 +73,40 @@ Weapon types include line-piercing lasers, arc-over-obstacles missiles, and area
 ```
 hex-dominion/
 ├── src/
-│   ├── core.js          # HexUtil, tile types, movement costs
-│   ├── pathfinder.js    # A* pathfinding
-│   └── unit.js          # Unit state and movement
+│   ├── core.ts          # Types, HexUtil, tile constants
+│   ├── pathfinder.ts    # A* pathfinding
+│   ├── unit.ts          # Unit state and movement
+│   ├── noise.ts         # Perlin noise, seeded RNG
+│   ├── config.ts        # Game configuration
+│   ├── game-map.ts      # Map generation
+│   ├── viewport.ts      # Camera and input
+│   ├── renderer.ts      # Drawing
+│   └── main.ts          # Entry point
 ├── tests/
-│   ├── framework.js     # Test runner
-│   ├── helpers.js       # createTestMap() utility
-│   ├── pathfinding.test.js
-│   └── unit.test.js
-├── index.html           # Browser game (standalone)
-├── test.js              # CLI test runner
+│   ├── framework.ts     # Test runner
+│   ├── helpers.ts       # createTestMap() utility
+│   ├── pathfinding.test.ts
+│   └── unit.test.ts
+├── dist/                # Built output (git-ignored)
+├── index.html           # Browser game
+├── test.ts              # CLI test runner
 └── package.json
 ```
 
 ## Development
 
-### Running Tests
-
 ```bash
-npm test
+npm run watch      # Build + serve with auto-rebuild
+npm run build      # One-time build
+npm run typecheck  # Check types without building
+npm test           # Run tests
 ```
 
 ### Test Map Helper
 
 `createTestMap(grid)` creates a mock map from ASCII:
 
-```javascript
+```typescript
 const map = createTestMap([
   'GGGGG',  // G=grass, W=water, M=mountain
   'GWWWG',  // R=road, F=forest, B=building

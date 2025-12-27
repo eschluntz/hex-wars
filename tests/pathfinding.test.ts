@@ -5,6 +5,7 @@
 import { TestRunner, assert, assertEqual, assertDeepEqual, assertNull, assertNotNull } from './framework.js';
 import { createTestMap } from './helpers.js';
 import { Pathfinder } from '../src/pathfinder.js';
+import { DEFAULT_TERRAIN_COSTS, type TerrainCosts } from '../src/core.js';
 
 const runner = new TestRunner();
 
@@ -201,6 +202,95 @@ runner.describe('Pathfinder', () => {
         return tile && tile.type === 'water';
       });
       assert(!crossesWater, 'Should take road around water');
+    });
+
+  });
+
+  runner.describe('Custom terrain costs', () => {
+
+    runner.it('should allow pathfinding through water with custom costs', () => {
+      const map = createTestMap([
+        'GGGGG',
+        'GWWWG',
+        'GGGGG'
+      ]);
+
+      const hoverCosts: TerrainCosts = {
+        ...DEFAULT_TERRAIN_COSTS,
+        water: 1
+      };
+
+      const pathfinder = new Pathfinder(map);
+
+      // Default costs: no path through water
+      const defaultResult = pathfinder.findPath(0, 1, 4, 1);
+      assertNotNull(defaultResult);
+      const crossesWater = defaultResult!.path.some(p => {
+        const tile = map.getTile(p.q, p.r);
+        return tile && tile.type === 'water';
+      });
+      assert(!crossesWater, 'Default path should avoid water');
+
+      // Custom costs: path directly through water
+      const hoverResult = pathfinder.findPath(0, 1, 4, 1, hoverCosts);
+      assertNotNull(hoverResult);
+      assertEqual(hoverResult!.path.length, 5, 'Hover path should go straight through');
+    });
+
+    runner.it('should allow pathfinding through mountains with custom costs', () => {
+      const map = createTestMap([
+        'GGGGG',
+        'GMMMG',
+        'GGGGG'
+      ]);
+
+      const mountaineerCosts: TerrainCosts = {
+        ...DEFAULT_TERRAIN_COSTS,
+        mountain: 2
+      };
+
+      const pathfinder = new Pathfinder(map);
+
+      // Default costs: no path through mountains
+      const defaultResult = pathfinder.findPath(0, 1, 4, 1);
+      assertNotNull(defaultResult);
+      const crossesMountain = defaultResult!.path.some(p => {
+        const tile = map.getTile(p.q, p.r);
+        return tile && tile.type === 'mountain';
+      });
+      assert(!crossesMountain, 'Default path should avoid mountains');
+
+      // Custom costs: path through mountains
+      const mountainResult = pathfinder.findPath(0, 1, 4, 1, mountaineerCosts);
+      assertNotNull(mountainResult);
+      assertEqual(mountainResult!.path.length, 5, 'Mountain unit should go straight through');
+      assertEqual(mountainResult!.totalCost, 7, 'Cost: 3 mountains * 2 + 1 grass = 7');
+    });
+
+    runner.it('should use custom terrain costs for path selection', () => {
+      const map = createTestMap([
+        'RRRRR',
+        'FFFFF',
+        'GGGGG'
+      ]);
+
+      // Forest ranger: woods cost 0.5 (cheaper than road!)
+      const rangerCosts: TerrainCosts = {
+        ...DEFAULT_TERRAIN_COSTS,
+        woods: 0.5
+      };
+
+      const pathfinder = new Pathfinder(map);
+
+      // Default should prefer road
+      const defaultResult = pathfinder.findPath(0, 0, 4, 0);
+      assertNotNull(defaultResult);
+      assertEqual(defaultResult!.totalCost, 2, 'Default path uses roads (4 * 0.5)');
+
+      // Ranger should prefer woods
+      const rangerResult = pathfinder.findPath(0, 1, 4, 1, rangerCosts);
+      assertNotNull(rangerResult);
+      assertEqual(rangerResult!.totalCost, 2, 'Ranger path uses woods (4 * 0.5)');
     });
 
   });

@@ -2,7 +2,7 @@
 // HEX DOMINION - Pathfinder Module (A* Algorithm)
 // ============================================================================
 
-import { HexUtil, MOVEMENT_COSTS, type AxialCoord, type Tile, type TileType } from './core.js';
+import { HexUtil, DEFAULT_TERRAIN_COSTS, type AxialCoord, type Tile, type TileType, type TerrainCosts } from './core.js';
 
 export interface GameMap {
   getTile(q: number, r: number): Tile | undefined;
@@ -20,22 +20,23 @@ export class Pathfinder {
     this.map = map;
   }
 
-  getMovementCost(tileType: TileType): number {
-    return MOVEMENT_COSTS[tileType];
+  getMovementCost(tileType: TileType, terrainCosts: TerrainCosts = DEFAULT_TERRAIN_COSTS): number {
+    return terrainCosts[tileType];
   }
 
-  isPassable(q: number, r: number): boolean {
+  isPassable(q: number, r: number, terrainCosts: TerrainCosts = DEFAULT_TERRAIN_COSTS, blocked?: Set<string>): boolean {
+    if (blocked?.has(`${q},${r}`)) return false;
     const tile = this.map.getTile(q, r);
     if (!tile) return false;
-    return this.getMovementCost(tile.type) < Infinity;
+    return this.getMovementCost(tile.type, terrainCosts) < Infinity;
   }
 
   heuristic(q1: number, r1: number, q2: number, r2: number): number {
     return HexUtil.distance(q1, r1, q2, r2);
   }
 
-  findPath(startQ: number, startR: number, goalQ: number, goalR: number): PathResult | null {
-    if (!this.isPassable(startQ, startR) || !this.isPassable(goalQ, goalR)) {
+  findPath(startQ: number, startR: number, goalQ: number, goalR: number, terrainCosts: TerrainCosts = DEFAULT_TERRAIN_COSTS, blocked?: Set<string>): PathResult | null {
+    if (!this.isPassable(startQ, startR, terrainCosts, blocked) || !this.isPassable(goalQ, goalR, terrainCosts, blocked)) {
       return null;
     }
 
@@ -66,10 +67,10 @@ export class Pathfinder {
         const neighborKey = `${neighbor.q},${neighbor.r}`;
 
         if (closedSet.has(neighborKey)) continue;
-        if (!this.isPassable(neighbor.q, neighbor.r)) continue;
+        if (!this.isPassable(neighbor.q, neighbor.r, terrainCosts, blocked)) continue;
 
         const tile = this.map.getTile(neighbor.q, neighbor.r)!;
-        const moveCost = this.getMovementCost(tile.type);
+        const moveCost = this.getMovementCost(tile.type, terrainCosts);
         const tentativeG = gScore.get(currentKey)! + moveCost;
 
         const existingG = gScore.get(neighborKey);
