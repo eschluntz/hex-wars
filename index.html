@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hex Dominion</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #1a1a2e; overflow: hidden; font-family: 'Segoe UI', system-ui, sans-serif; }
+    #gameCanvas { display: block; cursor: grab; }
+    #gameCanvas:active { cursor: grabbing; }
+
+    #hud {
+      position: fixed; top: 20px; left: 20px; color: #e0e0e0; font-size: 14px;
+      background: rgba(0, 0, 0, 0.6); padding: 12px 16px; border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px);
+    }
+    #hud h1 { font-size: 18px; font-weight: 600; margin-bottom: 8px; color: #ffd700; letter-spacing: 1px; }
+    #hud p { opacity: 0.8; line-height: 1.5; }
+    kbd { background: rgba(255, 255, 255, 0.15); padding: 2px 6px; border-radius: 4px; font-family: inherit; font-size: 12px; }
+
+    #coords {
+      position: fixed; bottom: 20px; left: 20px; color: #e0e0e0; font-size: 13px;
+      background: rgba(0, 0, 0, 0.6); padding: 8px 12px; border-radius: 6px; font-family: 'Courier New', monospace;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+
+  <div id="hud">
+    <h1>HEX DOMINION</h1>
+    <p><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> pan · <kbd>drag</kbd> mouse<br><kbd>scroll</kbd> to zoom</p>
+  </div>
+
+  <div id="coords">--</div>
+
+  <script src="dist/bundle.js"></script>
+</body>
+</html>

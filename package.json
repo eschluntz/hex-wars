@@ -1,0 +1,20 @@
+{
+  "name": "hex-dominion",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Hex-based strategy game",
+  "scripts": {
+    "build": "esbuild src/main.ts --bundle --outfile=dist/bundle.js",
+    "watch": "esbuild src/main.ts --bundle --outfile=dist/bundle.js --watch --servedir=.",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx test.ts"
+  },
+  "keywords": ["game", "hex", "strategy"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "esbuild": "^0.27.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.3"
+  }
+}
