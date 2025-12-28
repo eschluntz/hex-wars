@@ -71,8 +71,9 @@ export class LabModal {
             <span class="science-amount">0</span>
           </div>
           <div class="tech-tree-container">
-            <svg class="tech-tree-lines"></svg>
-            <div class="tech-tree-nodes"></div>
+            <div class="tech-tree-nodes">
+              <svg class="tech-tree-lines"></svg>
+            </div>
           </div>
           <div class="tech-tooltip"></div>
         </div>
@@ -229,49 +230,81 @@ export class LabModal {
 
     const container = this.overlay.querySelector('.tech-tree-nodes') as HTMLElement;
     const svgEl = this.overlay.querySelector('.tech-tree-lines') as SVGElement;
-    container.innerHTML = '';
+
+    // Clear only the node elements, preserve the SVG
+    const existingNodes = container.querySelectorAll('.tech-node');
+    existingNodes.forEach(node => node.remove());
 
     const nodes = getTechTreeState(this.team, this.science);
     const layout = computeTechLayout();
 
-    // Constants for positioning
-    const nodeWidth = 120;
-    const nodeHeight = 60;
-    const tierGap = 160;
-    const rowGap = 80;
-    const startX = 30;
-    const startY = 30;
+    // Constants for vertical layout
+    const nodeWidth = 105;
+    const nodeHeight = 50;
+    const nodeGapX = 12;
+    const tierGapY = 70;
+    const paddingX = 20;
+    const paddingY = 10;
 
-    // Build position map
+    // Group layout by tier to find tier sizes
+    const tierGroups: Record<number, typeof layout> = {};
+    let maxTier = 0;
+    for (const pos of layout) {
+      if (!tierGroups[pos.tier]) tierGroups[pos.tier] = [];
+      tierGroups[pos.tier]!.push(pos);
+      maxTier = Math.max(maxTier, pos.tier);
+    }
+
+    // Find max tier width for centering
+    let maxTierNodes = 0;
+    for (const positions of Object.values(tierGroups)) {
+      maxTierNodes = Math.max(maxTierNodes, positions.length);
+    }
+    const containerWidth = maxTierNodes * nodeWidth + (maxTierNodes - 1) * nodeGapX + paddingX * 2;
+
+    // Build position map (vertical layout: tier = y, column = x, centered per tier)
     const positionMap: Record<string, { x: number; y: number }> = {};
-    const tierRows: Record<number, number> = {};
-    for (const pos of layout) {
-      tierRows[pos.tier] = Math.max(tierRows[pos.tier] ?? 0, pos.row + 1);
+
+    for (const [tierStr, positions] of Object.entries(tierGroups)) {
+      const tier = parseInt(tierStr);
+      const tierWidth = positions.length * nodeWidth + (positions.length - 1) * nodeGapX;
+      const tierOffsetX = (containerWidth - tierWidth) / 2;
+
+      // Sort by column within tier
+      positions.sort((a, b) => a.column - b.column);
+
+      for (let i = 0; i < positions.length; i++) {
+        const x = tierOffsetX + i * (nodeWidth + nodeGapX);
+        const y = paddingY + tier * (nodeHeight + tierGapY);
+        positionMap[positions[i]!.techId] = { x, y };
+      }
     }
 
-    for (const pos of layout) {
-      const x = startX + pos.tier * tierGap;
-      const y = startY + pos.row * rowGap;
-      positionMap[pos.techId] = { x, y };
-    }
+    // Set container size (width enables margin: 0 auto centering)
+    const containerHeight = paddingY * 2 + (maxTier + 1) * nodeHeight + maxTier * tierGapY;
+    container.style.height = `${containerHeight}px`;
+    container.style.width = `${containerWidth}px`;
 
-    // Draw dependency lines
+    // Draw dependency lines (vertical: from bottom of parent to top of child)
     let svgContent = '';
     for (const node of nodes) {
       const tech = node.tech;
-      const endPos = positionMap[tech.id]!;
+      const childPos = positionMap[tech.id]!;
       for (const prereq of tech.requires) {
-        const startPos = positionMap[prereq]!;
-        const x1 = startPos.x + nodeWidth;
-        const y1 = startPos.y + nodeHeight / 2;
-        const x2 = endPos.x;
-        const y2 = endPos.y + nodeHeight / 2;
-        const midX = (x1 + x2) / 2;
+        const parentPos = positionMap[prereq]!;
+        // Line from bottom-center of parent to top-center of child
+        const x1 = parentPos.x + nodeWidth / 2;
+        const y1 = parentPos.y + nodeHeight;
+        const x2 = childPos.x + nodeWidth / 2;
+        const y2 = childPos.y;
+        const midY = (y1 + y2) / 2;
         const lineClass = node.state === 'unlocked' ? 'line-unlocked' : 'line-locked';
-        svgContent += `<path class="tech-line ${lineClass}" data-from="${prereq}" data-to="${tech.id}" d="M${x1},${y1} C${midX},${y1} ${midX},${y2} ${x2},${y2}" />`;
+        svgContent += `<path class="tech-line ${lineClass}" data-from="${prereq}" data-to="${tech.id}" d="M${x1},${y1} C${x1},${midY} ${x2},${midY} ${x2},${y2}" />`;
       }
     }
     svgEl.innerHTML = svgContent;
+    svgEl.style.width = `${containerWidth}px`;
+    svgEl.style.height = `${containerHeight}px`;
 
     // Draw nodes
     for (const node of nodes) {

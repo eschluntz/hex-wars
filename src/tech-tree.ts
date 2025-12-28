@@ -1,8 +1,7 @@
 // ============================================================================
 // HEX DOMINION - Tech Tree System
 // ============================================================================
-// Defines the tech tree structure and API for unlocking new components.
-// Business logic layer - UI calls these functions to query and modify state.
+// Business logic for the tech tree. Data is defined in tech-data.ts.
 
 import { ResourceManager } from './resources.js';
 import {
@@ -13,254 +12,9 @@ import {
   unlockTech,
   getUnlockedTechs as researchGetUnlockedTechs,
 } from './research.js';
+import { TECH_TREE, type TechDefinition } from './tech-data.js';
 
-// ============================================================================
-// DATA STRUCTURES
-// ============================================================================
-
-export interface TechDefinition {
-  id: string;
-  name: string;
-  description: string;
-  category: 'chassis' | 'weapon' | 'system';
-  unlocks: string;      // Component ID to unlock
-  cost: number;         // Science cost
-  requires: string[];   // Prerequisite tech IDs
-}
-
-export const TECH_TREE: Record<string, TechDefinition> = {
-  // ============================================================================
-  // TIER 0 - Root Technologies (no prerequisites)
-  // ============================================================================
-  advancedTreads: {
-    id: 'advancedTreads',
-    name: 'Advanced Treads',
-    description: 'Hover technology for enhanced mobility over all terrain.',
-    category: 'chassis',
-    unlocks: 'hover',
-    cost: 5,
-    requires: [],
-  },
-  laserTechnology: {
-    id: 'laserTechnology',
-    name: 'Laser Technology',
-    description: 'Focused energy weapons with perfect accuracy.',
-    category: 'weapon',
-    unlocks: 'laser',
-    cost: 6,
-    requires: [],
-  },
-  advancedSensors: {
-    id: 'advancedSensors',
-    name: 'Advanced Sensors',
-    description: 'Enhanced detection and targeting systems.',
-    category: 'system',
-    unlocks: 'sensors',
-    cost: 4,
-    requires: [],
-  },
-  reactiveArmor: {
-    id: 'reactiveArmor',
-    name: 'Reactive Armor',
-    description: 'Explosive reactive plating that defeats incoming projectiles.',
-    category: 'system',
-    unlocks: 'reactive',
-    cost: 5,
-    requires: [],
-  },
-
-  // ============================================================================
-  // TIER 1 - Basic Specializations
-  // ============================================================================
-  rocketLauncher: {
-    id: 'rocketLauncher',
-    name: 'Rocket Launcher',
-    description: 'Explosive projectile weapon with moderate range.',
-    category: 'weapon',
-    unlocks: 'rockets',
-    cost: 8,
-    requires: ['advancedTreads'],
-  },
-  stealthPlating: {
-    id: 'stealthPlating',
-    name: 'Stealth Plating',
-    description: 'Advanced materials that reduce unit visibility.',
-    category: 'system',
-    unlocks: 'stealth',
-    cost: 10,
-    requires: ['advancedTreads'],
-  },
-  amphibiousHull: {
-    id: 'amphibiousHull',
-    name: 'Amphibious Hull',
-    description: 'Sealed hull design for water crossing capability.',
-    category: 'chassis',
-    unlocks: 'amphibious',
-    cost: 8,
-    requires: ['advancedTreads'],
-  },
-  plasmaCannon: {
-    id: 'plasmaCannon',
-    name: 'Plasma Cannon',
-    description: 'Superheated plasma projectiles that melt through armor.',
-    category: 'weapon',
-    unlocks: 'plasma',
-    cost: 10,
-    requires: ['laserTechnology'],
-  },
-  electronicWarfare: {
-    id: 'electronicWarfare',
-    name: 'Electronic Warfare',
-    description: 'Jamming and countermeasure systems.',
-    category: 'system',
-    unlocks: 'ecm',
-    cost: 7,
-    requires: ['advancedSensors'],
-  },
-  targetingComputer: {
-    id: 'targetingComputer',
-    name: 'Targeting Computer',
-    description: 'AI-assisted targeting for improved accuracy at range.',
-    category: 'system',
-    unlocks: 'targeting',
-    cost: 6,
-    requires: ['advancedSensors'],
-  },
-  shieldGenerator: {
-    id: 'shieldGenerator',
-    name: 'Shield Generator',
-    description: 'Energy barrier that absorbs incoming damage.',
-    category: 'system',
-    unlocks: 'shield',
-    cost: 12,
-    requires: ['reactiveArmor'],
-  },
-  fieldRepair: {
-    id: 'fieldRepair',
-    name: 'Field Repair',
-    description: 'Mobile repair systems for battlefield maintenance.',
-    category: 'system',
-    unlocks: 'repair',
-    cost: 6,
-    requires: ['reactiveArmor'],
-  },
-
-  // ============================================================================
-  // TIER 2 - Advanced Technologies
-  // ============================================================================
-  advancedRockets: {
-    id: 'advancedRockets',
-    name: 'Advanced Rockets',
-    description: 'Guided missile technology with extended range and accuracy.',
-    category: 'weapon',
-    unlocks: 'missiles',
-    cost: 15,
-    requires: ['rocketLauncher', 'stealthPlating'],
-  },
-  jumpJets: {
-    id: 'jumpJets',
-    name: 'Jump Jets',
-    description: 'Vertical thrust systems for terrain jumping.',
-    category: 'chassis',
-    unlocks: 'jump',
-    cost: 14,
-    requires: ['amphibiousHull'],
-  },
-  ionCannon: {
-    id: 'ionCannon',
-    name: 'Ion Cannon',
-    description: 'Disrupts electronics and disables enemy systems.',
-    category: 'weapon',
-    unlocks: 'ion',
-    cost: 16,
-    requires: ['plasmaCannon', 'electronicWarfare'],
-  },
-  droneSwarm: {
-    id: 'droneSwarm',
-    name: 'Drone Swarm',
-    description: 'Autonomous combat drones for distributed attacks.',
-    category: 'system',
-    unlocks: 'drones',
-    cost: 12,
-    requires: ['electronicWarfare'],
-  },
-  cloakingDevice: {
-    id: 'cloakingDevice',
-    name: 'Cloaking Device',
-    description: 'Complete optical invisibility system.',
-    category: 'system',
-    unlocks: 'cloak',
-    cost: 18,
-    requires: ['stealthPlating', 'shieldGenerator'],
-  },
-  nanoRepair: {
-    id: 'nanoRepair',
-    name: 'Nano Repair',
-    description: 'Nanobots that continuously repair damage.',
-    category: 'system',
-    unlocks: 'nanorepair',
-    cost: 14,
-    requires: ['fieldRepair', 'shieldGenerator'],
-  },
-  railgun: {
-    id: 'railgun',
-    name: 'Railgun',
-    description: 'Electromagnetic acceleration for hypersonic projectiles.',
-    category: 'weapon',
-    unlocks: 'railgun',
-    cost: 14,
-    requires: ['targetingComputer', 'plasmaCannon'],
-  },
-  siegeWeapons: {
-    id: 'siegeWeapons',
-    name: 'Siege Weapons',
-    description: 'Heavy ordnance designed for destroying fortifications.',
-    category: 'weapon',
-    unlocks: 'siege',
-    cost: 12,
-    requires: ['rocketLauncher', 'targetingComputer'],
-  },
-
-  // ============================================================================
-  // TIER 3 - Ultimate Technologies
-  // ============================================================================
-  fusionCore: {
-    id: 'fusionCore',
-    name: 'Fusion Core',
-    description: 'Miniaturized fusion reactor for ultimate mobility.',
-    category: 'chassis',
-    unlocks: 'fusion',
-    cost: 25,
-    requires: ['jumpJets', 'ionCannon'],
-  },
-  antimatterWeapons: {
-    id: 'antimatterWeapons',
-    name: 'Antimatter Weapons',
-    description: 'Matter-antimatter annihilation for devastating damage.',
-    category: 'weapon',
-    unlocks: 'antimatter',
-    cost: 30,
-    requires: ['railgun', 'ionCannon'],
-  },
-  psychicAmplifier: {
-    id: 'psychicAmplifier',
-    name: 'Psychic Amplifier',
-    description: 'Mind control technology for battlefield dominance.',
-    category: 'system',
-    unlocks: 'psychic',
-    cost: 28,
-    requires: ['cloakingDevice', 'droneSwarm'],
-  },
-  titanClass: {
-    id: 'titanClass',
-    name: 'Titan Class',
-    description: 'Massive walker chassis with unmatched firepower capacity.',
-    category: 'chassis',
-    unlocks: 'titan',
-    cost: 22,
-    requires: ['siegeWeapons', 'nanoRepair'],
-  },
-};
+export { TECH_TREE, type TechDefinition } from './tech-data.js';
 
 // ============================================================================
 // PER-TEAM STATE (delegated to research.ts)
@@ -392,7 +146,7 @@ export function getTechTreeState(team: string, science: number): TechNode[] {
 export interface TechPosition {
   techId: string;
   tier: number;
-  row: number;
+  column: number;  // position within tier (0-indexed from left)
 }
 
 export function computeTechLayout(): TechPosition[] {
@@ -427,22 +181,56 @@ export function computeTechLayout(): TechPosition[] {
 
   // Group techs by tier
   const tierGroups: Record<number, string[]> = {};
+  let maxTier = 0;
   for (const [techId, tier] of Object.entries(techTiers)) {
     if (!tierGroups[tier]) {
       tierGroups[tier] = [];
     }
     tierGroups[tier].push(techId);
+    maxTier = Math.max(maxTier, tier);
   }
 
-  // Assign row positions within each tier
-  for (const [tier, techIds] of Object.entries(tierGroups)) {
-    for (let row = 0; row < techIds.length; row++) {
-      positions.push({
-        techId: techIds[row]!,
-        tier: parseInt(tier),
-        row,
-      });
+  // Barycenter method for ordering nodes to minimize edge crossings
+  // Step 1: Assign initial positions for tier 0 (alphabetically for consistency)
+  const columnPositions: Record<string, number> = {};
+  tierGroups[0]!.sort();
+  for (let i = 0; i < tierGroups[0]!.length; i++) {
+    columnPositions[tierGroups[0]![i]!] = i;
+  }
+
+  // Step 2: For each subsequent tier, order by barycenter of prerequisites
+  for (let tier = 1; tier <= maxTier; tier++) {
+    const nodes = tierGroups[tier]!;
+
+    // Compute barycenter for each node (average x of prerequisites)
+    const withBarycenter = nodes.map(techId => {
+      const tech = TECH_TREE[techId]!;
+      const prereqColumns = tech.requires.map(p => columnPositions[p]!);
+      const barycenter = prereqColumns.reduce((a, b) => a + b, 0) / prereqColumns.length;
+      return { techId, barycenter };
+    });
+
+    // Sort by barycenter, then alphabetically for stability
+    withBarycenter.sort((a, b) => {
+      if (Math.abs(a.barycenter - b.barycenter) < 0.001) {
+        return a.techId.localeCompare(b.techId);
+      }
+      return a.barycenter - b.barycenter;
+    });
+
+    // Assign sequential column positions
+    for (let i = 0; i < withBarycenter.length; i++) {
+      columnPositions[withBarycenter[i]!.techId] = i;
     }
+  }
+
+  // Build final positions
+  for (const [techId, tier] of Object.entries(techTiers)) {
+    positions.push({
+      techId,
+      tier,
+      column: columnPositions[techId]!,
+    });
   }
 
   return positions;
