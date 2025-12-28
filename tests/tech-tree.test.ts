@@ -1,6 +1,7 @@
 // ============================================================================
 // HEX DOMINION - Tech Tree Tests
 // ============================================================================
+// Uses a test fixture for logic tests to decouple from game balance changes.
 
 import { TestRunner, assertEqual, assert } from './framework.js';
 import {
@@ -16,264 +17,318 @@ import {
 } from '../src/tech-tree.js';
 import { initTeamResearch, isChassisResearched, isWeaponResearched, isSystemResearched } from '../src/research.js';
 import { ResourceManager } from '../src/resources.js';
+import { TEST_TECH_TREE } from './fixtures/test-tech-tree.js';
 
 const runner = new TestRunner();
 
 runner.describe('Tech Tree', () => {
 
-  runner.describe('TECH_TREE data', () => {
+  // ==========================================================================
+  // Tests using the FIXTURE (isolated from game data changes)
+  // ==========================================================================
 
-    runner.it('should have 19 techs defined', () => {
-      const techs = getAllTechs();
-      assertEqual(techs.length, 19);
-    });
+  runner.describe('getAllTechs (fixture)', () => {
 
-    runner.it('should have advancedMobility with no prerequisites', () => {
-      const tech = getTech('advancedMobility');
-      assertEqual(tech.name, 'Adv. Mobility');
-      assertEqual(tech.requires.length, 0);
-      assertEqual(tech.unlocks, 'hover');
-      assertEqual(tech.category, 'chassis');
-    });
-
-    runner.it('should have amphibiousDrive requiring advancedMobility', () => {
-      const tech = getTech('amphibiousDrive');
-      assertEqual(tech.requires.length, 1);
-      assertEqual(tech.requires[0], 'advancedMobility');
-      assertEqual(tech.unlocks, 'amphibious');
-      assertEqual(tech.category, 'chassis');
-    });
-
-    runner.it('should have railgun requiring two techs', () => {
-      const tech = getTech('railgun');
-      assertEqual(tech.requires.length, 2);
-      assert(tech.requires.includes('plasmaTech'));
-      assert(tech.requires.includes('targeting'));
-      assertEqual(tech.unlocks, 'railgun');
+    runner.it('should return all techs from the provided tree', () => {
+      const techs = getAllTechs(TEST_TECH_TREE);
+      assertEqual(techs.length, 6);
     });
 
   });
 
-  runner.describe('isTechUnlocked', () => {
+  runner.describe('getTech (fixture)', () => {
 
-    runner.it('should return false for uninitialized team', () => {
-      assert(!isTechUnlocked('newteam', 'advancedMobility'));
-    });
-
-    runner.it('should return false for unlocked tech on initialized team', () => {
-      initTeamResearch('testplayer1');
-      assert(!isTechUnlocked('testplayer1', 'advancedMobility'));
+    runner.it('should return tech by id', () => {
+      const tech = getTech('rootA', TEST_TECH_TREE);
+      assertEqual(tech.name, 'Root A');
+      assertEqual(tech.category, 'chassis');
     });
 
   });
 
-  runner.describe('areTechPrereqsMet', () => {
+  runner.describe('areTechPrereqsMet (fixture)', () => {
 
     runner.it('should return true for tech with no prerequisites', () => {
-      initTeamResearch('prereqtest1');
-      assert(areTechPrereqsMet('prereqtest1', 'advancedMobility'));
+      initTeamResearch('fix_prereq1');
+      assert(areTechPrereqsMet('fix_prereq1', 'rootA', TEST_TECH_TREE));
+      assert(areTechPrereqsMet('fix_prereq1', 'rootB', TEST_TECH_TREE));
     });
 
-    runner.it('should return false when prerequisites not met', () => {
-      initTeamResearch('prereqtest2');
-      assert(!areTechPrereqsMet('prereqtest2', 'amphibiousDrive'));
+    runner.it('should return false when single prerequisite not met', () => {
+      initTeamResearch('fix_prereq2');
+      assert(!areTechPrereqsMet('fix_prereq2', 'childA', TEST_TECH_TREE));
+    });
+
+    runner.it('should return false when any prerequisite not met', () => {
+      initTeamResearch('fix_prereq3');
+      // convergent requires both childA and childB
+      assert(!areTechPrereqsMet('fix_prereq3', 'convergent', TEST_TECH_TREE));
     });
 
   });
 
-  runner.describe('getTechAvailability', () => {
+  runner.describe('getTechAvailability (fixture)', () => {
 
     runner.it('should be available for root tech with enough science', () => {
-      initTeamResearch('availtest1');
-      const result = getTechAvailability('availtest1', 'advancedMobility', 10);
+      initTeamResearch('fix_avail1');
+      const result = getTechAvailability('fix_avail1', 'rootA', 10, TEST_TECH_TREE);
       assert(result.available);
     });
 
     runner.it('should not be available with insufficient science', () => {
-      initTeamResearch('availtest2');
-      const result = getTechAvailability('availtest2', 'advancedMobility', 2);
+      initTeamResearch('fix_avail2');
+      const result = getTechAvailability('fix_avail2', 'rootA', 2, TEST_TECH_TREE);
       assert(!result.available);
       assert(result.reason!.includes('Need'));
     });
 
     runner.it('should not be available when prereqs not met', () => {
-      initTeamResearch('availtest3');
-      const result = getTechAvailability('availtest3', 'amphibiousDrive', 100);
+      initTeamResearch('fix_avail3');
+      const result = getTechAvailability('fix_avail3', 'childA', 100, TEST_TECH_TREE);
       assert(!result.available);
       assert(result.reason!.includes('Requires'));
     });
 
-  });
-
-  runner.describe('purchaseTech', () => {
-
-    runner.it('should successfully purchase root tech with enough science', () => {
-      initTeamResearch('purchtest1');
-      const resources = new ResourceManager(['purchtest1']);
-      resources.addScience('purchtest1', 10);
-
-      const result = purchaseTech('purchtest1', 'advancedMobility', resources);
-
-      assert(result.success);
-      assertEqual(resources.getResources('purchtest1').science, 5); // 10 - 5 cost
-      assert(isTechUnlocked('purchtest1', 'advancedMobility'));
+    runner.it('should show all missing prereqs in reason', () => {
+      initTeamResearch('fix_avail4');
+      const result = getTechAvailability('fix_avail4', 'convergent', 100, TEST_TECH_TREE);
+      assert(!result.available);
+      assert(result.reason!.includes('Child A'));
+      assert(result.reason!.includes('Child B'));
     });
 
-    runner.it('should unlock the corresponding component', () => {
-      initTeamResearch('purchtest2');
-      const resources = new ResourceManager(['purchtest2']);
-      resources.addScience('purchtest2', 10);
+  });
 
-      // Hover should not be available before purchase
-      assert(!isChassisResearched('purchtest2', 'hover'));
+  runner.describe('purchaseTech (fixture)', () => {
 
-      purchaseTech('purchtest2', 'advancedMobility', resources);
+    runner.it('should successfully purchase root tech', () => {
+      initTeamResearch('fix_purch1');
+      const resources = new ResourceManager(['fix_purch1']);
+      resources.addScience('fix_purch1', 10);
 
-      // Hover should be available after purchase
-      assert(isChassisResearched('purchtest2', 'hover'));
+      const result = purchaseTech('fix_purch1', 'rootA', resources, TEST_TECH_TREE);
+
+      assert(result.success);
+      assertEqual(resources.getResources('fix_purch1').science, 5); // 10 - 5 cost
+      assert(isTechUnlocked('fix_purch1', 'rootA'));
     });
 
     runner.it('should fail with insufficient science', () => {
-      initTeamResearch('purchtest3');
-      const resources = new ResourceManager(['purchtest3']);
-      resources.addScience('purchtest3', 2);
+      initTeamResearch('fix_purch2');
+      const resources = new ResourceManager(['fix_purch2']);
+      resources.addScience('fix_purch2', 2);
 
-      const result = purchaseTech('purchtest3', 'advancedMobility', resources);
+      const result = purchaseTech('fix_purch2', 'rootA', resources, TEST_TECH_TREE);
 
       assert(!result.success);
-      assertEqual(resources.getResources('purchtest3').science, 2); // unchanged
+      assertEqual(resources.getResources('fix_purch2').science, 2);
     });
 
     runner.it('should fail when prerequisites not met', () => {
-      initTeamResearch('purchtest4');
-      const resources = new ResourceManager(['purchtest4']);
-      resources.addScience('purchtest4', 100);
+      initTeamResearch('fix_purch3');
+      const resources = new ResourceManager(['fix_purch3']);
+      resources.addScience('fix_purch3', 100);
 
-      const result = purchaseTech('purchtest4', 'amphibiousDrive', resources);
+      const result = purchaseTech('fix_purch3', 'childA', resources, TEST_TECH_TREE);
 
       assert(!result.success);
-      assert(!isTechUnlocked('purchtest4', 'amphibiousDrive'));
+      assert(!isTechUnlocked('fix_purch3', 'childA'));
     });
 
     runner.it('should allow chained purchases', () => {
-      initTeamResearch('purchtest5');
-      const resources = new ResourceManager(['purchtest5']);
-      resources.addScience('purchtest5', 50);
+      initTeamResearch('fix_purch4');
+      const resources = new ResourceManager(['fix_purch4']);
+      resources.addScience('fix_purch4', 50);
 
-      // Purchase advancedMobility first
-      const result1 = purchaseTech('purchtest5', 'advancedMobility', resources);
+      const result1 = purchaseTech('fix_purch4', 'rootA', resources, TEST_TECH_TREE);
       assert(result1.success);
 
-      // Now amphibiousDrive should be purchasable
-      const result2 = purchaseTech('purchtest5', 'amphibiousDrive', resources);
+      const result2 = purchaseTech('fix_purch4', 'childA', resources, TEST_TECH_TREE);
       assert(result2.success);
 
-      assert(isChassisResearched('purchtest5', 'amphibious'));
+      assert(isTechUnlocked('fix_purch4', 'childA'));
     });
 
-    runner.it('should unlock system component for stealthTech', () => {
-      initTeamResearch('purchtest6');
-      const resources = new ResourceManager(['purchtest6']);
-      resources.addScience('purchtest6', 30);
+    runner.it('should require all prereqs for convergent tech', () => {
+      initTeamResearch('fix_purch5');
+      const resources = new ResourceManager(['fix_purch5']);
+      resources.addScience('fix_purch5', 100);
 
-      purchaseTech('purchtest6', 'defenseTech', resources);
-      purchaseTech('purchtest6', 'shieldTech', resources);
-      purchaseTech('purchtest6', 'stealthTech', resources);
+      // Purchase only one branch
+      purchaseTech('fix_purch5', 'rootA', resources, TEST_TECH_TREE);
+      purchaseTech('fix_purch5', 'childA', resources, TEST_TECH_TREE);
 
-      assert(isSystemResearched('purchtest6', 'stealth'));
+      // Should fail - missing childB
+      const result = purchaseTech('fix_purch5', 'convergent', resources, TEST_TECH_TREE);
+      assert(!result.success);
+    });
+
+    runner.it('should succeed when all prereqs met for convergent tech', () => {
+      initTeamResearch('fix_purch6');
+      const resources = new ResourceManager(['fix_purch6']);
+      resources.addScience('fix_purch6', 100);
+
+      // Purchase both branches
+      purchaseTech('fix_purch6', 'rootA', resources, TEST_TECH_TREE);
+      purchaseTech('fix_purch6', 'rootB', resources, TEST_TECH_TREE);
+      purchaseTech('fix_purch6', 'childA', resources, TEST_TECH_TREE);
+      purchaseTech('fix_purch6', 'childB', resources, TEST_TECH_TREE);
+
+      const result = purchaseTech('fix_purch6', 'convergent', resources, TEST_TECH_TREE);
+      assert(result.success);
     });
 
   });
 
-  runner.describe('getTechTreeState', () => {
+  runner.describe('getTechTreeState (fixture)', () => {
 
     runner.it('should return all techs with correct states', () => {
-      initTeamResearch('statetest1');
-      const nodes = getTechTreeState('statetest1', 100);
+      initTeamResearch('fix_state1');
+      const nodes = getTechTreeState('fix_state1', 100, TEST_TECH_TREE);
 
-      assertEqual(nodes.length, 19);
+      assertEqual(nodes.length, 6);
 
-      // Root techs should be available
-      const advMobility = nodes.find(n => n.tech.id === 'advancedMobility')!;
-      assertEqual(advMobility.state, 'available');
+      const rootA = nodes.find(n => n.tech.id === 'rootA')!;
+      assertEqual(rootA.state, 'available');
 
-      // Tier 1 techs should be locked (prereqs not met)
-      const amphib = nodes.find(n => n.tech.id === 'amphibiousDrive')!;
-      assertEqual(amphib.state, 'locked');
+      const childA = nodes.find(n => n.tech.id === 'childA')!;
+      assertEqual(childA.state, 'locked');
     });
 
     runner.it('should mark purchased techs as unlocked', () => {
-      initTeamResearch('statetest2');
-      const resources = new ResourceManager(['statetest2']);
-      resources.addScience('statetest2', 10);
-      purchaseTech('statetest2', 'advancedMobility', resources);
+      initTeamResearch('fix_state2');
+      const resources = new ResourceManager(['fix_state2']);
+      resources.addScience('fix_state2', 10);
+      purchaseTech('fix_state2', 'rootA', resources, TEST_TECH_TREE);
 
-      const nodes = getTechTreeState('statetest2', 100);
-      const advMobility = nodes.find(n => n.tech.id === 'advancedMobility')!;
-      assertEqual(advMobility.state, 'unlocked');
+      const nodes = getTechTreeState('fix_state2', 100, TEST_TECH_TREE);
 
-      // Dependent techs should now be available
-      const amphib = nodes.find(n => n.tech.id === 'amphibiousDrive')!;
-      assertEqual(amphib.state, 'available');
+      const rootA = nodes.find(n => n.tech.id === 'rootA')!;
+      assertEqual(rootA.state, 'unlocked');
+
+      const childA = nodes.find(n => n.tech.id === 'childA')!;
+      assertEqual(childA.state, 'available');
     });
 
   });
 
-  runner.describe('computeTechLayout', () => {
+  runner.describe('computeTechLayout (fixture)', () => {
 
     runner.it('should assign tier 0 to root techs', () => {
-      const layout = computeTechLayout();
-      const advMobility = layout.find(p => p.techId === 'advancedMobility')!;
-      assertEqual(advMobility.tier, 0);
+      const layout = computeTechLayout(TEST_TECH_TREE);
 
-      const energy = layout.find(p => p.techId === 'energyWeapons')!;
-      assertEqual(energy.tier, 0);
+      const rootA = layout.find(p => p.techId === 'rootA')!;
+      assertEqual(rootA.tier, 0);
 
-      const defense = layout.find(p => p.techId === 'defenseTech')!;
-      assertEqual(defense.tier, 0);
+      const rootB = layout.find(p => p.techId === 'rootB')!;
+      assertEqual(rootB.tier, 0);
     });
 
-    runner.it('should assign tier 1 to techs with one prereq', () => {
-      const layout = computeTechLayout();
-      const amphib = layout.find(p => p.techId === 'amphibiousDrive')!;
-      assertEqual(amphib.tier, 1);
+    runner.it('should assign tier 1 to techs with single prereq', () => {
+      const layout = computeTechLayout(TEST_TECH_TREE);
 
-      const plasma = layout.find(p => p.techId === 'plasmaTech')!;
-      assertEqual(plasma.tier, 1);
+      const childA = layout.find(p => p.techId === 'childA')!;
+      assertEqual(childA.tier, 1);
 
-      const shield = layout.find(p => p.techId === 'shieldTech')!;
-      assertEqual(shield.tier, 1);
+      const childB = layout.find(p => p.techId === 'childB')!;
+      assertEqual(childB.tier, 1);
     });
 
-    runner.it('should assign higher tiers to techs with deeper prereqs', () => {
-      const layout = computeTechLayout();
+    runner.it('should assign tier 2 to convergent tech', () => {
+      const layout = computeTechLayout(TEST_TECH_TREE);
 
-      // Tier 2
-      const jumpJets = layout.find(p => p.techId === 'jumpJets')!;
-      assertEqual(jumpJets.tier, 2);
+      const convergent = layout.find(p => p.techId === 'convergent')!;
+      assertEqual(convergent.tier, 2);
+    });
 
-      // Tier 3
-      const railgun = layout.find(p => p.techId === 'railgun')!;
-      assertEqual(railgun.tier, 3);
+    runner.it('should assign tier 3 to ultimate tech', () => {
+      const layout = computeTechLayout(TEST_TECH_TREE);
 
-      // Tier 6 (ultimate)
-      const fusion = layout.find(p => p.techId === 'fusionCore')!;
-      assertEqual(fusion.tier, 6);
+      const ultimate = layout.find(p => p.techId === 'ultimate')!;
+      assertEqual(ultimate.tier, 3);
     });
 
     runner.it('should return positions for all techs', () => {
-      const layout = computeTechLayout();
-      assertEqual(layout.length, 19);
+      const layout = computeTechLayout(TEST_TECH_TREE);
+      assertEqual(layout.length, 6);
     });
 
-    runner.it('should order nodes by barycenter to minimize crossings', () => {
-      const layout = computeTechLayout();
-
-      // Tier 0 should be alphabetically sorted
+    runner.it('should order tier 0 alphabetically', () => {
+      const layout = computeTechLayout(TEST_TECH_TREE);
       const tier0 = layout.filter(p => p.tier === 0).sort((a, b) => a.column - b.column);
-      assertEqual(tier0[0]!.techId, 'advancedMobility');
-      assertEqual(tier0[1]!.techId, 'defenseTech');
-      assertEqual(tier0[2]!.techId, 'energyWeapons');
+      assertEqual(tier0[0]!.techId, 'rootA');
+      assertEqual(tier0[1]!.techId, 'rootB');
+    });
+
+  });
+
+  // ==========================================================================
+  // Smoke tests for REAL game data (validates structure, not specific values)
+  // ==========================================================================
+
+  runner.describe('TECH_TREE validation (game data)', () => {
+
+    runner.it('should have at least one tech', () => {
+      const techs = getAllTechs();
+      assert(techs.length > 0, 'Tech tree should not be empty');
+    });
+
+    runner.it('should have at least one root tech (no prerequisites)', () => {
+      const techs = getAllTechs();
+      const roots = techs.filter(t => t.requires.length === 0);
+      assert(roots.length > 0, 'Should have at least one root tech');
+    });
+
+    runner.it('all techs should have valid category', () => {
+      const validCategories = ['chassis', 'weapon', 'system'];
+      for (const tech of getAllTechs()) {
+        assert(validCategories.includes(tech.category),
+          `Tech ${tech.id} has invalid category: ${tech.category}`);
+      }
+    });
+
+    runner.it('all prerequisites should reference existing techs', () => {
+      const allIds = new Set(Object.keys(TECH_TREE));
+      for (const tech of getAllTechs()) {
+        for (const prereq of tech.requires) {
+          assert(allIds.has(prereq),
+            `Tech ${tech.id} has unknown prereq: ${prereq}`);
+        }
+      }
+    });
+
+    runner.it('should have no circular dependencies', () => {
+      const visited = new Set<string>();
+      const recursionStack = new Set<string>();
+
+      function hasCycle(techId: string): boolean {
+        visited.add(techId);
+        recursionStack.add(techId);
+
+        const tech = TECH_TREE[techId]!;
+        for (const prereq of tech.requires) {
+          if (!visited.has(prereq)) {
+            if (hasCycle(prereq)) return true;
+          } else if (recursionStack.has(prereq)) {
+            return true;
+          }
+        }
+
+        recursionStack.delete(techId);
+        return false;
+      }
+
+      for (const techId of Object.keys(TECH_TREE)) {
+        if (!visited.has(techId)) {
+          assert(!hasCycle(techId), `Circular dependency detected involving ${techId}`);
+        }
+      }
+    });
+
+    runner.it('all techs should have positive cost', () => {
+      for (const tech of getAllTechs()) {
+        assert(tech.cost > 0, `Tech ${tech.id} should have positive cost`);
+      }
     });
 
   });

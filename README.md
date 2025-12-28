@@ -193,7 +193,9 @@ hex-dominion/
 │   ├── combat.ts        # Combat calculations with armor/AP
 │   ├── building.ts      # Building types, icons, income
 │   ├── resources.ts     # Team resource tracking
-│   ├── research.ts      # Tech tree unlock tracking (per-team)
+│   ├── research.ts      # Component unlock tracking (per-team)
+│   ├── tech-data.ts     # Tech tree definitions (costs, prereqs, unlocks)
+│   ├── tech-tree.ts     # Tech tree logic (purchase, layout, availability)
 │   ├── unit-templates.ts # Unit templates built from components
 │   ├── unit-designer.ts # Design state, validation, component availability
 │   ├── lab-modal.ts     # HTML/DOM-based unit designer UI
@@ -209,12 +211,15 @@ hex-dominion/
 ├── tests/
 │   ├── framework.ts     # Test runner
 │   ├── helpers.ts       # createTestMap() utility
+│   ├── fixtures/        # Test fixtures (isolated from game data)
 │   ├── pathfinding.test.ts
 │   ├── unit.test.ts
 │   ├── combat.test.ts   # Combat system tests (incl. armor/AP)
 │   ├── components.test.ts # Component system tests
 │   ├── building.test.ts # Building system tests
 │   ├── resources.test.ts # Resource management tests
+│   ├── research.test.ts # Research unlock tests
+│   ├── tech-tree.test.ts # Tech tree logic tests
 │   ├── production.test.ts # Unit template tests
 │   ├── unit-designer.test.ts # Unit designer tests
 │   └── stats.test.ts    # Statistics tracking tests
@@ -230,7 +235,7 @@ hex-dominion/
 npm run watch      # Build + serve with auto-rebuild
 npm run build      # One-time build
 npm run typecheck  # Check types without building
-npm test           # Run tests (215 tests)
+npm test           # Run tests (246 tests)
 ```
 
 ### Test Map Helper
@@ -267,10 +272,11 @@ this.drawPopupMenu({
 }, zoom);
 ```
 
-**Research system** (`research.ts`):
-- Tracks unlocked components per team
-- Unresearched components are hidden (not grayed out)
-- Ready for tech tree integration
+**Tech tree system** (`tech-tree.ts`, `tech-data.ts`):
+- Spend science to unlock new chassis, weapons, and systems
+- Prerequisites create branching unlock paths
+- Barycenter algorithm for automatic tree layout (minimizes line crossings)
+- Vertical display with dependency highlighting on hover
 
 
 ## Next Steps
@@ -296,17 +302,26 @@ this.drawPopupMenu({
 - [x] Unit Designer interface (click lab to design custom units)
 - [x] Per-team template libraries
 - [x] Research system infrastructure (ready for tech tree)
+- [x] Tech tree (spend science to unlock new components)
 
 ### Upcoming
-- [ ] Tech tree (spend science to unlock new components)
 - [ ] AI opponent
 - [ ] Upgrade Map visuals
-- [ ] Building construction (using units with Build ability)
-- [ ] More chassis types (hover, etc.)
-- [ ] More weapon types (missiles, lasers, etc.)
-- [ ] More system modules (stealth, repair, sensors)
+  - [ ] prettier tiles
+  - [ ] better icons for units
+  - [ ] draw connected roads
+- [ ] Balance / playtesting
+  - [ ] More chassis types (hover, etc.)
+  - [ ] More weapon types (missiles, lasers, etc.)
+  - [ ] More system modules (stealth, repair, sensors)
+  - [ ] more building types? Resources?
 - [ ] Satisfying battle animations
 - [ ] Improving road generation
+
+### Potential future additions?
 - [ ] fog of war?
-- [ ] more building types? Resources?
+- [ ] Building construction (using units with Build ability)
+  - [ ] either light buildings like roads, foxholes, walls, or
+  - [ ] full, resource gathering system and empire building
+
 

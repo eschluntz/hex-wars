@@ -1,8 +1,9 @@
 // ============================================================================
 // HEX DOMINION - Component System Tests
 // ============================================================================
+// Tests validation logic, not specific balance values.
 
-import { TestRunner, assertEqual, assert, assertThrows } from './framework.js';
+import { TestRunner, assertEqual, assert } from './framework.js';
 import {
   CHASSIS,
   WEAPONS,
@@ -14,130 +15,60 @@ import {
   getAllWeapons,
   getAllSystems,
   validateTemplate,
-  validateComponentWeight,
   computeTemplateCost,
 } from '../src/components.js';
 
 const runner = new TestRunner();
 
 runner.describe('Components', () => {
-  runner.describe('CHASSIS', () => {
-    runner.it('should have foot chassis with correct properties', () => {
-      const foot = CHASSIS.foot!;
 
-      assertEqual(foot.id, 'foot');
-      assertEqual(foot.name, 'Foot');
-      assertEqual(foot.speed, 3);
-      assertEqual(foot.maxWeight, 2);
-      assertEqual(foot.baseCost, 500);
+  // ==========================================================================
+  // Structure validation (ensures components are properly defined)
+  // ==========================================================================
+
+  runner.describe('Component structure', () => {
+    runner.it('all chassis should have required properties', () => {
+      for (const chassis of getAllChassis()) {
+        assert(typeof chassis.id === 'string', `${chassis.id} should have string id`);
+        assert(typeof chassis.name === 'string', `${chassis.id} should have string name`);
+        assert(typeof chassis.speed === 'number' && chassis.speed > 0, `${chassis.id} should have positive speed`);
+        assert(typeof chassis.maxWeight === 'number' && chassis.maxWeight > 0, `${chassis.id} should have positive maxWeight`);
+        assert(typeof chassis.baseCost === 'number' && chassis.baseCost > 0, `${chassis.id} should have positive baseCost`);
+        assert(chassis.terrainCosts !== undefined, `${chassis.id} should have terrainCosts`);
+      }
     });
 
-    runner.it('should have wheels chassis with correct properties', () => {
-      const wheels = CHASSIS.wheels!;
-
-      assertEqual(wheels.id, 'wheels');
-      assertEqual(wheels.speed, 6);
-      assertEqual(wheels.maxWeight, 3);
-      assertEqual(wheels.baseCost, 800);
+    runner.it('all weapons should have required properties', () => {
+      for (const weapon of getAllWeapons()) {
+        assert(typeof weapon.id === 'string', `${weapon.id} should have string id`);
+        assert(typeof weapon.name === 'string', `${weapon.id} should have string name`);
+        assert(typeof weapon.attack === 'number' && weapon.attack > 0, `${weapon.id} should have positive attack`);
+        assert(typeof weapon.range === 'number' && weapon.range > 0, `${weapon.id} should have positive range`);
+        assert(typeof weapon.weight === 'number' && weapon.weight > 0, `${weapon.id} should have positive weight`);
+        assert(typeof weapon.cost === 'number' && weapon.cost >= 0, `${weapon.id} should have non-negative cost`);
+        assert(typeof weapon.armorPiercing === 'boolean', `${weapon.id} should have boolean armorPiercing`);
+      }
     });
 
-    runner.it('should have treads chassis with high weight capacity', () => {
-      const treads = CHASSIS.treads!;
-
-      assertEqual(treads.id, 'treads');
-      assertEqual(treads.speed, 4);
-      assertEqual(treads.maxWeight, 10);
-      assertEqual(treads.baseCost, 1500);
+    runner.it('all systems should have required properties', () => {
+      for (const system of getAllSystems()) {
+        assert(typeof system.id === 'string', `${system.id} should have string id`);
+        assert(typeof system.name === 'string', `${system.id} should have string name`);
+        assert(typeof system.weight === 'number' && system.weight > 0, `${system.id} should have positive weight`);
+        assert(typeof system.cost === 'number' && system.cost >= 0, `${system.id} should have non-negative cost`);
+      }
     });
 
-    runner.it('foot should move equally on all passable terrain', () => {
-      const foot = CHASSIS.foot!;
-      assertEqual(foot.terrainCosts.grass, 1);
-      assertEqual(foot.terrainCosts.road, 1);   // Not faster on roads
-      assertEqual(foot.terrainCosts.woods, 1);  // Not slower in woods
-    });
-
-    runner.it('treads should be slower in woods', () => {
-      const treads = CHASSIS.treads!;
-      assertEqual(treads.terrainCosts.woods, 2);
-    });
-  });
-
-  runner.describe('WEAPONS', () => {
-    runner.it('should have machineGun without armor piercing', () => {
-      const mg = WEAPONS.machineGun!;
-
-      assertEqual(mg.id, 'machineGun');
-      assertEqual(mg.attack, 4);
-      assertEqual(mg.armorPiercing, false);
-      assertEqual(mg.range, 1);
-      assertEqual(mg.weight, 1);
-      assertEqual(mg.cost, 500);
-    });
-
-    runner.it('should have heavyMG with higher attack', () => {
-      const hmg = WEAPONS.heavyMG!;
-
-      assertEqual(hmg.attack, 6);
-      assertEqual(hmg.armorPiercing, false);
-      assertEqual(hmg.weight, 2);
-    });
-
-    runner.it('should have cannon with armor piercing', () => {
-      const cannon = WEAPONS.cannon!;
-
-      assertEqual(cannon.id, 'cannon');
-      assertEqual(cannon.attack, 7);
-      assertEqual(cannon.armorPiercing, true);
-      assertEqual(cannon.range, 1);
-      assertEqual(cannon.weight, 4);
-      assertEqual(cannon.cost, 1500);
-    });
-
-    runner.it('should have artillery with long range and armor piercing', () => {
-      const artillery = WEAPONS.artillery!;
-
-      assertEqual(artillery.attack, 5);
-      assertEqual(artillery.armorPiercing, true);
-      assertEqual(artillery.range, 3);
-      assertEqual(artillery.weight, 5);
-      assertEqual(artillery.cost, 2000);
+    runner.it('should have at least one chassis, weapon, and system', () => {
+      assert(getAllChassis().length > 0, 'Should have at least one chassis');
+      assert(getAllWeapons().length > 0, 'Should have at least one weapon');
+      assert(getAllSystems().length > 0, 'Should have at least one system');
     });
   });
 
-  runner.describe('SYSTEMS', () => {
-    runner.it('should have capture system for foot only', () => {
-      const capture = SYSTEMS.capture!;
-
-      assertEqual(capture.id, 'capture');
-      assertEqual(capture.weight, 1);
-      assertEqual(capture.cost, 0);
-      assertEqual(capture.grantsCapture, true);
-      assert(capture.requiresChassis!.includes('foot'));
-      assertEqual(capture.requiresChassis!.length, 1);
-    });
-
-    runner.it('should have build system', () => {
-      const build = SYSTEMS.build!;
-
-      assertEqual(build.id, 'build');
-      assertEqual(build.weight, 1);
-      assertEqual(build.cost, 500);
-      assertEqual(build.grantsBuild, true);
-    });
-
-    runner.it('should have armor system for wheels and treads', () => {
-      const armor = SYSTEMS.armor!;
-
-      assertEqual(armor.id, 'armor');
-      assertEqual(armor.weight, 2);
-      assertEqual(armor.cost, 1000);
-      assertEqual(armor.grantsArmor, true);
-      assert(armor.requiresChassis!.includes('wheels'));
-      assert(armor.requiresChassis!.includes('treads'));
-      assert(!armor.requiresChassis!.includes('foot'));
-    });
-  });
+  // ==========================================================================
+  // Accessor tests
+  // ==========================================================================
 
   runner.describe('getChassis / getWeapon / getSystem', () => {
     runner.it('should return chassis by id', () => {
@@ -156,135 +87,104 @@ runner.describe('Components', () => {
     });
   });
 
-  runner.describe('getAllChassis / getAllWeapons / getAllSystems', () => {
-    runner.it('should return all chassis as array', () => {
-      const all = getAllChassis();
-      assert(Array.isArray(all));
-      assertEqual(all.length, 8); // foot, wheels, treads, hover, amphibious, jump, fusion, titan
-    });
-
-    runner.it('should return all weapons as array', () => {
-      const all = getAllWeapons();
-      assert(Array.isArray(all));
-      assertEqual(all.length, 12); // base(4): machineGun, heavyMG, cannon, artillery + locked(8): rockets, missiles, laser, plasma, ion, railgun, siege, antimatter
-    });
-
-    runner.it('should return all systems as array', () => {
-      const all = getAllSystems();
-      assert(Array.isArray(all));
-      assertEqual(all.length, 14); // base(3): capture, build, armor + locked(11): stealth, sensors, reactive, ecm, targeting, shield, repair, drones, cloak, nanorepair, psychic
-    });
-  });
+  // ==========================================================================
+  // Validation logic tests
+  // ==========================================================================
 
   runner.describe('validateTemplate', () => {
     runner.it('should validate foot + machineGun + capture', () => {
       const result = validateTemplate('foot', 'machineGun', ['capture']);
-
       assertEqual(result.valid, true);
-      assertEqual(result.totalWeight, 2); // MG (1) + capture (1)
-      assertEqual(result.maxWeight, 2);
     });
 
-    runner.it('should reject capture on wheels', () => {
-      const result = validateTemplate('wheels', 'machineGun', ['capture']);
+    runner.it('should reject capture on non-foot chassis', () => {
+      const wheelsResult = validateTemplate('wheels', 'machineGun', ['capture']);
+      assertEqual(wheelsResult.valid, false);
+      assert(wheelsResult.error!.includes('requires chassis'));
 
-      assertEqual(result.valid, false);
-      assert(result.error!.includes('requires chassis'));
-    });
-
-    runner.it('should reject capture on treads', () => {
-      const result = validateTemplate('treads', 'cannon', ['capture']);
-
-      assertEqual(result.valid, false);
-      assert(result.error!.includes('requires chassis'));
+      const treadsResult = validateTemplate('treads', 'cannon', ['capture']);
+      assertEqual(treadsResult.valid, false);
     });
 
     runner.it('should validate treads + cannon + armor', () => {
       const result = validateTemplate('treads', 'cannon', ['armor']);
-
       assertEqual(result.valid, true);
-      assertEqual(result.totalWeight, 6); // cannon (4) + armor (2)
     });
 
-    runner.it('should validate wheels + armor (no weapon)', () => {
+    runner.it('should validate chassis + armor without weapon', () => {
       const result = validateTemplate('wheels', null, ['armor']);
-
       assertEqual(result.valid, true);
-      assertEqual(result.totalWeight, 2);
     });
 
     runner.it('should reject armor on foot', () => {
       const result = validateTemplate('foot', 'machineGun', ['armor']);
-
       assertEqual(result.valid, false);
       assert(result.error!.includes('requires chassis'));
     });
 
-    runner.it('should validate build with weapon (combat engineer)', () => {
+    runner.it('should validate build system with weapon', () => {
       const result = validateTemplate('foot', 'machineGun', ['build']);
-
       assertEqual(result.valid, true);
-      assertEqual(result.totalWeight, 2); // MG (1) + build (1)
     });
 
-    runner.it('should validate build without weapon', () => {
+    runner.it('should validate build system without weapon', () => {
       const result = validateTemplate('foot', null, ['build']);
-
       assertEqual(result.valid, true);
     });
 
-    runner.it('should validate wheeled builder with weapon', () => {
-      const result = validateTemplate('wheels', 'machineGun', ['build']);
-
-      assertEqual(result.valid, true);
-      assertEqual(result.totalWeight, 2);
-    });
-  });
-
-  runner.describe('validateComponentWeight (legacy)', () => {
-    runner.it('should validate foot + machineGun (weight 1 <= 2)', () => {
-      const result = validateComponentWeight('foot', 'machineGun');
-
-      assertEqual(result.valid, true);
-      assertEqual(result.totalWeight, 1);
-      assertEqual(result.maxWeight, 2);
-    });
-
-    runner.it('should reject foot + cannon (weight 4 > 2)', () => {
-      const result = validateComponentWeight('foot', 'cannon');
-
+    runner.it('should reject when weight exceeds chassis capacity', () => {
+      // Cannon (weight 4) on foot (maxWeight 2)
+      const result = validateTemplate('foot', 'cannon', []);
       assertEqual(result.valid, false);
-      assertEqual(result.totalWeight, 4);
-      assertEqual(result.maxWeight, 2);
+      assert(result.error!.includes('Weight') || result.error!.includes('exceeds'));
+    });
+
+    runner.it('should track total and max weight correctly', () => {
+      const result = validateTemplate('treads', 'cannon', ['armor']);
+      // Should report weights regardless of validity
+      assert(result.totalWeight > 0);
+      assert(result.maxWeight > 0);
+      assert(result.totalWeight <= result.maxWeight);
     });
   });
+
+  // ==========================================================================
+  // Cost calculation tests
+  // ==========================================================================
 
   runner.describe('computeTemplateCost', () => {
-    runner.it('should compute soldier cost (foot + MG + capture = 1000)', () => {
+    runner.it('should sum chassis + weapon + system costs', () => {
+      const chassis = getChassis('foot');
+      const weapon = getWeapon('machineGun');
+      const system = getSystem('capture');
+
       const cost = computeTemplateCost('foot', 'machineGun', ['capture']);
-      assertEqual(cost, 1000); // 500 + 500 + 0
+      assertEqual(cost, chassis.baseCost + weapon.cost + system.cost);
     });
 
-    runner.it('should compute tank cost (treads + cannon + armor = 4000)', () => {
-      const cost = computeTemplateCost('treads', 'cannon', ['armor']);
-      assertEqual(cost, 4000); // 1500 + 1500 + 1000
-    });
+    runner.it('should handle null weapon', () => {
+      const chassis = getChassis('foot');
+      const system = getSystem('build');
 
-    runner.it('should compute recon cost (wheels + MG = 1300)', () => {
-      const cost = computeTemplateCost('wheels', 'machineGun');
-      assertEqual(cost, 1300); // 800 + 500
-    });
-
-    runner.it('should compute builder cost (foot + build = 1000)', () => {
       const cost = computeTemplateCost('foot', null, ['build']);
-      assertEqual(cost, 1000); // 500 + 500
+      assertEqual(cost, chassis.baseCost + system.cost);
     });
 
-    runner.it('should compute armored recon (wheels + MG + armor = 2300)', () => {
-      const cost = computeTemplateCost('wheels', 'machineGun', ['armor']);
-      assertEqual(cost, 2300); // 800 + 500 + 1000
+    runner.it('should handle no systems', () => {
+      const chassis = getChassis('wheels');
+      const weapon = getWeapon('machineGun');
+
+      const cost = computeTemplateCost('wheels', 'machineGun', []);
+      assertEqual(cost, chassis.baseCost + weapon.cost);
+    });
+
+    runner.it('should handle chassis only', () => {
+      const chassis = getChassis('foot');
+      const cost = computeTemplateCost('foot', null, []);
+      assertEqual(cost, chassis.baseCost);
     });
   });
+
 });
 
 export default runner;

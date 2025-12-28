@@ -1,6 +1,7 @@
 // ============================================================================
 // HEX DOMINION - Production/Unit Templates Tests
 // ============================================================================
+// Tests template creation logic and validation, not specific balance values.
 
 import { TestRunner, assertEqual, assert, assertThrows } from './framework.js';
 import {
@@ -14,75 +15,52 @@ import {
 const runner = new TestRunner();
 
 runner.describe('Unit Templates', () => {
-  runner.describe('UNIT_TEMPLATES', () => {
-    runner.it('should have soldier template', () => {
-      const soldier = UNIT_TEMPLATES.soldier!;
 
-      assertEqual(soldier.id, 'soldier');
-      assertEqual(soldier.name, 'Soldier');
-      assertEqual(soldier.cost, 1000); // foot (500) + machineGun (500) + capture (0)
-      assertEqual(soldier.speed, 3);
-      assertEqual(soldier.attack, 4);
-      assertEqual(soldier.range, 1);
+  // ==========================================================================
+  // Base template validation
+  // ==========================================================================
+
+  runner.describe('UNIT_TEMPLATES structure', () => {
+    runner.it('should have soldier, tank, and recon templates', () => {
+      assert(UNIT_TEMPLATES.soldier !== undefined, 'Should have soldier');
+      assert(UNIT_TEMPLATES.tank !== undefined, 'Should have tank');
+      assert(UNIT_TEMPLATES.recon !== undefined, 'Should have recon');
     });
 
-    runner.it('should have tank template', () => {
-      const tank = UNIT_TEMPLATES.tank!;
-
-      assertEqual(tank.id, 'tank');
-      assertEqual(tank.name, 'Tank');
-      assertEqual(tank.cost, 4000); // treads (1500) + cannon (1500) + armor (1000)
-      assertEqual(tank.speed, 4);
-      assertEqual(tank.attack, 7);
-      assertEqual(tank.range, 1);
-    });
-
-    runner.it('should have recon template', () => {
-      const recon = UNIT_TEMPLATES.recon!;
-
-      assertEqual(recon.id, 'recon');
-      assertEqual(recon.name, 'Recon');
-      assertEqual(recon.cost, 1300); // wheels (800) + machineGun (500)
-      assertEqual(recon.speed, 6);
-      assertEqual(recon.attack, 4);
-      assertEqual(recon.range, 1);
-    });
-
-    runner.it('soldier should have foot terrain costs', () => {
-      const soldier = UNIT_TEMPLATES.soldier!;
-
-      assertEqual(soldier.terrainCosts.woods, 1);  // Foot moves easily through woods
-      assertEqual(soldier.terrainCosts.road, 1);   // Foot isn't faster on roads
-      assertEqual(soldier.terrainCosts.grass, 1);
-      assertEqual(soldier.terrainCosts.water, Infinity);
-    });
-
-    runner.it('tank should be slower in woods (treads)', () => {
-      const tank = UNIT_TEMPLATES.tank!;
-
-      assertEqual(tank.terrainCosts.woods, 2);
-      assertEqual(tank.terrainCosts.grass, 1);
+    runner.it('all templates should have required properties', () => {
+      for (const template of getAvailableTemplates()) {
+        assert(typeof template.id === 'string');
+        assert(typeof template.name === 'string');
+        assert(typeof template.cost === 'number' && template.cost > 0);
+        assert(typeof template.speed === 'number' && template.speed > 0);
+        assert(typeof template.attack === 'number' && template.attack >= 0);
+        assert(typeof template.range === 'number' && template.range >= 0);
+        assert(typeof template.armored === 'boolean');
+        assert(typeof template.armorPiercing === 'boolean');
+        assert(template.terrainCosts !== undefined);
+      }
     });
   });
+
+  // ==========================================================================
+  // Template properties (game rules, not balance)
+  // ==========================================================================
 
   runner.describe('template armor/AP properties', () => {
     runner.it('soldier should not be armored and not have AP', () => {
       const soldier = getTemplate('soldier');
-
       assertEqual(soldier.armored, false);
       assertEqual(soldier.armorPiercing, false);
     });
 
     runner.it('tank should be armored and have AP', () => {
       const tank = getTemplate('tank');
-
       assertEqual(tank.armored, true);
       assertEqual(tank.armorPiercing, true);
     });
 
     runner.it('recon should not be armored and not have AP', () => {
       const recon = getTemplate('recon');
-
       assertEqual(recon.armored, false);
       assertEqual(recon.armorPiercing, false);
     });
@@ -91,7 +69,6 @@ runner.describe('Unit Templates', () => {
   runner.describe('template components', () => {
     runner.it('soldier should be foot + machineGun + capture', () => {
       const soldier = getTemplate('soldier');
-
       assertEqual(soldier.chassisId, 'foot');
       assertEqual(soldier.weaponId, 'machineGun');
       assert(soldier.systemIds.includes('capture'));
@@ -99,7 +76,6 @@ runner.describe('Unit Templates', () => {
 
     runner.it('tank should be treads + cannon + armor', () => {
       const tank = getTemplate('tank');
-
       assertEqual(tank.chassisId, 'treads');
       assertEqual(tank.weaponId, 'cannon');
       assert(tank.systemIds.includes('armor'));
@@ -107,25 +83,26 @@ runner.describe('Unit Templates', () => {
 
     runner.it('recon should be wheels + machineGun (no systems)', () => {
       const recon = getTemplate('recon');
-
       assertEqual(recon.chassisId, 'wheels');
       assertEqual(recon.weaponId, 'machineGun');
       assertEqual(recon.systemIds.length, 0);
     });
   });
 
+  // ==========================================================================
+  // Template lookup
+  // ==========================================================================
+
   runner.describe('getAvailableTemplates', () => {
     runner.it('should return array of templates', () => {
       const templates = getAvailableTemplates();
-
       assert(Array.isArray(templates));
-      assertEqual(templates.length, 3);
+      assert(templates.length >= 3, 'Should have at least soldier, tank, recon');
     });
 
-    runner.it('should include soldier, tank, and recon', () => {
+    runner.it('should include base templates', () => {
       const templates = getAvailableTemplates();
       const ids = templates.map((t) => t.id);
-
       assert(ids.includes('soldier'));
       assert(ids.includes('tank'));
       assert(ids.includes('recon'));
@@ -133,68 +110,54 @@ runner.describe('Unit Templates', () => {
   });
 
   runner.describe('getTemplate', () => {
-    runner.it('should return soldier template by id', () => {
-      const template = getTemplate('soldier');
+    runner.it('should return template by id', () => {
+      const soldier = getTemplate('soldier');
+      assertEqual(soldier.id, 'soldier');
 
-      assertEqual(template.id, 'soldier');
-      assertEqual(template.name, 'Soldier');
-    });
-
-    runner.it('should return tank template by id', () => {
-      const template = getTemplate('tank');
-
-      assertEqual(template.id, 'tank');
-      assertEqual(template.name, 'Tank');
+      const tank = getTemplate('tank');
+      assertEqual(tank.id, 'tank');
     });
   });
 
+  // ==========================================================================
+  // Template creation and validation
+  // ==========================================================================
+
   runner.describe('createTemplate', () => {
-    runner.it('should create template with foot + machineGun (no capture)', () => {
+    runner.it('should create valid template with foot + machineGun', () => {
       const template = createTemplate('test', 'Test Unit', 'foot', 'machineGun');
-
       assertEqual(template.id, 'test');
-      assertEqual(template.speed, 3);
-      assertEqual(template.attack, 4);
-      assertEqual(template.armored, false);
-      assertEqual(template.armorPiercing, false);
-      assertEqual(template.canCapture, false); // No capture system
+      assert(template.speed > 0);
+      assert(template.attack > 0);
     });
 
-    runner.it('should create template with foot + machineGun + capture', () => {
-      const template = createTemplate('inf', 'Infantry', 'foot', 'machineGun', ['capture']);
+    runner.it('should set canCapture when capture system included', () => {
+      const withCapture = createTemplate('inf', 'Infantry', 'foot', 'machineGun', ['capture']);
+      assertEqual(withCapture.canCapture, true);
 
-      assertEqual(template.canCapture, true);
-      assertEqual(template.cost, 1000); // 500 + 500 + 0
+      const without = createTemplate('inf2', 'Infantry2', 'foot', 'machineGun', []);
+      assertEqual(without.canCapture, false);
     });
 
-    runner.it('should create template with treads + artillery (no armor)', () => {
-      const template = createTemplate('artillery', 'Artillery', 'treads', 'artillery');
+    runner.it('should set armored when armor system included', () => {
+      const armored = createTemplate('heavy', 'Heavy', 'treads', 'cannon', ['armor']);
+      assertEqual(armored.armored, true);
 
-      assertEqual(template.id, 'artillery');
-      assertEqual(template.speed, 4);
-      assertEqual(template.attack, 5);
-      assertEqual(template.range, 3);
-      assertEqual(template.armored, false); // No armor system
-      assertEqual(template.armorPiercing, true);
-      assertEqual(template.cost, 3500); // 1500 + 2000
+      const unarmored = createTemplate('light', 'Light', 'treads', 'cannon', []);
+      assertEqual(unarmored.armored, false);
     });
 
-    runner.it('should create armored artillery', () => {
-      const template = createTemplate('heavy_art', 'Heavy Artillery', 'treads', 'artillery', ['armor']);
+    runner.it('should set armorPiercing from weapon', () => {
+      const ap = createTemplate('ap', 'AP Unit', 'treads', 'cannon', []);
+      assertEqual(ap.armorPiercing, true);
 
-      assertEqual(template.armored, true);
-      assertEqual(template.cost, 4500); // 1500 + 2000 + 1000
+      const noAp = createTemplate('noap', 'No AP', 'foot', 'machineGun', []);
+      assertEqual(noAp.armorPiercing, false);
     });
 
     runner.it('should throw when weight exceeds capacity', () => {
       assertThrows(() => {
-        createTemplate('invalid', 'Invalid', 'foot', 'cannon'); // cannon weight 4 > foot max 2
-      });
-    });
-
-    runner.it('should throw when wheels try to carry cannon', () => {
-      assertThrows(() => {
-        createTemplate('invalid', 'Invalid', 'wheels', 'cannon'); // cannon weight 4 > wheels max 3
+        createTemplate('invalid', 'Invalid', 'foot', 'cannon'); // cannon too heavy for foot
       });
     });
 
@@ -210,18 +173,20 @@ runner.describe('Unit Templates', () => {
       });
     });
 
-    runner.it('should create weaponless builder', () => {
-      const template = createTemplate('engineer', 'Engineer', 'foot', null, ['build', 'capture']);
-
+    runner.it('should create weaponless template', () => {
+      const template = createTemplate('engineer', 'Engineer', 'foot', null, ['build']);
       assertEqual(template.attack, 0);
       assertEqual(template.range, 0);
       assertEqual(template.canBuild, true);
-      assertEqual(template.canCapture, true);
     });
   });
 
+  // ==========================================================================
+  // Template component extraction
+  // ==========================================================================
+
   runner.describe('getTemplateComponents', () => {
-    runner.it('should return chassis, weapon, and systems for soldier', () => {
+    runner.it('should return chassis, weapon, and systems', () => {
       const soldier = getTemplate('soldier');
       const components = getTemplateComponents(soldier);
 
@@ -229,16 +194,6 @@ runner.describe('Unit Templates', () => {
       assertEqual(components.weapon!.id, 'machineGun');
       assertEqual(components.systems.length, 1);
       assertEqual(components.systems[0]!.id, 'capture');
-    });
-
-    runner.it('should return chassis, weapon, and systems for tank', () => {
-      const tank = getTemplate('tank');
-      const components = getTemplateComponents(tank);
-
-      assertEqual(components.chassis.id, 'treads');
-      assertEqual(components.weapon!.id, 'cannon');
-      assertEqual(components.systems.length, 1);
-      assertEqual(components.systems[0]!.id, 'armor');
     });
 
     runner.it('should return null weapon for weaponless template', () => {
@@ -250,17 +205,18 @@ runner.describe('Unit Templates', () => {
     });
   });
 
-  runner.describe('production costs', () => {
-    runner.it('soldier should be cheapest', () => {
+  // ==========================================================================
+  // Relative comparisons (stable even if values change)
+  // ==========================================================================
+
+  runner.describe('template relative properties', () => {
+    runner.it('soldier should be cheaper than tank', () => {
       const soldier = getTemplate('soldier');
       const tank = getTemplate('tank');
-      const recon = getTemplate('recon');
-
-      assert(soldier.cost < recon.cost);
-      assert(recon.cost < tank.cost);
+      assert(soldier.cost < tank.cost);
     });
 
-    runner.it('tank should have highest attack', () => {
+    runner.it('tank should have highest attack of base units', () => {
       const soldier = getTemplate('soldier');
       const tank = getTemplate('tank');
       const recon = getTemplate('recon');
@@ -269,7 +225,7 @@ runner.describe('Unit Templates', () => {
       assert(tank.attack > recon.attack);
     });
 
-    runner.it('recon should be fastest', () => {
+    runner.it('recon should be fastest of base units', () => {
       const soldier = getTemplate('soldier');
       const tank = getTemplate('tank');
       const recon = getTemplate('recon');
@@ -279,27 +235,36 @@ runner.describe('Unit Templates', () => {
     });
   });
 
+  // ==========================================================================
+  // Ability tests
+  // ==========================================================================
+
   runner.describe('capture ability', () => {
-    runner.it('soldier should be able to capture (has capture system)', () => {
+    runner.it('soldier should be able to capture', () => {
       const soldier = getTemplate('soldier');
       assertEqual(soldier.canCapture, true);
     });
 
-    runner.it('tank should not be able to capture (no capture system)', () => {
+    runner.it('tank should not be able to capture', () => {
       const tank = getTemplate('tank');
       assertEqual(tank.canCapture, false);
     });
 
-    runner.it('recon should not be able to capture (no capture system)', () => {
+    runner.it('recon should not be able to capture', () => {
       const recon = getTemplate('recon');
       assertEqual(recon.canCapture, false);
     });
   });
 
   runner.describe('build ability', () => {
-    runner.it('soldier should not be able to build', () => {
+    runner.it('base templates should not be able to build', () => {
       const soldier = getTemplate('soldier');
+      const tank = getTemplate('tank');
+      const recon = getTemplate('recon');
+
       assertEqual(soldier.canBuild, false);
+      assertEqual(tank.canBuild, false);
+      assertEqual(recon.canBuild, false);
     });
 
     runner.it('builder template can build', () => {
@@ -307,6 +272,7 @@ runner.describe('Unit Templates', () => {
       assertEqual(builder.canBuild, true);
     });
   });
+
 });
 
 export default runner;

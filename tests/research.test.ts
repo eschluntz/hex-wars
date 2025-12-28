@@ -1,6 +1,7 @@
 // ============================================================================
 // HEX DOMINION - Research Tests
 // ============================================================================
+// Tests research unlock logic with generic IDs (not tied to specific tech tree).
 
 import { TestRunner, assertEqual, assert } from './framework.js';
 import {
@@ -19,6 +20,10 @@ import {
 const runner = new TestRunner();
 
 runner.describe('Research System', () => {
+
+  // ==========================================================================
+  // Initialization tests
+  // ==========================================================================
 
   runner.describe('initTeamResearch', () => {
 
@@ -46,9 +51,8 @@ runner.describe('Research System', () => {
 
     runner.it('should not have locked components unlocked', () => {
       initTeamResearch('initbase4');
+      // These are locked until researched
       assert(!isChassisResearched('initbase4', 'hover'));
-      assert(!isWeaponResearched('initbase4', 'rockets'));
-      assert(!isWeaponResearched('initbase4', 'missiles'));
       assert(!isSystemResearched('initbase4', 'stealth'));
     });
 
@@ -59,6 +63,10 @@ runner.describe('Research System', () => {
     });
 
   });
+
+  // ==========================================================================
+  // Component unlock tests
+  // ==========================================================================
 
   runner.describe('unlockChassis', () => {
 
@@ -87,20 +95,20 @@ runner.describe('Research System', () => {
 
     runner.it('should unlock a locked weapon', () => {
       initTeamResearch('unlockwp1');
-      assert(!isWeaponResearched('unlockwp1', 'rockets'));
+      assert(!isWeaponResearched('unlockwp1', 'laser'));
 
-      unlockWeapon('unlockwp1', 'rockets');
+      unlockWeapon('unlockwp1', 'laser');
 
-      assert(isWeaponResearched('unlockwp1', 'rockets'));
+      assert(isWeaponResearched('unlockwp1', 'laser'));
     });
 
-    runner.it('should unlock missiles weapon', () => {
+    runner.it('should unlock plasma weapon', () => {
       initTeamResearch('unlockwp2');
-      assert(!isWeaponResearched('unlockwp2', 'missiles'));
+      assert(!isWeaponResearched('unlockwp2', 'plasma'));
 
-      unlockWeapon('unlockwp2', 'missiles');
+      unlockWeapon('unlockwp2', 'plasma');
 
-      assert(isWeaponResearched('unlockwp2', 'missiles'));
+      assert(isWeaponResearched('unlockwp2', 'plasma'));
     });
 
   });
@@ -118,25 +126,29 @@ runner.describe('Research System', () => {
 
   });
 
+  // ==========================================================================
+  // Tech tracking tests (uses generic IDs)
+  // ==========================================================================
+
   runner.describe('isTechUnlocked / unlockTech', () => {
 
     runner.it('should track unlocked techs', () => {
       initTeamResearch('techtrack1');
-      assert(!isTechUnlocked('techtrack1', 'advancedTreads'));
+      assert(!isTechUnlocked('techtrack1', 'someTech'));
 
-      unlockTech('techtrack1', 'advancedTreads');
+      unlockTech('techtrack1', 'someTech');
 
-      assert(isTechUnlocked('techtrack1', 'advancedTreads'));
+      assert(isTechUnlocked('techtrack1', 'someTech'));
     });
 
     runner.it('should track multiple unlocked techs', () => {
       initTeamResearch('techtrack2');
-      unlockTech('techtrack2', 'advancedTreads');
-      unlockTech('techtrack2', 'rocketLauncher');
+      unlockTech('techtrack2', 'techA');
+      unlockTech('techtrack2', 'techB');
 
-      assert(isTechUnlocked('techtrack2', 'advancedTreads'));
-      assert(isTechUnlocked('techtrack2', 'rocketLauncher'));
-      assert(!isTechUnlocked('techtrack2', 'stealthPlating'));
+      assert(isTechUnlocked('techtrack2', 'techA'));
+      assert(isTechUnlocked('techtrack2', 'techB'));
+      assert(!isTechUnlocked('techtrack2', 'techC'));
     });
 
   });
@@ -151,16 +163,20 @@ runner.describe('Research System', () => {
 
     runner.it('should return set with unlocked techs', () => {
       initTeamResearch('gettech2');
-      unlockTech('gettech2', 'advancedTreads');
-      unlockTech('gettech2', 'stealthPlating');
+      unlockTech('gettech2', 'techX');
+      unlockTech('gettech2', 'techY');
 
       const techs = getUnlockedTechs('gettech2');
       assertEqual(techs.size, 2);
-      assert(techs.has('advancedTreads'));
-      assert(techs.has('stealthPlating'));
+      assert(techs.has('techX'));
+      assert(techs.has('techY'));
     });
 
   });
+
+  // ==========================================================================
+  // Fallback behavior for uninitialized teams
+  // ==========================================================================
 
   runner.describe('isXResearched with uninitialized team', () => {
 
@@ -172,7 +188,7 @@ runner.describe('Research System', () => {
 
     runner.it('should return true for base weapons on uninitialized team', () => {
       assert(isWeaponResearched('noexist', 'cannon'));
-      assert(!isWeaponResearched('noexist', 'rockets'));
+      assert(!isWeaponResearched('noexist', 'laser'));
     });
 
     runner.it('should return true for base systems on uninitialized team', () => {

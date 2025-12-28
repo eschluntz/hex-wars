@@ -2,6 +2,7 @@
 // HEX DOMINION - Tech Tree System
 // ============================================================================
 // Business logic for the tech tree. Data is defined in tech-data.ts.
+// Most functions accept an optional `tree` parameter for testing with fixtures.
 
 import { ResourceManager } from './resources.js';
 import {
@@ -16,6 +17,9 @@ import { TECH_TREE, type TechDefinition } from './tech-data.js';
 
 export { TECH_TREE, type TechDefinition } from './tech-data.js';
 
+// Type alias for tree parameter
+type TechTree = Record<string, TechDefinition>;
+
 // ============================================================================
 // PER-TEAM STATE (delegated to research.ts)
 // ============================================================================
@@ -28,20 +32,20 @@ export function getUnlockedTechs(team: string): Set<string> {
 // QUERY FUNCTIONS
 // ============================================================================
 
-export function getAllTechs(): TechDefinition[] {
-  return Object.values(TECH_TREE);
+export function getAllTechs(tree: TechTree = TECH_TREE): TechDefinition[] {
+  return Object.values(tree);
 }
 
-export function getTech(techId: string): TechDefinition {
-  return TECH_TREE[techId]!;
+export function getTech(techId: string, tree: TechTree = TECH_TREE): TechDefinition {
+  return tree[techId]!;
 }
 
 export function isTechUnlocked(team: string, techId: string): boolean {
   return researchIsTechUnlocked(team, techId);
 }
 
-export function areTechPrereqsMet(team: string, techId: string): boolean {
-  const tech = TECH_TREE[techId]!;
+export function areTechPrereqsMet(team: string, techId: string, tree: TechTree = TECH_TREE): boolean {
+  const tech = tree[techId]!;
 
   for (const prereq of tech.requires) {
     if (!isTechUnlocked(team, prereq)) {
@@ -56,16 +60,21 @@ export interface TechAvailability {
   reason?: string;
 }
 
-export function getTechAvailability(team: string, techId: string, science: number): TechAvailability {
-  const tech = TECH_TREE[techId]!;
+export function getTechAvailability(
+  team: string,
+  techId: string,
+  science: number,
+  tree: TechTree = TECH_TREE
+): TechAvailability {
+  const tech = tree[techId]!;
 
   if (isTechUnlocked(team, techId)) {
     return { available: false, reason: 'Already unlocked' };
   }
 
-  if (!areTechPrereqsMet(team, techId)) {
+  if (!areTechPrereqsMet(team, techId, tree)) {
     const missing = tech.requires.filter(r => !isTechUnlocked(team, r));
-    const missingNames = missing.map(id => TECH_TREE[id]!.name);
+    const missingNames = missing.map(id => tree[id]!.name);
     return { available: false, reason: `Requires: ${missingNames.join(', ')}` };
   }
 
@@ -85,11 +94,16 @@ export interface PurchaseResult {
   error?: string;
 }
 
-export function purchaseTech(team: string, techId: string, resources: ResourceManager): PurchaseResult {
-  const tech = TECH_TREE[techId]!;
+export function purchaseTech(
+  team: string,
+  techId: string,
+  resources: ResourceManager,
+  tree: TechTree = TECH_TREE
+): PurchaseResult {
+  const tech = tree[techId]!;
   const teamResources = resources.getResources(team);
 
-  const availability = getTechAvailability(team, techId, teamResources.science);
+  const availability = getTechAvailability(team, techId, teamResources.science, tree);
   if (!availability.available) {
     return { success: false, error: availability.reason };
   }
@@ -124,14 +138,18 @@ export interface TechNode {
   reason?: string;
 }
 
-export function getTechTreeState(team: string, science: number): TechNode[] {
+export function getTechTreeState(
+  team: string,
+  science: number,
+  tree: TechTree = TECH_TREE
+): TechNode[] {
   const nodes: TechNode[] = [];
 
-  for (const tech of getAllTechs()) {
+  for (const tech of getAllTechs(tree)) {
     if (isTechUnlocked(team, tech.id)) {
       nodes.push({ tech, state: 'unlocked' });
     } else {
-      const availability = getTechAvailability(team, tech.id, science);
+      const availability = getTechAvailability(team, tech.id, science, tree);
       if (availability.available) {
         nodes.push({ tech, state: 'available' });
       } else {
@@ -149,7 +167,7 @@ export interface TechPosition {
   column: number;  // position within tier (0-indexed from left)
 }
 
-export function computeTechLayout(): TechPosition[] {
+export function computeTechLayout(tree: TechTree = TECH_TREE): TechPosition[] {
   const positions: TechPosition[] = [];
   const techTiers: Record<string, number> = {};
 
@@ -159,7 +177,7 @@ export function computeTechLayout(): TechPosition[] {
       return techTiers[techId];
     }
 
-    const tech = TECH_TREE[techId]!;
+    const tech = tree[techId]!;
     if (tech.requires.length === 0) {
       techTiers[techId] = 0;
       return 0;
@@ -175,7 +193,7 @@ export function computeTechLayout(): TechPosition[] {
   }
 
   // Compute tiers for all techs
-  for (const techId of Object.keys(TECH_TREE)) {
+  for (const techId of Object.keys(tree)) {
     computeTier(techId);
   }
 
@@ -204,7 +222,7 @@ export function computeTechLayout(): TechPosition[] {
 
     // Compute barycenter for each node (average x of prerequisites)
     const withBarycenter = nodes.map(techId => {
-      const tech = TECH_TREE[techId]!;
+      const tech = tree[techId]!;
       const prereqColumns = tech.requires.map(p => columnPositions[p]!);
       const barycenter = prereqColumns.reduce((a, b) => a + b, 0) / prereqColumns.length;
       return { techId, barycenter };
