@@ -35,6 +35,7 @@ import { ResourceManager } from './resources.js';
 import { GameStats } from './stats.js';
 import { MenuRenderer, type GamePhase, type GameOverData } from './menu.js';
 import { InputHandler } from './input.js';
+import { initTeamResearch } from './research.js';
 
 const TEAMS = {
   PLAYER: 'player',
@@ -195,9 +196,11 @@ class Game {
     this.resources.addFunds(TEAMS.PLAYER, 5000);
     this.resources.addFunds(TEAMS.ENEMY, 5000);
 
-    // Initialize per-team templates
+    // Initialize per-team templates and research
     initTeamTemplates(TEAMS.PLAYER);
     initTeamTemplates(TEAMS.ENEMY);
+    initTeamResearch(TEAMS.PLAYER);
+    initTeamResearch(TEAMS.ENEMY);
 
     // Setup based on map type
     if (mapType === 'small') {

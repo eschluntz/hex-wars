@@ -17,6 +17,11 @@ import {
   type SystemComponent,
 } from './components.js';
 import { type Building } from './building.js';
+import {
+  isChassisResearched,
+  isWeaponResearched,
+  isSystemResearched,
+} from './research.js';
 
 // ============================================================================
 // Design State
@@ -64,11 +69,20 @@ export interface SystemAvailability {
   reason?: string;
 }
 
+// Get only researched chassis for the team
+export function getResearchedChassis(team: string): ChassisComponent[] {
+  return getAllChassis().filter(chassis => isChassisResearched(team, chassis.id));
+}
+
 export function getAvailableWeapons(
   chassisId: string | null,
-  selectedSystems: string[] = []
+  selectedSystems: string[] = [],
+  team: string = ''
 ): WeaponAvailability[] {
-  const weapons = getAllWeapons();
+  // Filter to only researched weapons (unresearched are hidden, not greyed)
+  const weapons = team
+    ? getAllWeapons().filter(w => isWeaponResearched(team, w.id))
+    : getAllWeapons();
 
   if (!chassisId) {
     return weapons.map(weapon => ({
@@ -113,9 +127,14 @@ export function getAvailableWeapons(
 export function getAvailableSystems(
   chassisId: string | null,
   selectedSystems: string[],
-  weaponId: string | null = null
+  weaponId: string | null = null,
+  team: string = ''
 ): SystemAvailability[] {
-  const systems = getAllSystems();
+  // Filter to only researched systems (unresearched are hidden, not greyed)
+  // But always include currently selected systems even if somehow unresearched
+  const systems = team
+    ? getAllSystems().filter(s => isSystemResearched(team, s.id) || selectedSystems.includes(s.id))
+    : getAllSystems();
 
   if (!chassisId) {
     return systems.map(system => ({
