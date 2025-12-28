@@ -127,12 +127,22 @@ Buildings have ownership displayed via colored backgrounds:
 
 ### Unit Production
 - Click on an owned factory (when no unit is on it) to open the production menu
-- Three unit templates available (built from components):
+- Three default unit templates available (built from components):
   - **Soldier** ($1000): Foot + MG + Capture — Speed 3, Attack 4, can capture buildings
   - **Tank** ($4000): Treads + Cannon + Armor — Speed 4, Attack 7, armored + AP
   - **Recon** ($1300): Wheels + MG — Speed 6, Attack 4, fast scout
 - Newly built units appear on the factory, deactivated for the current turn
 - Use number keys or arrow keys + Enter to select
+
+### Unit Designer (Lab)
+- Click on an owned lab to open the Unit Designer
+- **Design new units** by combining chassis, weapons, and system modules
+- Real-time validation shows weight limits and component compatibility
+- **Edit existing templates** by clicking on them in the list
+- Hover over components to see detailed stats in the tooltip area
+- Unavailable components are grayed out with explanatory messages
+- Each team has their own template library
+- Research system ready for future tech tree (unresearched components will be hidden)
 
 ### Building Capture
 - Units with `canCapture` ability (Soldier) can capture neutral or enemy buildings
@@ -183,15 +193,19 @@ hex-dominion/
 │   ├── combat.ts        # Combat calculations with armor/AP
 │   ├── building.ts      # Building types, icons, income
 │   ├── resources.ts     # Team resource tracking
+│   ├── research.ts      # Tech tree unlock tracking (per-team)
 │   ├── unit-templates.ts # Unit templates built from components
+│   ├── unit-designer.ts # Design state, validation, component availability
+│   ├── lab-modal.ts     # HTML/DOM-based unit designer UI
 │   ├── noise.ts         # Perlin noise, seeded RNG
 │   ├── config.ts        # Game configuration
 │   ├── game-map.ts      # Map and building generation
 │   ├── viewport.ts      # Camera and input
-│   ├── renderer.ts      # Drawing, UI, action/production menus
+│   ├── input.ts         # Keyboard and mouse input handling
+│   ├── renderer.ts      # Canvas drawing, popup menus, info panel
 │   ├── stats.ts         # Game statistics tracking
 │   ├── menu.ts          # Main menu and game over screen
-│   └── main.ts          # Game state machine, turn management, production
+│   └── main.ts          # Game state machine, turn management
 ├── tests/
 │   ├── framework.ts     # Test runner
 │   ├── helpers.ts       # createTestMap() utility
@@ -202,9 +216,10 @@ hex-dominion/
 │   ├── building.test.ts # Building system tests
 │   ├── resources.test.ts # Resource management tests
 │   ├── production.test.ts # Unit template tests
+│   ├── unit-designer.test.ts # Unit designer tests
 │   └── stats.test.ts    # Statistics tracking tests
 ├── dist/                # Built output (git-ignored)
-├── index.html           # Browser game
+├── index.html           # Browser game + lab modal CSS
 ├── test.ts              # CLI test runner
 └── package.json
 ```
@@ -215,7 +230,7 @@ hex-dominion/
 npm run watch      # Build + serve with auto-rebuild
 npm run build      # One-time build
 npm run typecheck  # Check types without building
-npm test           # Run tests (178 tests)
+npm test           # Run tests (215 tests)
 ```
 
 ### Test Map Helper
@@ -231,6 +246,31 @@ const map = createTestMap([
 ```
 
 Combat tests use injectable variance parameters for deterministic results.
+
+### Architecture Notes
+
+**Rendering approach:**
+- Game map, units, and in-game popups use **canvas** rendering
+- Unit Designer uses **HTML/DOM** for better form handling and accessibility
+- Popup menus (action menu, production menu) use a unified `PopupMenu` system
+
+**PopupMenu system** (`renderer.ts`):
+```typescript
+this.drawPopupMenu({
+  title: 'Build Unit',           // Optional header
+  items: [
+    { label: 'Soldier', action: 'build_soldier', cost: 1000, enabled: true },
+    { label: 'Cancel', action: 'cancel', color: '#ff8888' },
+  ],
+  worldPos: { q: 5, r: 3 },      // Position near hex
+  clampToScreen: true,           // Keep in viewport
+}, zoom);
+```
+
+**Research system** (`research.ts`):
+- Tracks unlocked components per team
+- Unresearched components are hidden (not grayed out)
+- Ready for tech tree integration
 
 
 ## Next Steps
@@ -253,9 +293,11 @@ Combat tests use injectable variance parameters for deterministic results.
 - [x] Unit component system (chassis, weapon, system slots)
 - [x] Armor + armor-piercing combat mechanics
 - [x] Three unit types: Soldier, Tank, Recon
+- [x] Unit Designer interface (click lab to design custom units)
+- [x] Per-team template libraries
+- [x] Research system infrastructure (ready for tech tree)
 
 ### Upcoming
-- [ ] unit design interface
 - [ ] Tech tree (spend science to unlock new components)
 - [ ] AI opponent
 - [ ] Building construction (using units with Build ability)

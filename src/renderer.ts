@@ -42,6 +42,28 @@ interface MenuButton {
   height: number;
 }
 
+// ============================================================================
+// Popup Menu System
+// ============================================================================
+
+export interface PopupMenuItem {
+  label: string;
+  action: string;
+  cost?: number;          // Shows as "$X" on right side
+  stats?: string;         // Shows as smaller text on right side
+  enabled?: boolean;      // Grayed out if false (default: true)
+  color?: string;         // Text color override
+}
+
+export interface PopupMenuConfig {
+  title?: string;
+  items: PopupMenuItem[];
+  worldPos: { q: number; r: number };
+  clampToScreen?: boolean;
+  buttonWidth?: number;
+  buttonHeight?: number;
+}
+
 export class Renderer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -418,46 +440,44 @@ export class Renderer {
     this.updateInfoPanel(zoom);
   }
 
-  private drawProductionMenu(menu: ProductionMenu, zoom: number): void {
-    const ctx = this.ctx;
-    const factory = menu.factory;
+  // ============================================================================
+  // Popup Menu System
+  // ============================================================================
 
-    // Position menu near the factory
-    const world = HexUtil.axialToPixel(factory.q, factory.r, CONFIG.hexSize);
+  private drawPopupMenu(config: PopupMenuConfig, zoom: number): void {
+    const ctx = this.ctx;
+    const buttonWidth = config.buttonWidth ?? 140;
+    const buttonHeight = config.buttonHeight ?? 32;
+    const padding = 8;
+    const titleHeight = config.title ? 24 : 0;
+
+    // Calculate menu dimensions
+    const menuWidth = buttonWidth + padding * 2;
+    const menuHeight = titleHeight + config.items.length * (buttonHeight + padding) + padding;
+
+    // Position menu near the world position
+    const world = HexUtil.axialToPixel(config.worldPos.q, config.worldPos.r, CONFIG.hexSize);
     const screen = this.viewport.worldToScreen(world.x, world.y);
 
-    const buttonWidth = 140;
-    const buttonHeight = 36;
-    const padding = 8;
-    const titleHeight = 24;
-
-    // Calculate menu dimensions first
-    const menuWidth = buttonWidth + padding * 2;
-    const menuHeight = titleHeight + (menu.templates.length + 1) * (buttonHeight + padding) + padding;
-
-    // Position menu, clamping to screen bounds
-    const margin = 10;
     let menuX = screen.x + CONFIG.hexSize * zoom + 10;
     let menuY = screen.y - menuHeight / 2;
 
-    // Clamp horizontally
-    if (menuX + menuWidth > this.canvas.width - margin) {
-      menuX = screen.x - CONFIG.hexSize * zoom - menuWidth - 10;
-    }
-    if (menuX < margin) {
-      menuX = margin;
-    }
-
-    // Clamp vertically
-    if (menuY < margin) {
-      menuY = margin;
-    }
-    if (menuY + menuHeight > this.canvas.height - margin) {
-      menuY = this.canvas.height - menuHeight - margin;
+    // Clamp to screen bounds if requested
+    if (config.clampToScreen) {
+      const margin = 10;
+      if (menuX + menuWidth > this.canvas.width - margin) {
+        menuX = screen.x - CONFIG.hexSize * zoom - menuWidth - 10;
+      }
+      if (menuX < margin) menuX = margin;
+      if (menuY < margin) menuY = margin;
+      if (menuY + menuHeight > this.canvas.height - margin) {
+        menuY = this.canvas.height - menuHeight - margin;
+      }
     }
 
     this.menuButtons = [];
 
+    // Draw background
     ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
     ctx.lineWidth = 1;
@@ -466,33 +486,35 @@ export class Renderer {
     ctx.fill();
     ctx.stroke();
 
-    // Draw title
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 14px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('Build Unit', menuX + menuWidth / 2, menuY + padding + titleHeight / 2);
+    // Draw title if present
+    if (config.title) {
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(config.title, menuX + menuWidth / 2, menuY + padding + titleHeight / 2);
+    }
 
-    // Draw template buttons
-    for (let i = 0; i < menu.templates.length; i++) {
-      const template = menu.templates[i]!;
+    // Draw items
+    for (let i = 0; i < config.items.length; i++) {
+      const item = config.items[i]!;
+      const enabled = item.enabled !== false;
       const btnX = menuX + padding;
       const btnY = menuY + padding + titleHeight + i * (buttonHeight + padding);
 
-      // Check if hovered
+      // Check hover state
       const isMouseHovered = this.isPointInRect(
         this.lastMouseX, this.lastMouseY,
         btnX, btnY, buttonWidth, buttonHeight
       );
       const isKeyboardHighlighted = this.menuHighlightIndex === i;
-      const isHighlighted = isMouseHovered || isKeyboardHighlighted;
-      const canAfford = this.resources.funds >= template.cost;
+      const isHighlighted = (isMouseHovered || isKeyboardHighlighted) && enabled;
 
       // Button background
-      if (!canAfford) {
+      if (!enabled) {
         ctx.fillStyle = 'rgba(100, 100, 100, 0.3)';
       } else if (isHighlighted) {
-        ctx.fillStyle = 'rgba(76, 175, 80, 0.4)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
       } else {
         ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
       }
@@ -500,178 +522,99 @@ export class Renderer {
       ctx.roundRect(btnX, btnY, buttonWidth, buttonHeight, 4);
       ctx.fill();
 
-      if (isKeyboardHighlighted && canAfford) {
-        ctx.strokeStyle = '#4caf50';
+      if (isKeyboardHighlighted && enabled) {
+        ctx.strokeStyle = item.color ?? '#ffffff';
         ctx.lineWidth = 2;
         ctx.stroke();
       }
 
       // Number prefix
-      ctx.fillStyle = canAfford ? '#888888' : '#555555';
+      ctx.fillStyle = enabled ? '#888888' : '#555555';
       ctx.font = 'bold 12px Arial';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       ctx.fillText(`${i + 1}`, btnX + 8, btnY + buttonHeight / 2);
 
-      // Unit name
-      ctx.fillStyle = canAfford ? '#ffffff' : '#666666';
+      // Label (with optional cost on second line)
+      const hasSecondLine = item.cost !== undefined;
+      const labelY = hasSecondLine ? btnY + buttonHeight / 2 - 6 : btnY + buttonHeight / 2;
+
+      ctx.fillStyle = enabled ? (item.color ?? '#ffffff') : '#666666';
       ctx.font = 'bold 13px Arial';
       ctx.textAlign = 'left';
-      ctx.fillText(template.name, btnX + 24, btnY + buttonHeight / 2 - 6);
+      ctx.fillText(item.label, btnX + 24, labelY);
 
-      // Cost
-      ctx.fillStyle = canAfford ? '#4caf50' : '#f44336';
-      ctx.font = '11px Arial';
-      ctx.fillText(`$${template.cost}`, btnX + 24, btnY + buttonHeight / 2 + 8);
+      // Cost (second line, left side)
+      if (item.cost !== undefined) {
+        ctx.fillStyle = enabled ? '#4caf50' : '#f44336';
+        ctx.font = '11px Arial';
+        ctx.fillText(`$${item.cost}`, btnX + 24, btnY + buttonHeight / 2 + 8);
+      }
 
-      // Stats
-      ctx.fillStyle = canAfford ? '#aaaaaa' : '#555555';
-      ctx.font = '10px Arial';
-      ctx.textAlign = 'right';
-      ctx.fillText(`ATK:${template.attack} SPD:${template.speed}`, btnX + buttonWidth - 8, btnY + buttonHeight / 2);
+      // Stats (right side)
+      if (item.stats) {
+        ctx.fillStyle = enabled ? '#aaaaaa' : '#555555';
+        ctx.font = '10px Arial';
+        ctx.textAlign = 'right';
+        ctx.fillText(item.stats, btnX + buttonWidth - 8, btnY + buttonHeight / 2);
+      }
 
       this.menuButtons.push({
-        label: template.name,
-        action: `build_${template.id}`,
+        label: item.label,
+        action: item.action,
         x: btnX,
         y: btnY,
         width: buttonWidth,
         height: buttonHeight
       });
     }
-
-    // Cancel button
-    const cancelY = menuY + padding + titleHeight + menu.templates.length * (buttonHeight + padding);
-    const cancelX = menuX + padding;
-    const isCancelHovered = this.isPointInRect(
-      this.lastMouseX, this.lastMouseY,
-      cancelX, cancelY, buttonWidth, buttonHeight
-    );
-    const isCancelHighlighted = this.menuHighlightIndex === menu.templates.length;
-
-    ctx.fillStyle = (isCancelHovered || isCancelHighlighted) ? 'rgba(244, 67, 54, 0.3)' : 'rgba(255, 255, 255, 0.1)';
-    ctx.beginPath();
-    ctx.roundRect(cancelX, cancelY, buttonWidth, buttonHeight, 4);
-    ctx.fill();
-
-    if (isCancelHighlighted) {
-      ctx.strokeStyle = '#f44336';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-
-    ctx.fillStyle = '#888888';
-    ctx.font = 'bold 12px Arial';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(`${menu.templates.length + 1}`, cancelX + 8, cancelY + buttonHeight / 2);
-
-    ctx.fillStyle = '#ff8888';
-    ctx.font = 'bold 13px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('Cancel', cancelX + buttonWidth / 2 + 8, cancelY + buttonHeight / 2);
-
-    this.menuButtons.push({
-      label: 'Cancel',
-      action: 'cancel',
-      x: cancelX,
-      y: cancelY,
-      width: buttonWidth,
-      height: buttonHeight
-    });
   }
 
-  // Helper methods for lab name input
+  private drawProductionMenu(menu: ProductionMenu, zoom: number): void {
+    const items: PopupMenuItem[] = menu.templates.map(t => ({
+      label: t.name,
+      action: `build_${t.id}`,
+      cost: t.cost,
+      stats: `ATK:${t.attack} SPD:${t.speed}`,
+      enabled: this.resources.funds >= t.cost,
+    }));
+
+    items.push({
+      label: 'Cancel',
+      action: 'cancel',
+      color: '#ff8888',
+    });
+
+    this.drawPopupMenu({
+      title: 'Build Unit',
+      items,
+      worldPos: { q: menu.factory.q, r: menu.factory.r },
+      clampToScreen: true,
+      buttonWidth: 140,
+      buttonHeight: 36,
+    }, zoom);
+  }
+
   private drawActionMenu(menu: ActionMenu, zoom: number): void {
-    const ctx = this.ctx;
-    const unit = menu.unit;
-
-    // Position menu near the unit
-    const world = HexUtil.axialToPixel(unit.q, unit.r, CONFIG.hexSize);
-    const screen = this.viewport.worldToScreen(world.x, world.y);
-
-    const buttonWidth = 80;
-    const buttonHeight = 28;
-    const padding = 8;
-    const menuX = screen.x + CONFIG.hexSize * zoom + 10;
-    const menuY = screen.y - buttonHeight * 1.5;
-
-    this.menuButtons = [];
-
-    const buttons = [
+    const items: PopupMenuItem[] = [
       { label: 'Wait', action: 'wait' },
       { label: 'Cancel', action: 'cancel' },
     ];
 
     if (menu.canAttack) {
-      buttons.push({ label: 'Attack', action: 'attack' });
+      items.push({ label: 'Attack', action: 'attack', color: '#ff9800' });
     }
 
     if (menu.canCapture) {
-      buttons.push({ label: 'Capture', action: 'capture' });
+      items.push({ label: 'Capture', action: 'capture', color: '#4caf50' });
     }
 
-    // Draw menu background
-    const menuWidth = buttonWidth + padding * 2;
-    const menuHeight = buttons.length * (buttonHeight + padding) + padding;
-
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(menuX, menuY, menuWidth, menuHeight, 6);
-    ctx.fill();
-    ctx.stroke();
-
-    // Draw buttons
-    for (let i = 0; i < buttons.length; i++) {
-      const btn = buttons[i]!;
-      const btnX = menuX + padding;
-      const btnY = menuY + padding + i * (buttonHeight + padding);
-
-      // Check if hovered by mouse or keyboard
-      const isMouseHovered = this.isPointInRect(
-        this.lastMouseX, this.lastMouseY,
-        btnX, btnY, buttonWidth, buttonHeight
-      );
-      const isKeyboardHighlighted = this.menuHighlightIndex === i;
-      const isHighlighted = isMouseHovered || isKeyboardHighlighted;
-
-      // Button background
-      ctx.fillStyle = isHighlighted ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.1)';
-      ctx.beginPath();
-      ctx.roundRect(btnX, btnY, buttonWidth, buttonHeight, 4);
-      ctx.fill();
-
-      if (isKeyboardHighlighted) {
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      }
-
-      // Number prefix
-      ctx.fillStyle = '#888888';
-      ctx.font = 'bold 12px Arial';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(`${i + 1}`, btnX + 8, btnY + buttonHeight / 2);
-
-      // Button text
-      ctx.fillStyle = btn.action === 'attack' ? '#ff9800' : btn.action === 'capture' ? '#4caf50' : '#ffffff';
-      ctx.font = 'bold 14px Arial';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(btn.label, btnX + buttonWidth / 2 + 8, btnY + buttonHeight / 2);
-
-      this.menuButtons.push({
-        label: btn.label,
-        action: btn.action,
-        x: btnX,
-        y: btnY,
-        width: buttonWidth,
-        height: buttonHeight
-      });
-    }
+    this.drawPopupMenu({
+      items,
+      worldPos: { q: menu.unit.q, r: menu.unit.r },
+      buttonWidth: 80,
+      buttonHeight: 28,
+    }, zoom);
   }
 
   getMenuButtonCount(): number {
