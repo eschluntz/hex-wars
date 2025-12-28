@@ -12,6 +12,9 @@ export interface UnitStats {
   terrainCosts: TerrainCosts;
   color: string;
   canCapture: boolean;
+  canBuild: boolean;
+  armored: boolean;
+  armorPiercing: boolean;
 }
 
 const DEFAULT_STATS: UnitStats = {
@@ -20,7 +23,10 @@ const DEFAULT_STATS: UnitStats = {
   range: 1,
   terrainCosts: DEFAULT_TERRAIN_COSTS,
   color: '#ffffff',
-  canCapture: false
+  canCapture: false,
+  canBuild: false,
+  armored: false,
+  armorPiercing: false,
 };
 
 export class Unit {
@@ -35,6 +41,9 @@ export class Unit {
   terrainCosts: TerrainCosts;
   color: string;
   canCapture: boolean;
+  canBuild: boolean;
+  armored: boolean;
+  armorPiercing: boolean;
   hasActed: boolean = false;
 
   constructor(id: string, team: string, q: number, r: number, stats: Partial<UnitStats> = {}) {
@@ -49,6 +58,9 @@ export class Unit {
     this.terrainCosts = stats.terrainCosts ?? DEFAULT_STATS.terrainCosts;
     this.color = stats.color ?? DEFAULT_STATS.color;
     this.canCapture = stats.canCapture ?? DEFAULT_STATS.canCapture;
+    this.canBuild = stats.canBuild ?? DEFAULT_STATS.canBuild;
+    this.armored = stats.armored ?? DEFAULT_STATS.armored;
+    this.armorPiercing = stats.armorPiercing ?? DEFAULT_STATS.armorPiercing;
   }
 
   isAlive(): boolean {

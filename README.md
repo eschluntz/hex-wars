@@ -25,19 +25,41 @@ A turn-based hex strategy game inspired by Advance Wars, Factorio, and roguelike
 4. Design & produce units (spend materials)
 5. Move & fight
 
-### Unit Design System
+### Unit Component System
 
-Unit blueprints will be customized from components, rather than predefined, so you can have lots of different units each game.
+Units are built from modular components rather than predefined classes. Each template combines a chassis, an optional weapon, and optional system modules. Total component weight must not exceed chassis capacity. Unit cost = sum of all component costs.
 
-Potential way this could be implemented:
+**Chassis** (determines mobility):
+| Chassis | Speed | Max Weight | Cost | Terrain |
+|---------|-------|------------|------|---------|
+| Foot    | 3     | 2          | $500 | All passable terrain costs 1 |
+| Wheels  | 6     | 3          | $800 | Roads 0.5, Woods 2 |
+| Treads  | 4     | 10         | $1500 | Roads 0.5, Woods 2 |
 
-| Slot | Options | Tradeoffs |
-|------|---------|-----------|
-| **Chassis** | Scout / Standard / Heavy / Hover | Speed vs. HP vs. terrain access |
-| **Weapon** | MG, Cannon, Laser, Missiles, Flamer | Range, damage pattern, ammo |
-| **System** | Armor, Shield, Repair, Stealth, Sensor | Survivability vs. utility |
+**Weapons** (determines offense):
+| Weapon      | Attack | Range | Armor Piercing | Weight | Cost |
+|-------------|--------|-------|----------------|--------|------|
+| Machine Gun | 4      | 1     | No             | 1      | $500 |
+| Heavy MG    | 6      | 1     | No             | 2      | $800 |
+| Cannon      | 7      | 1     | Yes            | 4      | $1500 |
+| Artillery   | 5      | 3     | Yes            | 5      | $2000 |
 
-Weapon types include line-piercing lasers, arc-over-obstacles missiles, and area-denial flamers.
+**System Modules** (special abilities):
+| System | Weight | Cost | Chassis Restriction | Effect |
+|--------|--------|------|---------------------|--------|
+| Capture Kit | 1 | $0 | Foot only | Can capture buildings |
+| Construction Kit | 1 | $500 | Any | Can build structures |
+| Armor Plating | 2 | $1000 | Wheels or Treads | Takes 1/5 damage from non-AP |
+
+**Starting Templates**:
+- **Soldier** ($1000): Foot + MG + Capture — can capture buildings
+- **Tank** ($4000): Treads + Cannon + Armor — armored with armor-piercing
+- **Recon** ($1300): Wheels + MG — fast scout
+
+**Example Custom Units**:
+- **Combat Engineer**: Foot + MG + Build + Capture ($1500) — fights, builds, captures
+- **Armored Recon**: Wheels + MG + Armor ($2300) — fast and protected
+- **Heavy Artillery**: Treads + Artillery + Armor ($4500) — long range, armored
 
 ## What's Implemented
 
@@ -58,23 +80,25 @@ Weapon types include line-piercing lasers, arc-over-obstacles missiles, and area
 - Path preview while hovering (green = reachable, red = beyond movement range)
 - Units cannot pass through enemies or stop on occupied tiles
 
-| Terrain | Default Cost |
-|---------|--------------|
-| Road | 0.5 |
-| Grass / Building | 1.0 |
-| Woods | 1.5 |
-| Water / Mountain | ∞ (unless unit has special terrain costs) |
+| Terrain | Foot | Wheels/Treads |
+|---------|------|---------------|
+| Road | 1.0 | 0.5 |
+| Grass / Building | 1.0 | 1.0 |
+| Woods | 1.0 | 2.0 |
+| Water / Mountain | ∞ | ∞ |
 
 ### Unit System
-- Units have: speed, attack, range, health (max 10), and custom terrain costs
+- Units have: speed, attack, range, health (max 10), terrain costs, armored, armorPiercing
 - Click to select, click destination to move
 - Path preview shows exact movement with arrow indicator
 - Health bars displayed below units
 
 ### Combat System (Advance Wars style)
-- Damage formula: `attack × (health/10) + random(-1, 0, +1)`
+- Base damage formula: `attack × (health/10) + random(-1, 0, +1)`
+- **Armor system**: Non-AP damage against armored units is divided by 5 (floored)
 - Counter-attacks: defender strikes back if still alive AND attacker is within defender's range
 - Range-based targeting (melee units can't counter ranged attacks from distance)
+- Tactical example: Soldiers (4 ATK, no AP) deal 0 damage to Tanks (armored)
 
 ### Turn System
 - Two teams: Player and Enemy (hotseat mode for testing)
@@ -103,20 +127,21 @@ Buildings have ownership displayed via colored backgrounds:
 
 ### Unit Production
 - Click on an owned factory (when no unit is on it) to open the production menu
-- Two unit templates available:
-  - **Infantry** ($1000): Speed 3, Attack 4, Range 1, can capture buildings
-  - **Tank** ($3000): Speed 5, Attack 7, Range 1 (slower in woods), cannot capture
+- Three unit templates available (built from components):
+  - **Soldier** ($1000): Foot + MG + Capture — Speed 3, Attack 4, can capture buildings
+  - **Tank** ($4000): Treads + Cannon + Armor — Speed 4, Attack 7, armored + AP
+  - **Recon** ($1300): Wheels + MG — Speed 6, Attack 4, fast scout
 - Newly built units appear on the factory, deactivated for the current turn
 - Use number keys or arrow keys + Enter to select
 
 ### Building Capture
-- Units with `canCapture` ability (e.g., Infantry) can capture neutral or enemy buildings
+- Units with `canCapture` ability (Soldier) can capture neutral or enemy buildings
 - Move the unit onto a building, then select "Capture" from the action menu
 - Captured buildings immediately switch to the capturing team's ownership
 - Buildings are visible underneath units (ring + small icon in corner)
 
 ### Win/Lose Conditions
-- A team loses when they have **no cities AND no units**
+- A team loses when they have **no buildings AND no units**
 - Game ends immediately when a team is eliminated
 - Victory screen shows the winner and detailed statistics
 
@@ -152,12 +177,13 @@ Buildings have ownership displayed via colored backgrounds:
 hex-dominion/
 ├── src/
 │   ├── core.ts          # Types, HexUtil, tile constants, TerrainCosts, TeamColors
+│   ├── components.ts    # Chassis, weapon, system component definitions
 │   ├── pathfinder.ts    # A* pathfinding with blocked positions
 │   ├── unit.ts          # Unit state, stats, movement
-│   ├── combat.ts        # Combat calculations and execution
+│   ├── combat.ts        # Combat calculations with armor/AP
 │   ├── building.ts      # Building types, icons, income
 │   ├── resources.ts     # Team resource tracking
-│   ├── unit-templates.ts # Unit blueprints for production
+│   ├── unit-templates.ts # Unit templates built from components
 │   ├── noise.ts         # Perlin noise, seeded RNG
 │   ├── config.ts        # Game configuration
 │   ├── game-map.ts      # Map and building generation
@@ -171,7 +197,8 @@ hex-dominion/
 │   ├── helpers.ts       # createTestMap() utility
 │   ├── pathfinding.test.ts
 │   ├── unit.test.ts
-│   ├── combat.test.ts   # Combat system tests
+│   ├── combat.test.ts   # Combat system tests (incl. armor/AP)
+│   ├── components.test.ts # Component system tests
 │   ├── building.test.ts # Building system tests
 │   ├── resources.test.ts # Resource management tests
 │   ├── production.test.ts # Unit template tests
@@ -188,7 +215,7 @@ hex-dominion/
 npm run watch      # Build + serve with auto-rebuild
 npm run build      # One-time build
 npm run typecheck  # Check types without building
-npm test           # Run tests (111 tests)
+npm test           # Run tests (178 tests)
 ```
 
 ### Test Map Helper
@@ -218,17 +245,25 @@ Combat tests use injectable variance parameters for deterministic results.
 - [x] Unit health bars and acted state
 - [x] Building types (city, factory, lab) with ownership display
 - [x] Resource system (funds, science)
-- [x] Unit production from factories (Infantry, Tank templates)
+- [x] Unit production from factories
 - [x] Building capture by units with `canCapture` ability
-- [x] Win/lose conditions (no cities + no units = defeat)
+- [x] Win/lose conditions (no buildings + no units = defeat)
 - [x] Main menu and New Game functionality
 - [x] Game over screen with statistics graphs
+- [x] Unit component system (chassis, weapon, system slots)
+- [x] Armor + armor-piercing combat mechanics
+- [x] Three unit types: Soldier, Tank, Recon
 
 ### Upcoming
+- [ ] unit design interface
+- [ ] Tech tree (spend science to unlock new components)
 - [ ] AI opponent
+- [ ] Building construction (using units with Build ability)
+- [ ] More chassis types (hover, etc.)
+- [ ] More weapon types (missiles, lasers, etc.)
+- [ ] More system modules (stealth, repair, sensors)
+- [ ] Satisfying battle animations
 - [ ] Improving road generation
-- [ ] satisfying battle animations
-- [ ] more complex battle dynamics (armor + armor-piercing) 
-- [ ] Tech tree (spend science)
-- [ ] Unit component system (chassis, weapon, system slots)
-- [ ] More unit types
+- [ ] fog of war?
+- [ ] more building types? Resources?
+

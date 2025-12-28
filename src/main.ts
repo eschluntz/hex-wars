@@ -2,31 +2,39 @@
 // HEX DOMINION - Main Entry Point
 // ============================================================================
 
-import { HexUtil, DEFAULT_TERRAIN_COSTS, TEAM_COLORS, type TerrainCosts, type AxialCoord } from './core.js';
-import { GEN_PARAMS, CONFIG, MAP_CONFIGS, type MapConfig } from './config.js';
+import { HexUtil, TEAM_COLORS, type AxialCoord } from './core.js';
+import { GEN_PARAMS, CONFIG, MAP_CONFIGS } from './config.js';
 import { GameMap } from './game-map.js';
 import { Viewport } from './viewport.js';
 import { Renderer } from './renderer.js';
 import { Unit } from './unit.js';
 import { Pathfinder } from './pathfinder.js';
-import { SeededRandom } from './noise.js';
 import { Combat } from './combat.js';
 import { type Building } from './building.js';
-import { getAvailableTemplates, getTemplate } from './unit-templates.js';
+import {
+  getAvailableTemplates,
+  getTemplate,
+  getTeamTemplates,
+  getTeamTemplate,
+  initTeamTemplates,
+  registerTemplate,
+  updateTemplate,
+  unregisterTemplate,
+  isNameTaken,
+} from './unit-templates.js';
+import {
+  createEmptyDesign,
+  createDesignFromTemplate,
+  selectChassis,
+  selectWeapon,
+  toggleSystem,
+  getDesignPreview,
+  type DesignState,
+} from './unit-designer.js';
 import { ResourceManager } from './resources.js';
 import { GameStats } from './stats.js';
 import { MenuRenderer, type GamePhase, type GameOverData } from './menu.js';
-
-const HOVER_TERRAIN_COSTS: TerrainCosts = {
-  ...DEFAULT_TERRAIN_COSTS,
-  water: 1.5
-};
-
-const MOUNTAIN_TERRAIN_COSTS: TerrainCosts = {
-  ...DEFAULT_TERRAIN_COSTS,
-  mountain: 2,
-  woods: 1
-};
+import { InputHandler } from './input.js';
 
 const TEAMS = {
   PLAYER: 'player',
@@ -34,12 +42,15 @@ const TEAMS = {
 };
 
 // Game state machine
+type LabPhase = 'list' | 'designing';
+
 type GameState =
   | { type: 'idle' }
   | { type: 'selected'; unit: Unit }
   | { type: 'moved'; unit: Unit; fromQ: number; fromR: number }
   | { type: 'attacking'; unit: Unit; fromQ: number; fromR: number }
-  | { type: 'factory'; factory: Building };
+  | { type: 'factory'; factory: Building }
+  | { type: 'lab'; lab: Building; phase: LabPhase; design: DesignState; editingId?: string };
 
 class Game {
   private canvas: HTMLCanvasElement;
@@ -51,6 +62,7 @@ class Game {
   private resources!: ResourceManager;
   private gameStats!: GameStats;
   private menuRenderer: MenuRenderer;
+  private inputHandler!: InputHandler;
   private units: Unit[] = [];
   private state: GameState = { type: 'idle' };
   private lastPreviewHex: AxialCoord | null = null;
@@ -65,10 +77,89 @@ class Game {
     this.ctx = this.canvas.getContext('2d')!;
     this.menuRenderer = new MenuRenderer(this.ctx, this.canvas.width, this.canvas.height);
 
-    this.setupInputHandlers();
+    // Create a dummy viewport for initial input handler setup
+    this.viewport = new Viewport(this.canvas);
+    this.setupInputHandler();
     this.resize();
     window.addEventListener('resize', () => this.resize());
     this.loop();
+  }
+
+  private setupInputHandler(): void {
+    this.inputHandler = new InputHandler(this.canvas, this.viewport, {
+      onMainMenuAction: (action) => {
+        if (action === 'click') {
+          const menuAction = this.menuRenderer.getClickedAction();
+          if (menuAction === 'new_game_small') this.startNewGame('small');
+          else if (menuAction === 'new_game_normal') this.startNewGame('normal');
+        } else if (action === 'small') {
+          this.startNewGame('small');
+        } else if (action === 'normal') {
+          this.startNewGame('normal');
+        }
+      },
+      onGameOverAction: (action) => {
+        if (action === 'click') {
+          const menuAction = this.menuRenderer.getClickedAction();
+          if (menuAction === 'main_menu') this.gamePhase = 'main_menu';
+        } else if (action === 'main_menu') {
+          this.gamePhase = 'main_menu';
+        }
+      },
+      onHexClick: (hex) => this.handleClick(hex),
+      onCancel: () => this.handleCancel(),
+      onEndTurn: () => this.endTurn(),
+      onMenuNavigate: (direction) => {
+        const buttonCount = this.renderer.getMenuButtonCount();
+        if (buttonCount === 0) return;
+        if (direction === 'up') {
+          this.renderer.menuHighlightIndex = (this.renderer.menuHighlightIndex - 1 + buttonCount) % buttonCount;
+        } else {
+          this.renderer.menuHighlightIndex = (this.renderer.menuHighlightIndex + 1) % buttonCount;
+        }
+      },
+      onMenuSelect: (index) => {
+        // Special case: -2 means confirm/save in lab
+        if (index === -2 && this.state.type === 'lab') {
+          this.executeLabAction('confirm_name');
+          return;
+        }
+
+        const action = index === -1
+          ? this.renderer.getMenuAction(this.renderer.menuHighlightIndex)
+          : this.renderer.getMenuAction(index);
+        if (!action) return;
+
+        if (this.state.type === 'moved') {
+          this.executeMenuAction(action);
+        } else if (this.state.type === 'factory') {
+          this.executeProductionAction(action);
+        } else if (this.state.type === 'lab') {
+          this.executeLabAction(action);
+        }
+      },
+      onMenuMouseMove: (x, y) => this.menuRenderer.updateMouse(x, y),
+      getPhase: () => this.gamePhase,
+      getMenuContext: () => {
+        if (this.state.type === 'moved') return 'action';
+        if (this.state.type === 'factory') return 'production';
+        if (this.state.type === 'lab') return 'lab';
+        return 'none';
+      },
+      onLabNameInput: (char: string) => {
+        console.log('onLabNameInput callback:', char, 'state:', this.state.type, this.state.type === 'lab' ? (this.state as any).phase : 'N/A');
+        if (this.state.type === 'lab' && this.state.phase === 'designing') {
+          this.renderer.handleLabNameInput(char);
+        }
+      },
+      onLabNameBackspace: () => {
+        console.log('onLabNameBackspace callback, state:', this.state.type, this.state.type === 'lab' ? (this.state as any).phase : 'N/A');
+        if (this.state.type === 'lab' && this.state.phase === 'designing') {
+          this.renderer.handleLabNameBackspace();
+        }
+      },
+      isDragging: () => this.viewport.isDragging
+    });
   }
 
   private resize(): void {
@@ -85,6 +176,7 @@ class Game {
 
     this.map = new GameMap(mapConfig);
     this.viewport = new Viewport(this.canvas);
+    this.inputHandler.updateViewport(this.viewport);
     this.pathfinder = new Pathfinder(this.map);
     this.renderer = new Renderer(this.canvas, this.map, this.viewport);
     this.resources = new ResourceManager([TEAMS.PLAYER, TEAMS.ENEMY]);
@@ -102,6 +194,10 @@ class Game {
     // Give starting resources
     this.resources.addFunds(TEAMS.PLAYER, 5000);
     this.resources.addFunds(TEAMS.ENEMY, 5000);
+
+    // Initialize per-team templates
+    initTeamTemplates(TEAMS.PLAYER);
+    initTeamTemplates(TEAMS.ENEMY);
 
     // Setup based on map type
     if (mapType === 'small') {
@@ -132,29 +228,38 @@ class Game {
     // Player side (left) - q around 1-2
     this.map.addBuilding({ q: 1, r: centerR, type: 'city', owner: TEAMS.PLAYER });
     this.map.addBuilding({ q: 1, r: centerR + 1, type: 'factory', owner: TEAMS.PLAYER });
+    this.map.addBuilding({ q: 1, r: centerR - 1, type: 'lab', owner: TEAMS.PLAYER });
 
     // Enemy side (right) - q around 7-8
     this.map.addBuilding({ q: 8, r: centerR, type: 'city', owner: TEAMS.ENEMY });
     this.map.addBuilding({ q: 8, r: centerR + 1, type: 'factory', owner: TEAMS.ENEMY });
+    this.map.addBuilding({ q: 8, r: centerR - 1, type: 'lab', owner: TEAMS.ENEMY });
 
-    // Spawn one infantry each
-    const playerUnit = new Unit('infantry', TEAMS.PLAYER, 3, centerR, {
-      speed: 3,
-      attack: 4,
-      range: 1,
-      terrainCosts: DEFAULT_TERRAIN_COSTS,
+    // Spawn one soldier each (using soldier template stats)
+    const soldierTemplate = getTemplate('soldier');
+    const playerUnit = new Unit('soldier', TEAMS.PLAYER, 3, centerR, {
+      speed: soldierTemplate.speed,
+      attack: soldierTemplate.attack,
+      range: soldierTemplate.range,
+      terrainCosts: soldierTemplate.terrainCosts,
       color: TEAM_COLORS[TEAMS.PLAYER]!.unitColor,
-      canCapture: true
+      canCapture: soldierTemplate.canCapture,
+      canBuild: soldierTemplate.canBuild,
+      armored: soldierTemplate.armored,
+      armorPiercing: soldierTemplate.armorPiercing,
     });
     this.units.push(playerUnit);
 
-    const enemyUnit = new Unit('infantry', TEAMS.ENEMY, 6, centerR, {
-      speed: 3,
-      attack: 4,
-      range: 1,
-      terrainCosts: DEFAULT_TERRAIN_COSTS,
+    const enemyUnit = new Unit('soldier', TEAMS.ENEMY, 6, centerR, {
+      speed: soldierTemplate.speed,
+      attack: soldierTemplate.attack,
+      range: soldierTemplate.range,
+      terrainCosts: soldierTemplate.terrainCosts,
       color: TEAM_COLORS[TEAMS.ENEMY]!.unitColor,
-      canCapture: true
+      canCapture: soldierTemplate.canCapture,
+      canBuild: soldierTemplate.canBuild,
+      armored: soldierTemplate.armored,
+      armorPiercing: soldierTemplate.armorPiercing,
     });
     this.units.push(enemyUnit);
 
@@ -183,14 +288,19 @@ class Game {
       return dist <= 5;
     });
 
+    // Use templates for spawning units
+    const soldierT = getTemplate('soldier');
+    const tankT = getTemplate('tank');
+    const reconT = getTemplate('recon');
+
     const unitConfigs = [
       // Player units on left side of center
-      { id: 'scout', team: TEAMS.PLAYER, speed: 6, attack: 4, range: 1, terrainCosts: DEFAULT_TERRAIN_COSTS, color: '#ffeb3b', offsetQ: -2, offsetR: 0, canCapture: true },
-      { id: 'tank', team: TEAMS.PLAYER, speed: 3, attack: 7, range: 1, terrainCosts: DEFAULT_TERRAIN_COSTS, color: '#4caf50', offsetQ: -2, offsetR: 1, canCapture: false },
-      { id: 'hover', team: TEAMS.PLAYER, speed: 4, attack: 5, range: 2, terrainCosts: HOVER_TERRAIN_COSTS, color: '#2196f3', offsetQ: -2, offsetR: -1, canCapture: false },
+      { template: reconT, team: TEAMS.PLAYER, offsetQ: -2, offsetR: 0 },
+      { template: tankT, team: TEAMS.PLAYER, offsetQ: -2, offsetR: 1 },
+      { template: soldierT, team: TEAMS.PLAYER, offsetQ: -2, offsetR: -1 },
       // Enemy units on right side of center
-      { id: 'enemy1', team: TEAMS.ENEMY, speed: 4, attack: 5, range: 1, terrainCosts: DEFAULT_TERRAIN_COSTS, color: '#f44336', offsetQ: 2, offsetR: 0, canCapture: true },
-      { id: 'enemy2', team: TEAMS.ENEMY, speed: 4, attack: 6, range: 2, terrainCosts: DEFAULT_TERRAIN_COSTS, color: '#ff5722', offsetQ: 2, offsetR: 1, canCapture: false },
+      { template: soldierT, team: TEAMS.ENEMY, offsetQ: 2, offsetR: 0 },
+      { template: tankT, team: TEAMS.ENEMY, offsetQ: 2, offsetR: 1 },
     ];
 
     for (const config of unitConfigs) {
@@ -208,13 +318,17 @@ class Game {
         }
       }
 
-      const unit = new Unit(config.id, config.team, q, r, {
-        speed: config.speed,
-        attack: config.attack,
-        range: config.range,
-        terrainCosts: config.terrainCosts,
-        color: config.color,
-        canCapture: config.canCapture
+      const teamColors = TEAM_COLORS[config.team]!;
+      const unit = new Unit(`${config.template.id}_${this.nextUnitId++}`, config.team, q, r, {
+        speed: config.template.speed,
+        attack: config.template.attack,
+        range: config.template.range,
+        terrainCosts: config.template.terrainCosts,
+        color: teamColors.unitColor,
+        canCapture: config.template.canCapture,
+        canBuild: config.template.canBuild,
+        armored: config.template.armored,
+        armorPiercing: config.template.armorPiercing,
       });
       this.units.push(unit);
     }
@@ -265,6 +379,7 @@ class Game {
       this.renderer.actionMenu = null;
       this.renderer.attackTargets = null;
       this.renderer.productionMenu = null;
+      this.renderer.labMenu = null;
     } else if (newState.type === 'selected') {
       this.renderer.selectedUnit = newState.unit;
       this.renderer.actionMenu = null;
@@ -307,83 +422,53 @@ class Game {
       this.renderer.attackTargets = null;
       this.renderer.productionMenu = {
         factory: newState.factory,
-        templates: getAvailableTemplates()
+        templates: getTeamTemplates(this.currentTeam)
+      };
+      this.renderer.labMenu = null;
+      this.renderer.menuHighlightIndex = 0;
+    } else if (newState.type === 'lab') {
+      this.renderer.selectedUnit = null;
+      this.renderer.pathPreview = null;
+      this.renderer.actionMenu = null;
+      this.renderer.attackTargets = null;
+      this.renderer.productionMenu = null;
+
+      // Preserve nameInput when staying in designing phase
+      const currentNameInput = this.renderer.labMenu?.nameInput ?? '';
+      const isStayingInDesigning = this.renderer.labMenu?.phase === 'designing' && newState.phase === 'designing';
+
+      let nameInput: string;
+      if (isStayingInDesigning) {
+        // Keep current name when just changing components
+        nameInput = currentNameInput;
+      } else if (newState.editingId) {
+        // Load name from template when editing
+        nameInput = getTeamTemplate(this.currentTeam, newState.editingId)?.name ?? '';
+      } else {
+        // Empty for new design
+        nameInput = '';
+      }
+
+      this.renderer.labMenu = {
+        lab: newState.lab,
+        phase: newState.phase,
+        design: newState.design,
+        templates: getTeamTemplates(this.currentTeam),
+        editingId: newState.editingId,
+        nameInput,
+        nameError: null,
+        hoveredComponent: null,
       };
       this.renderer.menuHighlightIndex = 0;
+
+      // Disable WASD panning when in designing phase (typing name)
+      this.viewport.inputDisabled = newState.phase === 'designing';
     }
-  }
 
-  // --- Input handlers ---
-
-  private setupInputHandlers(): void {
-    this.canvas.addEventListener('mousemove', e => {
-      this.menuRenderer.updateMouse(e.clientX, e.clientY);
-    });
-
-    this.canvas.addEventListener('click', e => {
-      // Handle menu clicks
-      if (this.gamePhase === 'main_menu') {
-        const action = this.menuRenderer.getClickedAction();
-        if (action === 'new_game_small') {
-          this.startNewGame('small');
-        } else if (action === 'new_game_normal') {
-          this.startNewGame('normal');
-        }
-        return;
-      }
-      if (this.gamePhase === 'game_over') {
-        const action = this.menuRenderer.getClickedAction();
-        if (action === 'main_menu') {
-          this.gamePhase = 'main_menu';
-        }
-        return;
-      }
-
-      // Handle game clicks
-      if (this.viewport.isDragging) return;
-
-      const world = this.viewport.screenToWorld(e.clientX, e.clientY);
-      const hex = HexUtil.pixelToAxial(world.x, world.y, CONFIG.hexSize);
-
-      this.handleClick(hex);
-    });
-
-    this.canvas.addEventListener('contextmenu', e => {
-      e.preventDefault();
-      if (this.gamePhase === 'playing') {
-        this.handleCancel();
-      }
-    });
-
-    window.addEventListener('keydown', e => {
-      // Menu shortcuts
-      if (this.gamePhase === 'main_menu') {
-        if (e.key === '1') {
-          this.startNewGame('small');
-        } else if (e.key === '2' || e.key === 'Enter' || e.key === ' ') {
-          this.startNewGame('normal');
-        }
-        return;
-      }
-      if (this.gamePhase === 'game_over') {
-        if (e.key === 'Enter' || e.key === ' ') {
-          this.gamePhase = 'main_menu';
-        }
-        return;
-      }
-
-      // Game shortcuts
-      if (e.key === 'Escape') {
-        this.handleCancel();
-      } else if (e.key === 'Tab') {
-        e.preventDefault();
-        this.endTurn();
-      } else if (this.state.type === 'moved') {
-        this.handleMenuKeyboard(e);
-      } else if (this.state.type === 'factory') {
-        this.handleProductionKeyboard(e);
-      }
-    });
+    // Re-enable viewport input when leaving lab
+    if (newState.type !== 'lab') {
+      this.viewport.inputDisabled = false;
+    }
   }
 
   private endTurn(): void {
@@ -438,12 +523,12 @@ class Game {
   }
 
   private checkGameOver(): string | null {
-    // A team loses if they have no cities AND no units
+    // A team loses if they have no buildings AND no units
     for (const team of [TEAMS.PLAYER, TEAMS.ENEMY]) {
-      const hasCities = this.map.getBuildingsByOwner(team).some(b => b.type === 'city');
+      const hasBuildings = this.map.getBuildingsByOwner(team).length > 0;
       const hasUnits = this.units.some(u => u.team === team && u.isAlive());
 
-      if (!hasCities && !hasUnits) {
+      if (!hasBuildings && !hasUnits) {
         return team; // This team lost
       }
     }
@@ -489,66 +574,6 @@ class Game {
     return this.units.filter(u => u.team === this.currentTeam && u.isAlive()).length;
   }
 
-  private handleMenuKeyboard(e: KeyboardEvent): void {
-    const buttonCount = this.renderer.getMenuButtonCount();
-    if (buttonCount === 0) return;
-
-    // Number keys 1-9
-    if (e.key >= '1' && e.key <= '9') {
-      const index = parseInt(e.key) - 1;
-      const action = this.renderer.getMenuAction(index);
-      if (action) {
-        this.executeMenuAction(action);
-      }
-      return;
-    }
-
-    // Arrow keys
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      this.renderer.menuHighlightIndex = (this.renderer.menuHighlightIndex - 1 + buttonCount) % buttonCount;
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      this.renderer.menuHighlightIndex = (this.renderer.menuHighlightIndex + 1) % buttonCount;
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      const action = this.renderer.getMenuAction(this.renderer.menuHighlightIndex);
-      if (action) {
-        this.executeMenuAction(action);
-      }
-    }
-  }
-
-  private handleProductionKeyboard(e: KeyboardEvent): void {
-    const buttonCount = this.renderer.getMenuButtonCount();
-    if (buttonCount === 0) return;
-
-    // Number keys 1-9
-    if (e.key >= '1' && e.key <= '9') {
-      const index = parseInt(e.key) - 1;
-      const action = this.renderer.getMenuAction(index);
-      if (action) {
-        this.executeProductionAction(action);
-      }
-      return;
-    }
-
-    // Arrow keys
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      this.renderer.menuHighlightIndex = (this.renderer.menuHighlightIndex - 1 + buttonCount) % buttonCount;
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      this.renderer.menuHighlightIndex = (this.renderer.menuHighlightIndex + 1) % buttonCount;
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      const action = this.renderer.getMenuAction(this.renderer.menuHighlightIndex);
-      if (action) {
-        this.executeProductionAction(action);
-      }
-    }
-  }
-
   private executeMenuAction(action: string): void {
     if (this.state.type !== 'moved') return;
 
@@ -579,6 +604,21 @@ class Game {
   }
 
   private handleClick(hex: AxialCoord): void {
+    // Handle modal menus first - they block all other clicks
+    if (this.state.type === 'lab' || this.state.type === 'factory') {
+      const action = this.renderer.getActionMenuClick();
+      console.log('Modal menu click, action:', action, 'state:', this.state.type);
+      if (action) {
+        if (this.state.type === 'lab') {
+          this.executeLabAction(action);
+        } else {
+          this.executeProductionAction(action);
+        }
+      }
+      // Ignore clicks outside the menu
+      return;
+    }
+
     const clickedUnit = this.getUnitAt(hex.q, hex.r);
 
     switch (this.state.type) {
@@ -586,10 +626,19 @@ class Game {
         if (clickedUnit && clickedUnit.team === this.currentTeam && !clickedUnit.hasActed) {
           this.setState({ type: 'selected', unit: clickedUnit });
         } else if (!clickedUnit) {
-          // Check if clicked on an owned factory
+          // Check if clicked on an owned factory or lab
           const building = this.map.getBuilding(hex.q, hex.r);
-          if (building && building.type === 'factory' && building.owner === this.currentTeam) {
-            this.setState({ type: 'factory', factory: building });
+          if (building && building.owner === this.currentTeam) {
+            if (building.type === 'factory') {
+              this.setState({ type: 'factory', factory: building });
+            } else if (building.type === 'lab') {
+              this.setState({
+                type: 'lab',
+                lab: building,
+                phase: 'list',
+                design: createEmptyDesign(),
+              });
+            }
           }
         }
         break;
@@ -637,14 +686,6 @@ class Game {
         break;
       }
 
-      case 'factory': {
-        // Check if clicked on production menu buttons
-        const action = this.renderer.getActionMenuClick();
-        if (action) {
-          this.executeProductionAction(action);
-        }
-        break;
-      }
     }
   }
 
@@ -658,7 +699,8 @@ class Game {
 
     if (action.startsWith('build_')) {
       const templateId = action.slice(6); // Remove 'build_' prefix
-      const template = getTemplate(templateId);
+      const template = getTeamTemplate(this.currentTeam, templateId);
+      if (!template) return;
       const factory = this.state.factory;
 
       if (!this.resources.canAfford(this.currentTeam, template.cost)) {
@@ -681,7 +723,10 @@ class Game {
           range: template.range,
           terrainCosts: template.terrainCosts,
           color: teamColors.unitColor,
-          canCapture: template.canCapture
+          canCapture: template.canCapture,
+          canBuild: template.canBuild,
+          armored: template.armored,
+          armorPiercing: template.armorPiercing,
         }
       );
       unit.hasActed = true; // New units can't act this turn
@@ -689,6 +734,149 @@ class Game {
 
       console.log(`Built ${template.name} at (${factory.q}, ${factory.r}) for $${template.cost}`);
       this.setState({ type: 'idle' });
+    }
+  }
+
+  private executeLabAction(action: string): void {
+    if (this.state.type !== 'lab') return;
+
+    if (action === 'cancel') {
+      this.handleCancel();
+      return;
+    }
+
+    if (action === 'new') {
+      this.setState({
+        type: 'lab',
+        lab: this.state.lab,
+        phase: 'designing',
+        design: createEmptyDesign(),
+      });
+      return;
+    }
+
+    if (action.startsWith('edit_')) {
+      const templateId = action.slice(5);
+      const template = getTeamTemplate(this.currentTeam, templateId);
+      if (template) {
+        this.setState({
+          type: 'lab',
+          lab: this.state.lab,
+          phase: 'designing',
+          design: createDesignFromTemplate(template),
+          editingId: templateId,
+        });
+      }
+      return;
+    }
+
+    if (action.startsWith('delete_')) {
+      const templateId = action.slice(7);
+      unregisterTemplate(this.currentTeam, templateId);
+      // Refresh the template list by re-entering list state
+      this.setState({
+        type: 'lab',
+        lab: this.state.lab,
+        phase: 'list',
+        design: createEmptyDesign(),
+      });
+      return;
+    }
+
+    if (action.startsWith('chassis_')) {
+      const chassisId = action.slice(8);
+      const newDesign = selectChassis(this.state.design, chassisId);
+      this.setState({
+        type: 'lab',
+        lab: this.state.lab,
+        phase: 'designing',
+        design: newDesign,
+        editingId: this.state.editingId,
+      });
+      return;
+    }
+
+    if (action.startsWith('weapon_')) {
+      const weaponId = action.slice(7);
+      const newDesign = selectWeapon(this.state.design, weaponId === 'none' ? null : weaponId);
+      this.setState({
+        type: 'lab',
+        lab: this.state.lab,
+        phase: 'designing',
+        design: newDesign,
+        editingId: this.state.editingId,
+      });
+      return;
+    }
+
+    if (action === 'system_none') {
+      // Clear all systems
+      this.setState({
+        type: 'lab',
+        lab: this.state.lab,
+        phase: 'designing',
+        design: { ...this.state.design, systemIds: [] },
+        editingId: this.state.editingId,
+      });
+      return;
+    }
+
+    if (action.startsWith('system_')) {
+      const systemId = action.slice(7);
+      const newDesign = toggleSystem(this.state.design, systemId);
+      this.setState({
+        type: 'lab',
+        lab: this.state.lab,
+        phase: 'designing',
+        design: newDesign,
+        editingId: this.state.editingId,
+      });
+      return;
+    }
+
+    if (action === 'confirm_name') {
+      const name = this.renderer.labMenu?.nameInput?.trim() ?? '';
+      console.log('confirm_name action:', { name, team: this.currentTeam, editingId: this.state.editingId });
+
+      if (!name) {
+        this.renderer.setLabNameError('Name cannot be empty');
+        return;
+      }
+
+      const nameTaken = isNameTaken(this.currentTeam, name, this.state.editingId);
+      console.log('isNameTaken result:', nameTaken);
+
+      if (nameTaken) {
+        this.renderer.setLabNameError('Name already exists');
+        return;
+      }
+
+      const design = this.state.design;
+      if (!design.chassisId) return;
+
+      if (this.state.editingId) {
+        updateTemplate(
+          this.currentTeam,
+          this.state.editingId,
+          name,
+          design.chassisId,
+          design.weaponId,
+          design.systemIds
+        );
+        console.log(`Updated template: ${name}`);
+      } else {
+        registerTemplate(
+          this.currentTeam,
+          name,
+          design.chassisId,
+          design.weaponId,
+          design.systemIds
+        );
+        console.log(`Created new template: ${name}`);
+      }
+
+      this.setState({ type: 'idle' });
+      return;
     }
   }
 
@@ -709,6 +897,19 @@ class Game {
         break;
       case 'factory':
         this.setState({ type: 'idle' });
+        break;
+      case 'lab':
+        // Go back through phases or exit
+        if (this.state.phase === 'designing') {
+          this.setState({
+            type: 'lab',
+            lab: this.state.lab,
+            phase: 'list',
+            design: createEmptyDesign(),
+          });
+        } else {
+          this.setState({ type: 'idle' });
+        }
         break;
     }
   }

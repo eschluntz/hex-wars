@@ -16,8 +16,10 @@ export class Viewport {
   private minZoom = 0.25;
   private maxZoom = 3;
   private keys = { w: false, a: false, s: false, d: false };
-  isDragging = false;
+  private isMouseDown = false;
+  isDragging = false;  // True only if mouse actually moved during drag
   private dragStart = { x: 0, y: 0, viewX: 0, viewY: 0 };
+  inputDisabled = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -26,6 +28,7 @@ export class Viewport {
 
   private setupInput(): void {
     window.addEventListener('keydown', e => {
+      if (this.inputDisabled) return;
       const k = e.key.toLowerCase() as keyof typeof this.keys;
       if (k in this.keys) {
         this.keys[k] = true;
@@ -39,7 +42,8 @@ export class Viewport {
     });
 
     this.canvas.addEventListener('mousedown', e => {
-      this.isDragging = true;
+      this.isMouseDown = true;
+      this.isDragging = false;  // Not dragging until mouse moves
       this.dragStart = {
         x: e.clientX,
         y: e.clientY,
@@ -49,15 +53,24 @@ export class Viewport {
     });
 
     window.addEventListener('mousemove', e => {
-      if (this.isDragging) {
-        this.x = this.dragStart.viewX - (e.clientX - this.dragStart.x) / this.zoom;
-        this.y = this.dragStart.viewY - (e.clientY - this.dragStart.y) / this.zoom;
-        this.targetX = this.x;
-        this.targetY = this.y;
+      if (this.isMouseDown) {
+        // Only count as dragging if mouse moved more than a few pixels
+        const dx = e.clientX - this.dragStart.x;
+        const dy = e.clientY - this.dragStart.y;
+        if (!this.isDragging && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) {
+          this.isDragging = true;
+        }
+        if (this.isDragging) {
+          this.x = this.dragStart.viewX - dx / this.zoom;
+          this.y = this.dragStart.viewY - dy / this.zoom;
+          this.targetX = this.x;
+          this.targetY = this.y;
+        }
       }
     });
 
     window.addEventListener('mouseup', () => {
+      this.isMouseDown = false;
       this.isDragging = false;
     });
 
