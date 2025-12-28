@@ -9,11 +9,12 @@ const BASE_CHASSIS = new Set(['foot', 'wheels', 'treads']);
 const BASE_WEAPONS = new Set(['machineGun', 'heavyMG', 'cannon', 'artillery']);
 const BASE_SYSTEMS = new Set(['capture', 'build', 'armor']);
 
-// Team research state (for future tech tree)
+// Team research state
 const teamResearch: Record<string, {
   unlockedChassis: Set<string>;
   unlockedWeapons: Set<string>;
   unlockedSystems: Set<string>;
+  unlockedTechs: Set<string>;
 }> = {};
 
 export function initTeamResearch(team: string): void {
@@ -21,6 +22,7 @@ export function initTeamResearch(team: string): void {
     unlockedChassis: new Set(BASE_CHASSIS),
     unlockedWeapons: new Set(BASE_WEAPONS),
     unlockedSystems: new Set(BASE_SYSTEMS),
+    unlockedTechs: new Set(),
   };
 }
 
@@ -66,4 +68,20 @@ export function unlockSystem(team: string, systemId: string): void {
   if (teamResearch[team]) {
     teamResearch[team].unlockedSystems.add(systemId);
   }
+}
+
+export function isTechUnlocked(team: string, techId: string): boolean {
+  const research = teamResearch[team];
+  return research ? research.unlockedTechs.has(techId) : false;
+}
+
+export function unlockTech(team: string, techId: string): void {
+  if (teamResearch[team]) {
+    teamResearch[team].unlockedTechs.add(techId);
+  }
+}
+
+export function getUnlockedTechs(team: string): Set<string> {
+  const research = teamResearch[team];
+  return research ? research.unlockedTechs : new Set();
 }

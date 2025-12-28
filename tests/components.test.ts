@@ -160,19 +160,19 @@ runner.describe('Components', () => {
     runner.it('should return all chassis as array', () => {
       const all = getAllChassis();
       assert(Array.isArray(all));
-      assertEqual(all.length, 3);
+      assertEqual(all.length, 8); // foot, wheels, treads, hover, amphibious, jump, fusion, titan
     });
 
     runner.it('should return all weapons as array', () => {
       const all = getAllWeapons();
       assert(Array.isArray(all));
-      assertEqual(all.length, 4);
+      assertEqual(all.length, 12); // base(4): machineGun, heavyMG, cannon, artillery + locked(8): rockets, missiles, laser, plasma, ion, railgun, siege, antimatter
     });
 
     runner.it('should return all systems as array', () => {
       const all = getAllSystems();
       assert(Array.isArray(all));
-      assertEqual(all.length, 3);
+      assertEqual(all.length, 14); // base(3): capture, build, armor + locked(11): stealth, sensors, reactive, ecm, targeting, shield, repair, drones, cloak, nanorepair, psychic
     });
   });
 

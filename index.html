@@ -41,7 +41,7 @@
 
     .lab-modal {
       background: #1a1a2e; border: 2px solid #6495ED50; border-radius: 12px;
-      padding: 20px; width: 620px; color: #e0e0e0;
+      padding: 20px; width: 700px; max-width: 95vw; color: #e0e0e0;
     }
 
     .lab-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
@@ -136,6 +136,144 @@
     .lab-save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
     .lab-phase.hidden { display: none; }
+
+    /* Lab Tabs */
+    .lab-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 16px;
+      border-bottom: 2px solid #ffffff20;
+      padding-bottom: 8px;
+    }
+    .lab-tab {
+      background: #ffffff10;
+      border: none;
+      border-radius: 6px 6px 0 0;
+      padding: 10px 20px;
+      color: #888;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .lab-tab:hover { background: #ffffff20; color: #aaa; }
+    .lab-tab.active {
+      background: #6495ED30;
+      color: #6495ED;
+      border-bottom: 2px solid #6495ED;
+      margin-bottom: -2px;
+    }
+
+    .lab-tab-content { min-height: 300px; }
+    .lab-tab-content.hidden { display: none; }
+
+    /* Research Tab */
+    .lab-science-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #00000030;
+      border-radius: 6px;
+      padding: 8px 14px;
+      margin-bottom: 12px;
+      font-size: 16px;
+    }
+    .science-icon { font-size: 20px; }
+    .science-amount { color: #64b5f6; font-weight: 600; }
+
+    .tech-tree-container {
+      position: relative;
+      background: #00000030;
+      border-radius: 8px;
+      padding: 16px;
+      min-height: 220px;
+      overflow-x: auto;
+    }
+    .tech-tree-lines {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    .tech-line {
+      fill: none;
+      stroke-width: 2;
+    }
+    .tech-line.line-unlocked { stroke: #4caf50; }
+    .tech-line.line-locked { stroke: #ffffff30; }
+
+    .tech-tree-nodes { position: relative; }
+
+    .tech-node {
+      position: absolute;
+      background: #1a1a2e;
+      border: 2px solid #666;
+      border-radius: 8px;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      cursor: default;
+      transition: all 0.2s;
+    }
+    .tech-name { font-size: 12px; font-weight: 600; color: #e0e0e0; }
+    .tech-cost { font-size: 11px; color: #888; margin-top: 4px; }
+
+    .tech-unlocked {
+      border-color: #4caf50;
+      background: #4caf5015;
+    }
+    .tech-unlocked .tech-cost { color: #4caf50; }
+
+    .tech-available {
+      border-color: #6495ED;
+      background: #6495ED15;
+      cursor: pointer;
+      box-shadow: 0 0 12px #6495ED40;
+      animation: tech-pulse 2s infinite;
+    }
+    .tech-available:hover {
+      background: #6495ED30;
+      transform: scale(1.05);
+    }
+    @keyframes tech-pulse {
+      0%, 100% { box-shadow: 0 0 8px #6495ED30; }
+      50% { box-shadow: 0 0 16px #6495ED60; }
+    }
+
+    .tech-locked {
+      border-color: #444;
+      opacity: 0.5;
+    }
+    .tech-locked .tech-name { color: #888; }
+
+    .tech-tooltip {
+      background: #00000080;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: #aaa;
+      margin-top: 12px;
+      height: 54px; /* Fixed height for ~3 lines */
+      overflow-y: auto;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .tech-tooltip.visible { opacity: 1; }
+
+    /* Dependency highlighting */
+    .tech-node.tech-dependency {
+      border-color: #ffb74d !important;
+      box-shadow: 0 0 12px #ffb74d60 !important;
+    }
+    .tech-line.line-dependency {
+      stroke: #ffb74d !important;
+      stroke-width: 3 !important;
+    }
   </style>
 </head>
 <body>

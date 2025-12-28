@@ -35,6 +35,44 @@ const TREADS_TERRAIN_COSTS: TerrainCosts = {
   road: 0.5,
 };
 
+const HOVER_TERRAIN_COSTS: TerrainCosts = {
+  ...DEFAULT_TERRAIN_COSTS,
+  woods: 1,     // Hover glides over terrain
+  water: 2,     // Can cross water!
+  road: 0.5,
+};
+
+const AMPHIBIOUS_TERRAIN_COSTS: TerrainCosts = {
+  ...DEFAULT_TERRAIN_COSTS,
+  water: 1.5,   // Can cross water
+  woods: 2,
+  road: 0.5,
+};
+
+const JUMP_TERRAIN_COSTS: TerrainCosts = {
+  ...DEFAULT_TERRAIN_COSTS,
+  woods: 1,
+  water: 1,     // Can jump over
+  mountain: 2,  // Can traverse mountains!
+  road: 0.5,
+};
+
+const FUSION_TERRAIN_COSTS: TerrainCosts = {
+  ...DEFAULT_TERRAIN_COSTS,
+  woods: 0.5,   // Blazes through everything
+  water: 0.5,
+  mountain: 1,
+  road: 0.5,
+};
+
+const TITAN_TERRAIN_COSTS: TerrainCosts = {
+  ...DEFAULT_TERRAIN_COSTS,
+  woods: 1,     // Crushes trees
+  water: Infinity, // Too heavy
+  mountain: 3,  // Can climb slowly
+  road: 1,      // Too big for road bonus
+};
+
 export const CHASSIS: Record<string, ChassisComponent> = {
   foot: {
     id: 'foot',
@@ -59,6 +97,51 @@ export const CHASSIS: Record<string, ChassisComponent> = {
     terrainCosts: TREADS_TERRAIN_COSTS,
     maxWeight: 10,
     baseCost: 1500,
+  },
+  // Locked: requires advancedTreads tech
+  hover: {
+    id: 'hover',
+    name: 'Hover',
+    speed: 5,
+    terrainCosts: HOVER_TERRAIN_COSTS,
+    maxWeight: 6,
+    baseCost: 2000,
+  },
+  // Locked: requires amphibiousHull tech
+  amphibious: {
+    id: 'amphibious',
+    name: 'Amphibious',
+    speed: 4,
+    terrainCosts: AMPHIBIOUS_TERRAIN_COSTS,
+    maxWeight: 8,
+    baseCost: 2200,
+  },
+  // Locked: requires jumpJets tech
+  jump: {
+    id: 'jump',
+    name: 'Jump Jets',
+    speed: 5,
+    terrainCosts: JUMP_TERRAIN_COSTS,
+    maxWeight: 5,
+    baseCost: 2800,
+  },
+  // Locked: requires fusionCore tech
+  fusion: {
+    id: 'fusion',
+    name: 'Fusion',
+    speed: 8,
+    terrainCosts: FUSION_TERRAIN_COSTS,
+    maxWeight: 8,
+    baseCost: 5000,
+  },
+  // Locked: requires titanClass tech
+  titan: {
+    id: 'titan',
+    name: 'Titan',
+    speed: 2,
+    terrainCosts: TITAN_TERRAIN_COSTS,
+    maxWeight: 20,
+    baseCost: 6000,
   },
 };
 
@@ -114,6 +197,86 @@ export const WEAPONS: Record<string, WeaponComponent> = {
     weight: 5,
     cost: 2000,
   },
+  // Locked: requires rocketLauncher tech
+  rockets: {
+    id: 'rockets',
+    name: 'Rockets',
+    attack: 6,
+    armorPiercing: true,
+    range: 2,
+    weight: 3,
+    cost: 1800,
+  },
+  // Locked: requires advancedRockets tech
+  missiles: {
+    id: 'missiles',
+    name: 'Missiles',
+    attack: 8,
+    armorPiercing: true,
+    range: 4,
+    weight: 4,
+    cost: 3000,
+  },
+  // Locked: requires laserTechnology tech
+  laser: {
+    id: 'laser',
+    name: 'Laser',
+    attack: 5,
+    armorPiercing: false,
+    range: 2,
+    weight: 2,
+    cost: 1200,
+  },
+  // Locked: requires plasmaCannon tech
+  plasma: {
+    id: 'plasma',
+    name: 'Plasma Cannon',
+    attack: 8,
+    armorPiercing: true,
+    range: 1,
+    weight: 3,
+    cost: 2000,
+  },
+  // Locked: requires ionCannon tech
+  ion: {
+    id: 'ion',
+    name: 'Ion Cannon',
+    attack: 6,
+    armorPiercing: true,
+    range: 2,
+    weight: 4,
+    cost: 2500,
+  },
+  // Locked: requires railgun tech
+  railgun: {
+    id: 'railgun',
+    name: 'Railgun',
+    attack: 10,
+    armorPiercing: true,
+    range: 3,
+    weight: 5,
+    cost: 3500,
+  },
+  // Locked: requires siegeWeapons tech
+  siege: {
+    id: 'siege',
+    name: 'Siege Cannon',
+    attack: 12,
+    armorPiercing: true,
+    range: 4,
+    weight: 8,
+    cost: 4000,
+  },
+  // Locked: requires antimatterWeapons tech
+  antimatter: {
+    id: 'antimatter',
+    name: 'Antimatter',
+    attack: 15,
+    armorPiercing: true,
+    range: 2,
+    weight: 6,
+    cost: 6000,
+  },
 };
 
 // ============================================================================
@@ -129,6 +292,16 @@ export interface SystemComponent {
   grantsCapture?: boolean;         // Unit can capture buildings
   grantsBuild?: boolean;           // Unit can construct buildings
   grantsArmor?: boolean;           // Unit is armored (takes 1/5 damage from non-AP)
+  grantsStealth?: boolean;         // Unit has reduced visibility
+  grantsSensors?: boolean;         // Enhanced detection range
+  grantsECM?: boolean;             // Electronic countermeasures
+  grantsTargeting?: boolean;       // Improved accuracy
+  grantsShield?: boolean;          // Energy shield absorption
+  grantsRepair?: boolean;          // Can repair other units
+  grantsDrones?: boolean;          // Deploys combat drones
+  grantsCloak?: boolean;           // Full invisibility
+  grantsNanoRepair?: boolean;      // Self-healing
+  grantsPsychic?: boolean;         // Mind control abilities
 }
 
 export const SYSTEMS: Record<string, SystemComponent> = {
@@ -154,6 +327,94 @@ export const SYSTEMS: Record<string, SystemComponent> = {
     cost: 1000,
     requiresChassis: ['wheels', 'treads'],
     grantsArmor: true,
+  },
+  // Locked: requires stealthPlating tech
+  stealth: {
+    id: 'stealth',
+    name: 'Stealth Plating',
+    weight: 1,
+    cost: 1500,
+    grantsStealth: true,
+  },
+  // Locked: requires advancedSensors tech
+  sensors: {
+    id: 'sensors',
+    name: 'Advanced Sensors',
+    weight: 1,
+    cost: 800,
+    grantsSensors: true,
+  },
+  // Locked: requires reactiveArmor tech
+  reactive: {
+    id: 'reactive',
+    name: 'Reactive Armor',
+    weight: 2,
+    cost: 1200,
+    grantsArmor: true,
+  },
+  // Locked: requires electronicWarfare tech
+  ecm: {
+    id: 'ecm',
+    name: 'ECM Suite',
+    weight: 1,
+    cost: 1000,
+    grantsECM: true,
+  },
+  // Locked: requires targetingComputer tech
+  targeting: {
+    id: 'targeting',
+    name: 'Targeting Computer',
+    weight: 1,
+    cost: 900,
+    grantsTargeting: true,
+  },
+  // Locked: requires shieldGenerator tech
+  shield: {
+    id: 'shield',
+    name: 'Shield Generator',
+    weight: 3,
+    cost: 2000,
+    grantsShield: true,
+  },
+  // Locked: requires fieldRepair tech
+  repair: {
+    id: 'repair',
+    name: 'Repair System',
+    weight: 2,
+    cost: 1000,
+    grantsRepair: true,
+  },
+  // Locked: requires droneSwarm tech
+  drones: {
+    id: 'drones',
+    name: 'Drone Swarm',
+    weight: 2,
+    cost: 1800,
+    grantsDrones: true,
+  },
+  // Locked: requires cloakingDevice tech
+  cloak: {
+    id: 'cloak',
+    name: 'Cloaking Device',
+    weight: 2,
+    cost: 3000,
+    grantsCloak: true,
+  },
+  // Locked: requires nanoRepair tech
+  nanorepair: {
+    id: 'nanorepair',
+    name: 'Nano Repair',
+    weight: 1,
+    cost: 2500,
+    grantsNanoRepair: true,
+  },
+  // Locked: requires psychicAmplifier tech
+  psychic: {
+    id: 'psychic',
+    name: 'Psychic Amplifier',
+    weight: 3,
+    cost: 4000,
+    grantsPsychic: true,
   },
 };
 

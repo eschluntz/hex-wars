@@ -45,6 +45,19 @@ export class ResourceManager {
     return this.resources.get(team)!.funds >= amount;
   }
 
+  spendScience(team: string, amount: number): boolean {
+    const res = this.resources.get(team)!;
+    if (res.science >= amount) {
+      res.science -= amount;
+      return true;
+    }
+    return false;
+  }
+
+  canAffordScience(team: string, amount: number): boolean {
+    return this.resources.get(team)!.science >= amount;
+  }
+
   collectIncome(team: string, buildings: Building[]): { funds: number; science: number } {
     let totalFunds = 0;
     let totalScience = 0;

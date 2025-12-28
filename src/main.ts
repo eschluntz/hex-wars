@@ -660,23 +660,33 @@ class Game {
 
   private openLabModal(): void {
     const templates = getTeamTemplates(this.currentTeam);
-    this.labModal.open(this.currentTeam, templates, {
-      onSave: (name, design) => {
-        if (!design.chassisId) return;
-        // Check if this is editing an existing template by name
-        const existingTemplate = templates.find(t => t.name.toLowerCase() === name.toLowerCase());
-        if (existingTemplate) {
-          updateTemplate(this.currentTeam, existingTemplate.id, name, design.chassisId, design.weaponId, design.systemIds);
-          console.log(`Updated template: ${name}`);
-        } else {
-          registerTemplate(this.currentTeam, name, design.chassisId, design.weaponId, design.systemIds);
-          console.log(`Created new template: ${name}`);
+    const teamResources = this.resources.getResources(this.currentTeam);
+    this.labModal.open(
+      this.currentTeam,
+      templates,
+      {
+        onSave: (name, design) => {
+          if (!design.chassisId) return;
+          // Check if this is editing an existing template by name
+          const existingTemplate = templates.find(t => t.name.toLowerCase() === name.toLowerCase());
+          if (existingTemplate) {
+            updateTemplate(this.currentTeam, existingTemplate.id, name, design.chassisId, design.weaponId, design.systemIds);
+            console.log(`Updated template: ${name}`);
+          } else {
+            registerTemplate(this.currentTeam, name, design.chassisId, design.weaponId, design.systemIds);
+            console.log(`Created new template: ${name}`);
+          }
+        },
+        onCancel: () => {
+          // Modal handles its own closing
+        },
+        onPurchaseTech: (techId) => {
+          console.log(`Purchased tech: ${techId}`);
         }
       },
-      onCancel: () => {
-        // Modal handles its own closing
-      }
-    });
+      teamResources.science,
+      this.resources
+    );
   }
 
   private handleCancel(): void {

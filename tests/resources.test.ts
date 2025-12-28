@@ -107,6 +107,56 @@ runner.describe('ResourceManager', () => {
 
   });
 
+  runner.describe('spendScience', () => {
+
+    runner.it('should deduct science when affordable', () => {
+      const manager = new ResourceManager(['player']);
+      manager.addScience('player', 20);
+      const result = manager.spendScience('player', 8);
+
+      assert(result);
+      assertEqual(manager.getResources('player').science, 12);
+    });
+
+    runner.it('should return false when not affordable', () => {
+      const manager = new ResourceManager(['player']);
+      manager.addScience('player', 5);
+      const result = manager.spendScience('player', 10);
+
+      assert(!result);
+      assertEqual(manager.getResources('player').science, 5);
+    });
+
+    runner.it('should allow spending exact amount', () => {
+      const manager = new ResourceManager(['player']);
+      manager.addScience('player', 15);
+      const result = manager.spendScience('player', 15);
+
+      assert(result);
+      assertEqual(manager.getResources('player').science, 0);
+    });
+
+  });
+
+  runner.describe('canAffordScience', () => {
+
+    runner.it('should return true when science is sufficient', () => {
+      const manager = new ResourceManager(['player']);
+      manager.addScience('player', 20);
+
+      assert(manager.canAffordScience('player', 10));
+      assert(manager.canAffordScience('player', 20));
+    });
+
+    runner.it('should return false when science is insufficient', () => {
+      const manager = new ResourceManager(['player']);
+      manager.addScience('player', 5);
+
+      assert(!manager.canAffordScience('player', 10));
+    });
+
+  });
+
   runner.describe('collectIncome', () => {
 
     runner.it('should collect income from owned cities', () => {

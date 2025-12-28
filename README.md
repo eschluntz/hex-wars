@@ -300,6 +300,7 @@ this.drawPopupMenu({
 ### Upcoming
 - [ ] Tech tree (spend science to unlock new components)
 - [ ] AI opponent
+- [ ] Upgrade Map visuals
 - [ ] Building construction (using units with Build ability)
 - [ ] More chassis types (hover, etc.)
 - [ ] More weapon types (missiles, lasers, etc.)
