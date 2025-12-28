@@ -19,13 +19,9 @@ export interface InputCallbacks {
   onMenuSelect: (index: number) => void;  // -1 for current highlight
   onMenuMouseMove: (x: number, y: number) => void;
 
-  // Lab menu handlers
-  onLabNameInput: (char: string) => void;
-  onLabNameBackspace: () => void;
-
   // State queries
   getPhase: () => 'main_menu' | 'playing' | 'game_over';
-  getMenuContext: () => 'none' | 'action' | 'production' | 'lab';
+  getMenuContext: () => 'none' | 'action' | 'production';
   isDragging: () => boolean;
 }
 
@@ -125,34 +121,7 @@ export class InputHandler {
     }
   }
 
-  private handleMenuKeyboard(e: KeyboardEvent, context: 'action' | 'production' | 'lab'): void {
-    // Lab naming mode has special text input handling
-    if (context === 'lab') {
-      // Check if this is a typing character for naming
-      if (e.key === 'Backspace') {
-        e.preventDefault();
-        this.callbacks.onLabNameBackspace();
-        return;
-      }
-
-      // Allow typing alphanumeric and space for names
-      if (e.key.length === 1 && /^[a-zA-Z0-9 \-_]$/.test(e.key)) {
-        e.preventDefault();
-        this.callbacks.onLabNameInput(e.key);
-        return;
-      }
-
-      // Enter confirms/saves the design
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        // Directly trigger confirm_name action
-        this.callbacks.onMenuSelect(-2); // Special value for confirm
-        return;
-      }
-
-      // Other keys fall through to standard menu navigation
-    }
-
+  private handleMenuKeyboard(e: KeyboardEvent, _context: 'action' | 'production'): void {
     // Number keys 1-9
     if (e.key >= '1' && e.key <= '9') {
       const index = parseInt(e.key) - 1;

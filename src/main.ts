@@ -22,20 +22,13 @@ import {
   unregisterTemplate,
   isNameTaken,
 } from './unit-templates.js';
-import {
-  createEmptyDesign,
-  createDesignFromTemplate,
-  selectChassis,
-  selectWeapon,
-  toggleSystem,
-  getDesignPreview,
-  type DesignState,
-} from './unit-designer.js';
+import { type DesignState } from './unit-designer.js';
 import { ResourceManager } from './resources.js';
 import { GameStats } from './stats.js';
 import { MenuRenderer, type GamePhase, type GameOverData } from './menu.js';
 import { InputHandler } from './input.js';
 import { initTeamResearch } from './research.js';
+import { LabModal } from './lab-modal.js';
 
 const TEAMS = {
   PLAYER: 'player',
@@ -43,15 +36,12 @@ const TEAMS = {
 };
 
 // Game state machine
-type LabPhase = 'list' | 'designing';
-
 type GameState =
   | { type: 'idle' }
   | { type: 'selected'; unit: Unit }
   | { type: 'moved'; unit: Unit; fromQ: number; fromR: number }
   | { type: 'attacking'; unit: Unit; fromQ: number; fromR: number }
-  | { type: 'factory'; factory: Building }
-  | { type: 'lab'; lab: Building; phase: LabPhase; design: DesignState; editingId?: string };
+  | { type: 'factory'; factory: Building };
 
 class Game {
   private canvas: HTMLCanvasElement;
@@ -64,6 +54,7 @@ class Game {
   private gameStats!: GameStats;
   private menuRenderer: MenuRenderer;
   private inputHandler!: InputHandler;
+  private labModal: LabModal;
   private units: Unit[] = [];
   private state: GameState = { type: 'idle' };
   private lastPreviewHex: AxialCoord | null = null;
@@ -77,6 +68,7 @@ class Game {
     this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
     this.ctx = this.canvas.getContext('2d')!;
     this.menuRenderer = new MenuRenderer(this.ctx, this.canvas.width, this.canvas.height);
+    this.labModal = new LabModal();
 
     // Create a dummy viewport for initial input handler setup
     this.viewport = new Viewport(this.canvas);
@@ -120,12 +112,6 @@ class Game {
         }
       },
       onMenuSelect: (index) => {
-        // Special case: -2 means confirm/save in lab
-        if (index === -2 && this.state.type === 'lab') {
-          this.executeLabAction('confirm_name');
-          return;
-        }
-
         const action = index === -1
           ? this.renderer.getMenuAction(this.renderer.menuHighlightIndex)
           : this.renderer.getMenuAction(index);
@@ -135,8 +121,6 @@ class Game {
           this.executeMenuAction(action);
         } else if (this.state.type === 'factory') {
           this.executeProductionAction(action);
-        } else if (this.state.type === 'lab') {
-          this.executeLabAction(action);
         }
       },
       onMenuMouseMove: (x, y) => this.menuRenderer.updateMouse(x, y),
@@ -144,20 +128,7 @@ class Game {
       getMenuContext: () => {
         if (this.state.type === 'moved') return 'action';
         if (this.state.type === 'factory') return 'production';
-        if (this.state.type === 'lab') return 'lab';
         return 'none';
-      },
-      onLabNameInput: (char: string) => {
-        console.log('onLabNameInput callback:', char, 'state:', this.state.type, this.state.type === 'lab' ? (this.state as any).phase : 'N/A');
-        if (this.state.type === 'lab' && this.state.phase === 'designing') {
-          this.renderer.handleLabNameInput(char);
-        }
-      },
-      onLabNameBackspace: () => {
-        console.log('onLabNameBackspace callback, state:', this.state.type, this.state.type === 'lab' ? (this.state as any).phase : 'N/A');
-        if (this.state.type === 'lab' && this.state.phase === 'designing') {
-          this.renderer.handleLabNameBackspace();
-        }
       },
       isDragging: () => this.viewport.isDragging
     });
@@ -382,7 +353,6 @@ class Game {
       this.renderer.actionMenu = null;
       this.renderer.attackTargets = null;
       this.renderer.productionMenu = null;
-      this.renderer.labMenu = null;
     } else if (newState.type === 'selected') {
       this.renderer.selectedUnit = newState.unit;
       this.renderer.actionMenu = null;
@@ -427,50 +397,7 @@ class Game {
         factory: newState.factory,
         templates: getTeamTemplates(this.currentTeam)
       };
-      this.renderer.labMenu = null;
       this.renderer.menuHighlightIndex = 0;
-    } else if (newState.type === 'lab') {
-      this.renderer.selectedUnit = null;
-      this.renderer.pathPreview = null;
-      this.renderer.actionMenu = null;
-      this.renderer.attackTargets = null;
-      this.renderer.productionMenu = null;
-
-      // Preserve nameInput when staying in designing phase
-      const currentNameInput = this.renderer.labMenu?.nameInput ?? '';
-      const isStayingInDesigning = this.renderer.labMenu?.phase === 'designing' && newState.phase === 'designing';
-
-      let nameInput: string;
-      if (isStayingInDesigning) {
-        // Keep current name when just changing components
-        nameInput = currentNameInput;
-      } else if (newState.editingId) {
-        // Load name from template when editing
-        nameInput = getTeamTemplate(this.currentTeam, newState.editingId)?.name ?? '';
-      } else {
-        // Empty for new design
-        nameInput = '';
-      }
-
-      this.renderer.labMenu = {
-        lab: newState.lab,
-        phase: newState.phase,
-        design: newState.design,
-        templates: getTeamTemplates(this.currentTeam),
-        editingId: newState.editingId,
-        nameInput,
-        nameError: null,
-        hoveredComponent: null,
-      };
-      this.renderer.menuHighlightIndex = 0;
-
-      // Disable WASD panning when in designing phase (typing name)
-      this.viewport.inputDisabled = newState.phase === 'designing';
-    }
-
-    // Re-enable viewport input when leaving lab
-    if (newState.type !== 'lab') {
-      this.viewport.inputDisabled = false;
     }
   }
 
@@ -607,16 +534,12 @@ class Game {
   }
 
   private handleClick(hex: AxialCoord): void {
-    // Handle modal menus first - they block all other clicks
-    if (this.state.type === 'lab' || this.state.type === 'factory') {
+    // Handle factory menu - it blocks other clicks
+    if (this.state.type === 'factory') {
       const action = this.renderer.getActionMenuClick();
       console.log('Modal menu click, action:', action, 'state:', this.state.type);
       if (action) {
-        if (this.state.type === 'lab') {
-          this.executeLabAction(action);
-        } else {
-          this.executeProductionAction(action);
-        }
+        this.executeProductionAction(action);
       }
       // Ignore clicks outside the menu
       return;
@@ -635,12 +558,7 @@ class Game {
             if (building.type === 'factory') {
               this.setState({ type: 'factory', factory: building });
             } else if (building.type === 'lab') {
-              this.setState({
-                type: 'lab',
-                lab: building,
-                phase: 'list',
-                design: createEmptyDesign(),
-              });
+              this.openLabModal();
             }
           }
         }
@@ -740,147 +658,25 @@ class Game {
     }
   }
 
-  private executeLabAction(action: string): void {
-    if (this.state.type !== 'lab') return;
-
-    if (action === 'cancel') {
-      this.handleCancel();
-      return;
-    }
-
-    if (action === 'new') {
-      this.setState({
-        type: 'lab',
-        lab: this.state.lab,
-        phase: 'designing',
-        design: createEmptyDesign(),
-      });
-      return;
-    }
-
-    if (action.startsWith('edit_')) {
-      const templateId = action.slice(5);
-      const template = getTeamTemplate(this.currentTeam, templateId);
-      if (template) {
-        this.setState({
-          type: 'lab',
-          lab: this.state.lab,
-          phase: 'designing',
-          design: createDesignFromTemplate(template),
-          editingId: templateId,
-        });
+  private openLabModal(): void {
+    const templates = getTeamTemplates(this.currentTeam);
+    this.labModal.open(this.currentTeam, templates, {
+      onSave: (name, design) => {
+        if (!design.chassisId) return;
+        // Check if this is editing an existing template by name
+        const existingTemplate = templates.find(t => t.name.toLowerCase() === name.toLowerCase());
+        if (existingTemplate) {
+          updateTemplate(this.currentTeam, existingTemplate.id, name, design.chassisId, design.weaponId, design.systemIds);
+          console.log(`Updated template: ${name}`);
+        } else {
+          registerTemplate(this.currentTeam, name, design.chassisId, design.weaponId, design.systemIds);
+          console.log(`Created new template: ${name}`);
+        }
+      },
+      onCancel: () => {
+        // Modal handles its own closing
       }
-      return;
-    }
-
-    if (action.startsWith('delete_')) {
-      const templateId = action.slice(7);
-      unregisterTemplate(this.currentTeam, templateId);
-      // Refresh the template list by re-entering list state
-      this.setState({
-        type: 'lab',
-        lab: this.state.lab,
-        phase: 'list',
-        design: createEmptyDesign(),
-      });
-      return;
-    }
-
-    if (action.startsWith('chassis_')) {
-      const chassisId = action.slice(8);
-      const newDesign = selectChassis(this.state.design, chassisId);
-      this.setState({
-        type: 'lab',
-        lab: this.state.lab,
-        phase: 'designing',
-        design: newDesign,
-        editingId: this.state.editingId,
-      });
-      return;
-    }
-
-    if (action.startsWith('weapon_')) {
-      const weaponId = action.slice(7);
-      const newDesign = selectWeapon(this.state.design, weaponId === 'none' ? null : weaponId);
-      this.setState({
-        type: 'lab',
-        lab: this.state.lab,
-        phase: 'designing',
-        design: newDesign,
-        editingId: this.state.editingId,
-      });
-      return;
-    }
-
-    if (action === 'system_none') {
-      // Clear all systems
-      this.setState({
-        type: 'lab',
-        lab: this.state.lab,
-        phase: 'designing',
-        design: { ...this.state.design, systemIds: [] },
-        editingId: this.state.editingId,
-      });
-      return;
-    }
-
-    if (action.startsWith('system_')) {
-      const systemId = action.slice(7);
-      const newDesign = toggleSystem(this.state.design, systemId);
-      this.setState({
-        type: 'lab',
-        lab: this.state.lab,
-        phase: 'designing',
-        design: newDesign,
-        editingId: this.state.editingId,
-      });
-      return;
-    }
-
-    if (action === 'confirm_name') {
-      const name = this.renderer.labMenu?.nameInput?.trim() ?? '';
-      console.log('confirm_name action:', { name, team: this.currentTeam, editingId: this.state.editingId });
-
-      if (!name) {
-        this.renderer.setLabNameError('Name cannot be empty');
-        return;
-      }
-
-      const nameTaken = isNameTaken(this.currentTeam, name, this.state.editingId);
-      console.log('isNameTaken result:', nameTaken);
-
-      if (nameTaken) {
-        this.renderer.setLabNameError('Name already exists');
-        return;
-      }
-
-      const design = this.state.design;
-      if (!design.chassisId) return;
-
-      if (this.state.editingId) {
-        updateTemplate(
-          this.currentTeam,
-          this.state.editingId,
-          name,
-          design.chassisId,
-          design.weaponId,
-          design.systemIds
-        );
-        console.log(`Updated template: ${name}`);
-      } else {
-        registerTemplate(
-          this.currentTeam,
-          name,
-          design.chassisId,
-          design.weaponId,
-          design.systemIds
-        );
-        console.log(`Created new template: ${name}`);
-      }
-
-      this.setState({ type: 'idle' });
-      return;
-    }
+    });
   }
 
   private handleCancel(): void {
@@ -900,19 +696,6 @@ class Game {
         break;
       case 'factory':
         this.setState({ type: 'idle' });
-        break;
-      case 'lab':
-        // Go back through phases or exit
-        if (this.state.phase === 'designing') {
-          this.setState({
-            type: 'lab',
-            lab: this.state.lab,
-            phase: 'list',
-            design: createEmptyDesign(),
-          });
-        } else {
-          this.setState({ type: 'idle' });
-        }
         break;
     }
   }

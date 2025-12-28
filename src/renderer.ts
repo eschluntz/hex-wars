@@ -10,7 +10,6 @@ import { Unit } from './unit.js';
 import { BUILDING_ICONS, type Building } from './building.js';
 import { type UnitTemplate } from './unit-templates.js';
 import { type TeamResources } from './resources.js';
-import { LabUI, type LabMenu } from './lab-ui.js';
 
 export interface PathPreview {
   path: AxialCoord[];
@@ -33,8 +32,6 @@ export interface ProductionMenu {
   templates: UnitTemplate[];
 }
 
-// LabMenu and LabPhase are re-exported from lab-ui.ts
-export { type LabMenu, type LabPhase } from './lab-ui.js';
 
 interface MenuButton {
   label: string;
@@ -51,7 +48,6 @@ export class Renderer {
   private map: GameMap;
   private viewport: Viewport;
   private menuButtons: MenuButton[] = [];
-  private labUI: LabUI;
   hoveredHex: AxialCoord | null = null;
   units: Unit[] = [];
   selectedUnit: Unit | null = null;
@@ -59,7 +55,6 @@ export class Renderer {
   actionMenu: ActionMenu | null = null;
   attackTargets: AttackTargets | null = null;
   productionMenu: ProductionMenu | null = null;
-  labMenu: LabMenu | null = null;
   menuHighlightIndex: number = 0;
   currentTeam: string = '';
   turnNumber: number = 1;
@@ -72,7 +67,6 @@ export class Renderer {
     this.ctx = canvas.getContext('2d')!;
     this.map = map;
     this.viewport = viewport;
-    this.labUI = new LabUI(this.ctx);
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -80,11 +74,9 @@ export class Renderer {
     this.canvas.addEventListener('mousemove', e => {
       this.lastMouseX = e.clientX;
       this.lastMouseY = e.clientY;
-      if (!this.viewport.isDragging && !this.labMenu) {
+      if (!this.viewport.isDragging) {
         const world = this.viewport.screenToWorld(e.clientX, e.clientY);
         this.hoveredHex = HexUtil.pixelToAxial(world.x, world.y, CONFIG.hexSize);
-      } else if (this.labMenu) {
-        this.hoveredHex = null;
       }
     });
   }
@@ -423,20 +415,6 @@ export class Renderer {
       this.drawProductionMenu(this.productionMenu, zoom);
     }
 
-    // Draw lab menu
-    if (this.labMenu) {
-      this.labUI.update(
-        this.canvas.width,
-        this.canvas.height,
-        this.lastMouseX,
-        this.lastMouseY,
-        this.menuHighlightIndex,
-        this.currentTeam
-      );
-      this.labUI.render(this.labMenu);
-      this.menuButtons = this.labUI.getMenuButtons();
-    }
-
     this.updateInfoPanel(zoom);
   }
 
@@ -604,42 +582,6 @@ export class Renderer {
   }
 
   // Helper methods for lab name input
-  handleLabNameInput(char: string): void {
-    if (!this.labMenu) {
-      console.log('handleLabNameInput: labMenu is null!');
-      return;
-    }
-    if (this.labMenu.nameInput.length < 20) {
-      this.labMenu.nameInput += char;
-      this.labMenu.nameError = null;
-      console.log('handleLabNameInput:', char, 'nameInput now:', this.labMenu.nameInput);
-    }
-  }
-
-  handleLabNameBackspace(): void {
-    if (!this.labMenu) {
-      console.log('handleLabNameBackspace: labMenu is null!');
-      return;
-    }
-    if (this.labMenu.nameInput.length > 0) {
-      this.labMenu.nameInput = this.labMenu.nameInput.slice(0, -1);
-      this.labMenu.nameError = null;
-      console.log('handleLabNameBackspace: nameInput now:', this.labMenu.nameInput);
-    }
-  }
-
-  setLabNameError(error: string): void {
-    if (this.labMenu) {
-      this.labMenu.nameError = error;
-    }
-  }
-
-  clearLabNameError(): void {
-    if (this.labMenu) {
-      this.labMenu.nameError = null;
-    }
-  }
-
   private drawActionMenu(menu: ActionMenu, zoom: number): void {
     const ctx = this.ctx;
     const unit = menu.unit;
