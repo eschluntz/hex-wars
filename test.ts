@@ -25,11 +25,15 @@ function colorize(text: string, color: keyof typeof colors): string {
 
 function findTestFiles(dir: string): string[] {
   const testFiles: string[] = [];
-  const files = fs.readdirSync(dir);
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
 
-  for (const file of files) {
-    if (file.endsWith('.test.ts')) {
-      testFiles.push(path.join(dir, file));
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      // Recursively search subdirectories
+      testFiles.push(...findTestFiles(fullPath));
+    } else if (entry.name.endsWith('.test.ts')) {
+      testFiles.push(fullPath);
     }
   }
 

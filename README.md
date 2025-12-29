@@ -101,12 +101,36 @@ Units are built from modular components rather than predefined classes. Each tem
 - Tactical example: Soldiers (4 ATK, no AP) deal 0 damage to Tanks (armored)
 
 ### Turn System
-- Two teams: Player and Enemy (hotseat mode for testing)
+- Two teams: Player vs AI (or hotseat mode)
 - Each unit can move and optionally attack once per turn
 - Units that have acted are greyed out
 - Tab key ends turn and switches to other team
 - Turn counter tracks game progress
 - Resources collected at start of each turn
+
+### AI Opponent System
+Pluggable AI system with multiple strategies:
+
+**Available AIs:**
+- **NoOpAI**: Testing baseline — just ends turn
+- **GreedyAI**: First playable AI with greedy decision-making
+
+**GreedyAI Behavior (per turn):**
+1. **Research**: Pick cheapest affordable tech
+2. **Design**: Create new unit templates using unlocked components
+3. **Production**: Build units at factories (prioritizing those closer to enemy)
+4. **Unit Control** (per-unit priority):
+   - Capture building if standing on one
+   - Move to capture building if reachable
+   - Attack target with maximum expected damage
+   - Move toward nearest enemy unit or building
+   - Wait if nothing else to do
+
+**AI Architecture:**
+- `AIController` interface for pluggable strategies
+- `GameStateView` provides read-only game state for AI decisions
+- Uses real game systems (Combat, Pathfinder, etc.) — no duplicate logic
+- Actions executed through same code path as player actions
 
 ### Building System
 Three building types with distinct roles:
@@ -188,7 +212,7 @@ hex-dominion/
 ├── src/
 │   ├── core.ts          # Types, HexUtil, tile constants, TerrainCosts, TeamColors
 │   ├── components.ts    # Chassis, weapon, system component definitions
-│   ├── pathfinder.ts    # A* pathfinding with blocked positions
+│   ├── pathfinder.ts    # A* pathfinding + reachability (Dijkstra)
 │   ├── unit.ts          # Unit state, stats, movement
 │   ├── combat.ts        # Combat calculations with armor/AP
 │   ├── building.ts      # Building types, icons, income
@@ -199,6 +223,14 @@ hex-dominion/
 │   ├── unit-templates.ts # Unit templates built from components
 │   ├── unit-designer.ts # Design state, validation, component availability
 │   ├── lab-modal.ts     # HTML/DOM-based unit designer UI
+│   ├── player.ts        # Player/AI abstraction
+│   ├── ai/
+│   │   ├── actions.ts   # AIAction types (move, attack, build, etc.)
+│   │   ├── controller.ts # AIController interface
+│   │   ├── game-state.ts # GameStateView (read-only state for AI)
+│   │   ├── greedy-ai.ts # GreedyAI implementation
+│   │   ├── noop-ai.ts   # NoOpAI (testing baseline)
+│   │   └── registry.ts  # AI type lookup by name
 │   ├── noise.ts         # Perlin noise, seeded RNG
 │   ├── config.ts        # Game configuration
 │   ├── game-map.ts      # Map and building generation
@@ -207,11 +239,16 @@ hex-dominion/
 │   ├── renderer.ts      # Canvas drawing, popup menus, info panel
 │   ├── stats.ts         # Game statistics tracking
 │   ├── menu.ts          # Main menu and game over screen
-│   └── main.ts          # Game state machine, turn management
+│   └── main.ts          # Game state machine, turn management, AI execution
 ├── tests/
 │   ├── framework.ts     # Test runner
 │   ├── helpers.ts       # createTestMap() utility
+│   ├── test-utils.ts    # TestGame, scenario helpers, shared utilities
 │   ├── fixtures/        # Test fixtures (isolated from game data)
+│   ├── ai/
+│   │   ├── greedy-ai.test.ts # GreedyAI behavior tests
+│   │   ├── noop-ai.test.ts   # NoOpAI tests
+│   │   └── smoke.test.ts     # AI integration/smoke tests
 │   ├── pathfinding.test.ts
 │   ├── unit.test.ts
 │   ├── combat.test.ts   # Combat system tests (incl. armor/AP)
@@ -235,7 +272,7 @@ hex-dominion/
 npm run watch      # Build + serve with auto-rebuild
 npm run build      # One-time build
 npm run typecheck  # Check types without building
-npm test           # Run tests (246 tests)
+npm test           # Run tests (266 tests)
 ```
 
 ### Test Map Helper
@@ -303,9 +340,10 @@ this.drawPopupMenu({
 - [x] Per-team template libraries
 - [x] Research system infrastructure (ready for tech tree)
 - [x] Tech tree (spend science to unlock new components)
+- [x] AI opponent (GreedyAI with research, design, production, combat)
+- [x] View enemy lab (click to see their tech tree and designs, read-only)
 
 ### Upcoming
-- [ ] AI opponent
 - [ ] Upgrade Map visuals
   - [ ] prettier tiles
   - [ ] better icons for units

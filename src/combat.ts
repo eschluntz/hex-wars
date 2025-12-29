@@ -14,34 +14,24 @@ export interface CombatResult {
 
 export class Combat {
   /**
-   * Calculate base damage dealt by an attacker (before armor reduction).
-   * Formula: attack * (health/10) + variance
-   * Variance is -1, 0, or +1 randomly (can be injected for testing)
+   * Calculate base expected damage before armor (no variance).
+   * Formula: floor(attack * health/10)
+   * This is the single source of truth for the damage formula.
    */
-  static calculateBaseDamage(attacker: Unit, variance?: number): number {
-    const actualVariance = variance ?? Combat.randomVariance();
+  static calculateBaseExpectedDamage(attacker: Unit): number {
     const healthRatio = attacker.health / 10;
-    const baseDamage = attacker.attack * healthRatio;
-    return Math.max(0, Math.floor(baseDamage) + actualVariance);
+    return Math.floor(attacker.attack * healthRatio);
   }
 
   /**
-   * Calculate final damage after applying armor reduction.
+   * Apply armor reduction to damage.
    * Non-AP damage against armored targets is divided by 5 (floored).
    */
-  static calculateDamage(
-    attacker: Unit,
-    defender: Unit,
-    variance?: number
-  ): number {
-    const baseDamage = Combat.calculateBaseDamage(attacker, variance);
-
-    // Apply armor reduction if defender is armored and attacker lacks AP
+  static applyArmorReduction(damage: number, attacker: Unit, defender: Unit): number {
     if (defender.armored && !attacker.armorPiercing) {
-      return Math.floor(baseDamage / 5);
+      return Math.floor(damage / 5);
     }
-
-    return baseDamage;
+    return damage;
   }
 
   /**
@@ -52,6 +42,25 @@ export class Combat {
     if (roll < 1 / 3) return -1;
     if (roll < 2 / 3) return 0;
     return 1;
+  }
+
+  /**
+   * Calculate expected damage (no variance) for AI decision-making and UI preview.
+   * This is THE canonical damage formula - calculateDamage calls this.
+   */
+  static calculateExpectedDamage(attacker: Unit, defender: Unit): number {
+    const baseDamage = Combat.calculateBaseExpectedDamage(attacker);
+    return Combat.applyArmorReduction(baseDamage, attacker, defender);
+  }
+
+  /**
+   * Calculate actual damage with variance.
+   * Calls calculateExpectedDamage and adds variance.
+   */
+  static calculateDamage(attacker: Unit, defender: Unit, variance?: number): number {
+    const expectedDamage = Combat.calculateExpectedDamage(attacker, defender);
+    const actualVariance = variance ?? Combat.randomVariance();
+    return Math.max(0, expectedDamage + actualVariance);
   }
 
   /**

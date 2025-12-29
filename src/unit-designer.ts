@@ -74,6 +74,16 @@ export function getResearchedChassis(team: string): ChassisComponent[] {
   return getAllChassis().filter(chassis => isChassisResearched(team, chassis.id));
 }
 
+// Get only researched weapons for the team
+export function getResearchedWeapons(team: string): WeaponComponent[] {
+  return getAllWeapons().filter(weapon => isWeaponResearched(team, weapon.id));
+}
+
+// Get only researched systems for the team
+export function getResearchedSystems(team: string): SystemComponent[] {
+  return getAllSystems().filter(system => isSystemResearched(team, system.id));
+}
+
 export function getAvailableWeapons(
   chassisId: string | null,
   selectedSystems: string[] = [],

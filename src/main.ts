@@ -2,7 +2,7 @@
 // HEX DOMINION - Main Entry Point
 // ============================================================================
 
-import { HexUtil, TEAM_COLORS, type AxialCoord } from './core.js';
+import { HexUtil, TEAM_COLORS, type AxialCoord, type TerrainCosts, type Tile } from './core.js';
 import { GEN_PARAMS, CONFIG, MAP_CONFIGS } from './config.js';
 import { GameMap } from './game-map.js';
 import { Viewport } from './viewport.js';
@@ -22,13 +22,23 @@ import {
   unregisterTemplate,
   isNameTaken,
 } from './unit-templates.js';
-import { type DesignState } from './unit-designer.js';
+import {
+  type DesignState,
+  getResearchedChassis,
+  getResearchedWeapons,
+  getResearchedSystems,
+} from './unit-designer.js';
 import { ResourceManager } from './resources.js';
 import { GameStats } from './stats.js';
 import { MenuRenderer, type GamePhase, type GameOverData } from './menu.js';
 import { InputHandler } from './input.js';
-import { initTeamResearch } from './research.js';
+import { initTeamResearch, getUnlockedTechs } from './research.js';
+import { getTechTreeState, purchaseTech } from './tech-tree.js';
 import { LabModal } from './lab-modal.js';
+import { type Player, type PlayerConfig } from './player.js';
+import { type AIAction } from './ai/actions.js';
+import { type GameStateView, type UnitView } from './ai/game-state.js';
+import { createAI } from './ai/registry.js';
 
 const TEAMS = {
   PLAYER: 'player',
@@ -63,6 +73,8 @@ class Game {
   private nextUnitId: number = 1;
   private gamePhase: GamePhase = 'main_menu';
   private gameOverData: GameOverData | null = null;
+  private players: Player[] = [];
+  private isAITurnInProgress: boolean = false;
 
   constructor() {
     this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
@@ -142,7 +154,7 @@ class Game {
 
   private currentMapType: string = 'normal';
 
-  private startNewGame(mapType: string = 'normal'): void {
+  private startNewGame(mapType: string = 'normal', playerConfigs?: PlayerConfig[]): void {
     this.currentMapType = mapType;
     const mapConfig = MAP_CONFIGS[mapType];
 
@@ -162,6 +174,13 @@ class Game {
     this.turnNumber = 1;
     this.nextUnitId = 1;
     this.gameOverData = null;
+    this.isAITurnInProgress = false;
+
+    // Initialize players (default: human player vs greedy AI)
+    this.players = this.initializePlayers(playerConfigs ?? [
+      { id: TEAMS.PLAYER, name: 'Player', type: 'human' },
+      { id: TEAMS.ENEMY, name: 'Enemy AI', type: 'ai', aiType: 'greedy' }
+    ]);
 
     // Give starting resources
     this.resources.addFunds(TEAMS.PLAYER, 5000);
@@ -193,6 +212,31 @@ class Game {
     if (hudEl) hudEl.style.display = 'block';
   }
 
+  private initializePlayers(configs: PlayerConfig[]): Player[] {
+    return configs.map(config => {
+      const player: Player = {
+        id: config.id,
+        name: config.name,
+        type: config.type
+      };
+
+      if (config.type === 'ai' && config.aiType) {
+        player.aiController = createAI(config.aiType);
+      }
+
+      return player;
+    });
+  }
+
+  private getPlayer(teamId: string): Player | undefined {
+    return this.players.find(p => p.id === teamId);
+  }
+
+  private isCurrentPlayerAI(): boolean {
+    const player = this.getPlayer(this.currentTeam);
+    return player?.type === 'ai';
+  }
+
   private setupSmallMap(): void {
     const cfg = MAP_CONFIGS.small!;
     const centerR = Math.floor(cfg.height / 2);
@@ -211,7 +255,7 @@ class Game {
 
     // Spawn one soldier each (using soldier template stats)
     const soldierTemplate = getTemplate('soldier');
-    const playerUnit = new Unit('soldier', TEAMS.PLAYER, 3, centerR, {
+    const playerUnit = new Unit(`soldier_${this.nextUnitId++}`, TEAMS.PLAYER, 3, centerR, {
       speed: soldierTemplate.speed,
       attack: soldierTemplate.attack,
       range: soldierTemplate.range,
@@ -224,7 +268,7 @@ class Game {
     });
     this.units.push(playerUnit);
 
-    const enemyUnit = new Unit('soldier', TEAMS.ENEMY, 6, centerR, {
+    const enemyUnit = new Unit(`soldier_${this.nextUnitId++}`, TEAMS.ENEMY, 6, centerR, {
       speed: soldierTemplate.speed,
       attack: soldierTemplate.attack,
       range: soldierTemplate.range,
@@ -340,6 +384,357 @@ class Game {
     return this.units.filter(u => u.team !== unit.team && u.isAlive());
   }
 
+  private getUnitById(id: string): Unit | undefined {
+    return this.units.find(u => u.id === id && u.isAlive());
+  }
+
+  // --- AI Support ---
+
+  private createGameStateView(): GameStateView {
+    const self = this;
+    const units = this.units;
+    const map = this.map;
+    const pathfinder = this.pathfinder;
+    const resources = this.resources;
+
+    return {
+      currentTeam: this.currentTeam,
+      turnNumber: this.turnNumber,
+
+      getTile(q: number, r: number): Tile | undefined {
+        return map.getTile(q, r);
+      },
+
+      getAllTiles(): Tile[] {
+        return map.getAllTiles();
+      },
+
+      getBuilding(q: number, r: number): Building | undefined {
+        return map.getBuilding(q, r);
+      },
+
+      getAllBuildings(): Building[] {
+        return map.getAllBuildings();
+      },
+
+      getBuildingsByOwner(owner: string): Building[] {
+        return map.getBuildingsByOwner(owner);
+      },
+
+      getBuildingsByType(type: string): Building[] {
+        return map.getBuildingsByType(type as 'city' | 'factory' | 'lab');
+      },
+
+      getUnit(id: string): UnitView | undefined {
+        const unit = units.find(u => u.id === id && u.isAlive());
+        return unit ? self.unitToView(unit) : undefined;
+      },
+
+      getUnitAt(q: number, r: number): UnitView | undefined {
+        const unit = units.find(u => u.q === q && u.r === r && u.isAlive());
+        return unit ? self.unitToView(unit) : undefined;
+      },
+
+      getAllUnits(): UnitView[] {
+        return units.filter(u => u.isAlive()).map(u => self.unitToView(u));
+      },
+
+      getTeamUnits(team: string): UnitView[] {
+        return units.filter(u => u.team === team && u.isAlive()).map(u => self.unitToView(u));
+      },
+
+      getActiveUnits(team: string): UnitView[] {
+        return units.filter(u => u.team === team && u.isAlive() && !u.hasActed).map(u => self.unitToView(u));
+      },
+
+      getResources(team: string): { funds: number; science: number } {
+        return resources.getResources(team);
+      },
+
+      getTeamTemplates(team: string) {
+        return getTeamTemplates(team);
+      },
+
+      getUnlockedTechs(team: string): Set<string> {
+        return getUnlockedTechs(team);
+      },
+
+      getAvailableTechs(team: string) {
+        const teamResources = resources.getResources(team);
+        const nodes = getTechTreeState(team, teamResources.science);
+        return nodes.map(n => ({
+          id: n.tech.id,
+          name: n.tech.name,
+          cost: n.tech.cost,
+          state: n.state,
+        }));
+      },
+
+      getUnlockedChassis(team: string) {
+        return getResearchedChassis(team).map(c => ({
+          id: c.id,
+          name: c.name,
+          maxWeight: c.maxWeight,
+        }));
+      },
+
+      getUnlockedWeapons(team: string) {
+        return getResearchedWeapons(team).map(w => ({
+          id: w.id,
+          name: w.name,
+          weight: w.weight,
+        }));
+      },
+
+      getUnlockedSystems(team: string) {
+        return getResearchedSystems(team).map(s => ({
+          id: s.id,
+          name: s.name,
+          weight: s.weight,
+          requiresChassis: s.requiresChassis,
+        }));
+      },
+
+      getReachablePositions(
+        startQ: number,
+        startR: number,
+        speed: number,
+        terrainCosts: TerrainCosts,
+        blocked?: Set<string>,
+        occupied?: Set<string>
+      ): Map<string, { q: number; r: number; cost: number }> {
+        return pathfinder.getReachablePositions(startQ, startR, speed, terrainCosts, blocked, occupied);
+      },
+
+      findPath(
+        startQ: number,
+        startR: number,
+        goalQ: number,
+        goalR: number,
+        terrainCosts: TerrainCosts,
+        blocked?: Set<string>
+      ) {
+        return pathfinder.findPath(startQ, startR, goalQ, goalR, terrainCosts, blocked);
+      },
+
+      calculateExpectedDamage(attacker: UnitView, defender: UnitView): number {
+        // Create temporary Unit objects for the combat calculation
+        const attackerUnit = new Unit(attacker.id, attacker.team, attacker.q, attacker.r, {
+          attack: attacker.attack,
+          range: attacker.range,
+          speed: attacker.speed,
+          terrainCosts: attacker.terrainCosts,
+          armored: attacker.armored,
+          armorPiercing: attacker.armorPiercing,
+          canCapture: attacker.canCapture,
+          canBuild: attacker.canBuild,
+          color: '#000'
+        });
+        attackerUnit.health = attacker.health;
+
+        const defenderUnit = new Unit(defender.id, defender.team, defender.q, defender.r, {
+          attack: defender.attack,
+          range: defender.range,
+          speed: defender.speed,
+          terrainCosts: defender.terrainCosts,
+          armored: defender.armored,
+          armorPiercing: defender.armorPiercing,
+          canCapture: defender.canCapture,
+          canBuild: defender.canBuild,
+          color: '#000'
+        });
+        defenderUnit.health = defender.health;
+
+        return Combat.calculateExpectedDamage(attackerUnit, defenderUnit);
+      },
+
+      isInRange(attacker: UnitView, target: UnitView): boolean {
+        const distance = HexUtil.distance(attacker.q, attacker.r, target.q, target.r);
+        return distance <= attacker.range;
+      },
+
+      getTargetsInRange(attacker: UnitView): UnitView[] {
+        return units
+          .filter(u => u.team !== attacker.team && u.isAlive())
+          .filter(u => {
+            const distance = HexUtil.distance(attacker.q, attacker.r, u.q, u.r);
+            return distance <= attacker.range;
+          })
+          .map(u => self.unitToView(u));
+      }
+    };
+  }
+
+  private unitToView(unit: Unit): UnitView {
+    return {
+      id: unit.id,
+      team: unit.team,
+      q: unit.q,
+      r: unit.r,
+      speed: unit.speed,
+      attack: unit.attack,
+      range: unit.range,
+      health: unit.health,
+      terrainCosts: unit.terrainCosts,
+      canCapture: unit.canCapture,
+      canBuild: unit.canBuild,
+      armored: unit.armored,
+      armorPiercing: unit.armorPiercing,
+      hasActed: unit.hasActed
+    };
+  }
+
+  private async executeAITurn(): Promise<void> {
+    const player = this.getPlayer(this.currentTeam);
+    if (!player || player.type !== 'ai' || !player.aiController) {
+      return;
+    }
+
+    this.isAITurnInProgress = true;
+    console.log(`AI (${player.name}) is taking its turn...`);
+
+    const stateView = this.createGameStateView();
+    const actions = player.aiController.planTurn(stateView, this.currentTeam);
+
+    for (const action of actions) {
+      // Check for game over between actions
+      if (this.gamePhase !== 'playing') break;
+
+      await this.executeAIAction(action);
+
+      // Small delay between actions for visual feedback
+      await this.delay(50);
+    }
+
+    this.isAITurnInProgress = false;
+  }
+
+  private async executeAIAction(action: AIAction): Promise<void> {
+    switch (action.type) {
+      case 'move': {
+        const unit = this.getUnitById(action.unitId);
+        if (!unit || unit.hasActed) return;
+
+        unit.q = action.targetQ;
+        unit.r = action.targetR;
+        console.log(`AI moves ${unit.id} to (${action.targetQ}, ${action.targetR})`);
+        break;
+      }
+
+      case 'attack': {
+        const unit = this.getUnitById(action.unitId);
+        const target = this.getUnitAt(action.targetQ, action.targetR);
+        if (!unit || !target) return;
+
+        this.executeAttack(unit, target);
+        unit.hasActed = true;
+        this.checkAndTriggerGameOver();
+        break;
+      }
+
+      case 'capture': {
+        const unit = this.getUnitById(action.unitId);
+        if (!unit) return;
+
+        const building = this.map.getBuilding(unit.q, unit.r);
+        if (building && building.owner !== unit.team && unit.canCapture) {
+          const previousOwner = building.owner ?? 'neutral';
+          this.map.setBuildingOwner(unit.q, unit.r, unit.team);
+          this.gameStats.recordBuildingCaptured(unit.team);
+          console.log(`AI ${unit.id} captured ${building.type} from ${previousOwner}!`);
+        }
+        unit.hasActed = true;
+        this.checkAndTriggerGameOver();
+        break;
+      }
+
+      case 'wait': {
+        const unit = this.getUnitById(action.unitId);
+        if (unit) {
+          unit.hasActed = true;
+        }
+        break;
+      }
+
+      case 'build': {
+        const template = getTeamTemplate(this.currentTeam, action.templateId);
+        if (!template) {
+          console.log(`AI: Unknown template ${action.templateId}`);
+          return;
+        }
+
+        if (!this.resources.canAfford(this.currentTeam, template.cost)) {
+          console.log(`AI: Cannot afford ${template.name}`);
+          return;
+        }
+
+        // Check if factory position is occupied
+        const existingUnit = this.getUnitAt(action.factoryQ, action.factoryR);
+        if (existingUnit) {
+          console.log(`AI: Factory at (${action.factoryQ}, ${action.factoryR}) is occupied`);
+          return;
+        }
+
+        this.resources.spendFunds(this.currentTeam, template.cost);
+
+        const teamColors = TEAM_COLORS[this.currentTeam]!;
+        const unit = new Unit(
+          `${template.id}_${this.nextUnitId++}`,
+          this.currentTeam,
+          action.factoryQ,
+          action.factoryR,
+          {
+            speed: template.speed,
+            attack: template.attack,
+            range: template.range,
+            terrainCosts: template.terrainCosts,
+            color: teamColors.unitColor,
+            canCapture: template.canCapture,
+            canBuild: template.canBuild,
+            armored: template.armored,
+            armorPiercing: template.armorPiercing,
+          }
+        );
+        unit.hasActed = true;
+        this.units.push(unit);
+        console.log(`AI built ${template.name} at (${action.factoryQ}, ${action.factoryR})`);
+        break;
+      }
+
+      case 'research': {
+        const result = purchaseTech(this.currentTeam, action.techId, this.resources);
+        if (result.success) {
+          console.log(`AI researched: ${action.techId}`);
+        } else {
+          console.log(`AI failed to research ${action.techId}: ${result.error}`);
+        }
+        break;
+      }
+
+      case 'design': {
+        registerTemplate(
+          this.currentTeam,
+          action.name,
+          action.chassisId,
+          action.weaponId,
+          action.systemIds
+        );
+        console.log(`AI designed new unit: ${action.name}`);
+        break;
+      }
+
+      case 'endTurn': {
+        // This triggers the actual end of turn
+        this.endTurn();
+        break;
+      }
+    }
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
   // --- State transitions ---
 
   private setState(newState: GameState): void {
@@ -435,6 +830,11 @@ class Game {
     }
 
     console.log(`Turn ${this.turnNumber}: ${this.currentTeam}'s turn`);
+
+    // If the new current player is AI, trigger their turn
+    if (this.isCurrentPlayerAI()) {
+      setTimeout(() => this.executeAITurn(), 100);
+    }
   }
 
   private recordTurnStats(team: string): void {
@@ -552,13 +952,15 @@ class Game {
         if (clickedUnit && clickedUnit.team === this.currentTeam && !clickedUnit.hasActed) {
           this.setState({ type: 'selected', unit: clickedUnit });
         } else if (!clickedUnit) {
-          // Check if clicked on an owned factory or lab
+          // Check if clicked on a factory or lab
           const building = this.map.getBuilding(hex.q, hex.r);
-          if (building && building.owner === this.currentTeam) {
-            if (building.type === 'factory') {
+          if (building) {
+            if (building.type === 'factory' && building.owner === this.currentTeam) {
+              // Can only use own factories
               this.setState({ type: 'factory', factory: building });
-            } else if (building.type === 'lab') {
-              this.openLabModal();
+            } else if (building.type === 'lab' && building.owner) {
+              // Can view any team's lab (read-only for other teams)
+              this.openLabModal(building.owner);
             }
           }
         }
@@ -658,22 +1060,24 @@ class Game {
     }
   }
 
-  private openLabModal(): void {
-    const templates = getTeamTemplates(this.currentTeam);
-    const teamResources = this.resources.getResources(this.currentTeam);
+  private openLabModal(labOwner: string = this.currentTeam): void {
+    const readOnly = labOwner !== this.currentTeam;
+    const templates = getTeamTemplates(labOwner);
+    const teamResources = this.resources.getResources(labOwner);
+
     this.labModal.open(
-      this.currentTeam,
+      labOwner,
       templates,
       {
         onSave: (name, design) => {
-          if (!design.chassisId) return;
+          if (readOnly || !design.chassisId) return;
           // Check if this is editing an existing template by name
           const existingTemplate = templates.find(t => t.name.toLowerCase() === name.toLowerCase());
           if (existingTemplate) {
-            updateTemplate(this.currentTeam, existingTemplate.id, name, design.chassisId, design.weaponId, design.systemIds);
+            updateTemplate(labOwner, existingTemplate.id, name, design.chassisId, design.weaponId, design.systemIds);
             console.log(`Updated template: ${name}`);
           } else {
-            registerTemplate(this.currentTeam, name, design.chassisId, design.weaponId, design.systemIds);
+            registerTemplate(labOwner, name, design.chassisId, design.weaponId, design.systemIds);
             console.log(`Created new template: ${name}`);
           }
         },
@@ -681,11 +1085,14 @@ class Game {
           // Modal handles its own closing
         },
         onPurchaseTech: (techId) => {
-          console.log(`Purchased tech: ${techId}`);
+          if (!readOnly) {
+            console.log(`Purchased tech: ${techId}`);
+          }
         }
       },
       teamResources.science,
-      this.resources
+      readOnly ? undefined : this.resources,
+      readOnly
     );
   }
 

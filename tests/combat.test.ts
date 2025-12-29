@@ -34,42 +34,47 @@ function createUnit(
 }
 
 runner.describe('Combat', () => {
-  runner.describe('calculateBaseDamage', () => {
-    runner.it('should calculate full damage at full health with 0 variance', () => {
+  runner.describe('calculateBaseExpectedDamage', () => {
+    runner.it('should calculate full damage at full health', () => {
       const attacker = createUnit('a', 'player', 0, 0, { attack: 5 });
-      const damage = Combat.calculateBaseDamage(attacker, 0);
+      const damage = Combat.calculateBaseExpectedDamage(attacker);
       assertEqual(damage, 5);
     });
 
     runner.it('should calculate half damage at half health', () => {
       const attacker = createUnit('a', 'player', 0, 0, { attack: 6, health: 5 });
-      const damage = Combat.calculateBaseDamage(attacker, 0);
+      const damage = Combat.calculateBaseExpectedDamage(attacker);
       assertEqual(damage, 3); // 6 * 0.5 = 3
     });
 
+    runner.it('should floor fractional damage', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { attack: 5, health: 7 });
+      // 5 * 0.7 = 3.5, floor = 3
+      const damage = Combat.calculateBaseExpectedDamage(attacker);
+      assertEqual(damage, 3);
+    });
+  });
+
+  runner.describe('calculateDamage (variance)', () => {
     runner.it('should add positive variance', () => {
       const attacker = createUnit('a', 'player', 0, 0, { attack: 5 });
-      const damage = Combat.calculateBaseDamage(attacker, 1);
+      const defender = createUnit('d', 'enemy', 1, 0);
+      const damage = Combat.calculateDamage(attacker, defender, 1);
       assertEqual(damage, 6);
     });
 
     runner.it('should subtract negative variance', () => {
       const attacker = createUnit('a', 'player', 0, 0, { attack: 5 });
-      const damage = Combat.calculateBaseDamage(attacker, -1);
+      const defender = createUnit('d', 'enemy', 1, 0);
+      const damage = Combat.calculateDamage(attacker, defender, -1);
       assertEqual(damage, 4);
     });
 
-    runner.it('should floor fractional damage before adding variance', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 5, health: 7 });
-      // 5 * 0.7 = 3.5, floor = 3
-      const damage = Combat.calculateBaseDamage(attacker, 0);
-      assertEqual(damage, 3);
-    });
-
-    runner.it('should not go below 0 damage', () => {
+    runner.it('should not go below 0 damage with negative variance', () => {
       const attacker = createUnit('a', 'player', 0, 0, { attack: 1, health: 1 });
+      const defender = createUnit('d', 'enemy', 1, 0);
       // 1 * 0.1 = 0.1, floor = 0, + (-1) = -1, max(0, -1) = 0
-      const damage = Combat.calculateBaseDamage(attacker, -1);
+      const damage = Combat.calculateDamage(attacker, defender, -1);
       assertEqual(damage, 0);
     });
   });
@@ -110,12 +115,12 @@ runner.describe('Combat', () => {
       assertEqual(damage, 7);
     });
 
-    runner.it('should apply variance before armor reduction', () => {
+    runner.it('should apply variance after armor reduction', () => {
       const attacker = createUnit('a', 'player', 0, 0, { attack: 5, armorPiercing: false });
       const defender = createUnit('d', 'enemy', 1, 0, { armored: true });
-      // With +1 variance: 5 + 1 = 6, then 6 / 5 = 1.2, floor = 1
+      // Expected: 5 / 5 = 1, then +1 variance = 2
       const damage = Combat.calculateDamage(attacker, defender, 1);
-      assertEqual(damage, 1);
+      assertEqual(damage, 2);
     });
   });
 

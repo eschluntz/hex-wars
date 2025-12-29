@@ -102,4 +102,74 @@ export class Pathfinder {
 
     return { path, totalCost };
   }
+
+  /**
+   * Get all positions reachable from start within movement budget.
+   * Uses Dijkstra's algorithm limited by speed.
+   * @param startQ Starting q coordinate
+   * @param startR Starting r coordinate
+   * @param speed Maximum movement points
+   * @param terrainCosts Cost to enter each terrain type
+   * @param blocked Positions that cannot be entered (e.g., enemy units)
+   * @param occupied Positions that can be passed through but not stopped on (e.g., friendly units)
+   * @returns Map from "q,r" to position info with cost
+   */
+  getReachablePositions(
+    startQ: number,
+    startR: number,
+    speed: number,
+    terrainCosts: TerrainCosts,
+    blocked?: Set<string>,
+    occupied?: Set<string>
+  ): Map<string, { q: number; r: number; cost: number }> {
+    const reachable = new Map<string, { q: number; r: number; cost: number }>();
+    const visited = new Set<string>();
+    const queue: Array<{ q: number; r: number; cost: number }> = [];
+
+    const startKey = `${startQ},${startR}`;
+    queue.push({ q: startQ, r: startR, cost: 0 });
+    reachable.set(startKey, { q: startQ, r: startR, cost: 0 });
+
+    while (queue.length > 0) {
+      queue.sort((a, b) => a.cost - b.cost);
+      const current = queue.shift()!;
+      const currentKey = `${current.q},${current.r}`;
+
+      if (visited.has(currentKey)) continue;
+      visited.add(currentKey);
+
+      for (const neighbor of HexUtil.getNeighbors(current.q, current.r)) {
+        const neighborKey = `${neighbor.q},${neighbor.r}`;
+
+        if (visited.has(neighborKey)) continue;
+        if (blocked?.has(neighborKey)) continue;
+
+        const tile = this.map.getTile(neighbor.q, neighbor.r);
+        if (!tile) continue;
+
+        const moveCost = this.getMovementCost(tile.type, terrainCosts);
+        if (moveCost >= Infinity) continue;
+
+        const totalCost = current.cost + moveCost;
+        if (totalCost > speed) continue;
+
+        const existing = reachable.get(neighborKey);
+        if (!existing || totalCost < existing.cost) {
+          reachable.set(neighborKey, { q: neighbor.q, r: neighbor.r, cost: totalCost });
+          queue.push({ q: neighbor.q, r: neighbor.r, cost: totalCost });
+        }
+      }
+    }
+
+    // Remove occupied positions (can pass through but not stop on)
+    if (occupied) {
+      for (const key of occupied) {
+        if (key !== startKey) {
+          reachable.delete(key);
+        }
+      }
+    }
+
+    return reachable;
+  }
 }

@@ -42,6 +42,7 @@ export class LabModal {
   private science: number = 0;
   private resources: ResourceManager | null = null;
   private currentTab: LabTab = 'research';
+  private readOnly: boolean = false;
 
   constructor() {
     this.overlay = this.createOverlay();
@@ -176,7 +177,8 @@ export class LabModal {
     templates: UnitTemplate[],
     callbacks: LabModalCallbacks,
     science: number = 0,
-    resources?: ResourceManager
+    resources?: ResourceManager,
+    readOnly: boolean = false
   ): void {
     this.team = team;
     this.templates = templates;
@@ -185,6 +187,18 @@ export class LabModal {
     this.resources = resources ?? null;
     this.editingId = undefined;
     this.design = { chassisId: 'foot', weaponId: null, systemIds: [] };
+    this.readOnly = readOnly;
+
+    // Update title based on mode
+    const title = this.overlay.querySelector('.lab-title') as HTMLElement;
+    title.textContent = readOnly ? `${team.toUpperCase()}'S LAB (View Only)` : 'LAB';
+
+    // Hide/show create new button based on mode
+    const newBtn = this.overlay.querySelector('.lab-new-btn') as HTMLElement;
+    newBtn.style.display = readOnly ? 'none' : '';
+
+    // Add/remove read-only class for styling
+    this.overlay.classList.toggle('read-only', readOnly);
 
     // Default to research tab
     this.switchTab('research');
@@ -324,8 +338,8 @@ export class LabModal {
         <div class="tech-cost">${costText}</div>
       `;
 
-      // Click handler for available techs
-      if (node.state === 'available') {
+      // Click handler for available techs (only when not read-only)
+      if (node.state === 'available' && !this.readOnly) {
         nodeEl.addEventListener('click', () => this.handleTechClick(node.tech.id));
       }
 
@@ -454,14 +468,17 @@ export class LabModal {
     container.innerHTML = '';
 
     for (const template of this.templates) {
-      const btn = document.createElement('button');
-      btn.className = 'lab-template-btn';
-      btn.innerHTML = `
+      const el = document.createElement(this.readOnly ? 'div' : 'button');
+      el.className = 'lab-template-btn' + (this.readOnly ? ' view-only' : '');
+      el.innerHTML = `
         <span class="template-name">${template.name}</span>
+        <span class="template-stats">Spd:${template.speed} Atk:${template.attack} Rng:${template.range}</span>
         <span class="template-cost">$${template.cost}</span>
       `;
-      btn.addEventListener('click', () => this.showDesignPhase(template));
-      container.appendChild(btn);
+      if (!this.readOnly) {
+        el.addEventListener('click', () => this.showDesignPhase(template));
+      }
+      container.appendChild(el);
     }
   }
 
