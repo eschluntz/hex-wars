@@ -11,9 +11,10 @@
 //   4. Move toward nearest enemy/neutral building
 //   5. Wait
 
-import { HexUtil } from '../core.js';
+import { HexUtil, type TerrainCosts } from '../core.js';
 import { type Unit } from '../unit.js';
 import { Combat } from '../combat.js';
+import { type Pathfinder } from '../pathfinder.js';
 import { type AIController } from './controller.js';
 import { type AIAction } from './actions.js';
 import { type AIGameState } from './game-state.js';
@@ -429,12 +430,22 @@ export class GreedyAI implements AIController {
 
     if (targets.length === 0) return null;
 
-    // Find the reachable position that minimizes distance to nearest target
+    // Find the reachable position that minimizes pathfinding distance to nearest target
+    // This accounts for terrain and impassable tiles, unlike hex distance
     let bestPos: { q: number; r: number } | null = null;
     let bestDistance = Infinity;
 
+    // Get blocked positions for pathfinding (enemies can't be pathed through)
+    const blocked = this.getBlockedPositions(state, team);
+
     for (const [_key, pos] of reachable) {
-      const distToNearestTarget = this.minDistanceToPositions(pos.q, pos.r, targets);
+      const distToNearestTarget = this.minPathDistanceToPositions(
+        state.pathfinder,
+        pos.q, pos.r,
+        targets,
+        unit.terrainCosts,
+        blocked
+      );
       if (distToNearestTarget < bestDistance) {
         bestDistance = distToNearestTarget;
         bestPos = { q: pos.q, r: pos.r };
@@ -491,6 +502,32 @@ export class GreedyAI implements AIController {
     for (const pos of positions) {
       const dist = HexUtil.distance(q, r, pos.q, pos.r);
       if (dist < minDist) minDist = dist;
+    }
+    return minDist;
+  }
+
+  private minPathDistanceToPositions(
+    pathfinder: Pathfinder,
+    q: number,
+    r: number,
+    positions: Array<{ q: number; r: number }>,
+    terrainCosts: TerrainCosts,
+    blocked: Set<string>
+  ): number {
+    if (positions.length === 0) return Infinity;
+    let minDist = Infinity;
+    for (const pos of positions) {
+      // Remove the target from blocked set - we want to path TO it, not through it
+      const targetKey = `${pos.q},${pos.r}`;
+      let blockedForPath = blocked;
+      if (blocked.has(targetKey)) {
+        blockedForPath = new Set(blocked);
+        blockedForPath.delete(targetKey);
+      }
+      const path = pathfinder.findPath(q, r, pos.q, pos.r, terrainCosts, blockedForPath);
+      if (path && path.totalCost < minDist) {
+        minDist = path.totalCost;
+      }
     }
     return minDist;
   }
