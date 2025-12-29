@@ -120,13 +120,7 @@ export class GameMap {
       }
     }
 
-    // Step 2: Generate roads
-    const roadCount = cfg?.roadCount ?? GEN_PARAMS.roadCount;
-    if (roadCount > 0) {
-      this.generateRoads(rng, width, height, cfg);
-    }
-
-    // Step 3: Generate buildings
+    // Step 2: Generate buildings (which also generates cluster-based roads)
     if (cfg?.buildings) {
       this.generateBuildings(rng, width, height, cfg);
     }
@@ -348,17 +342,15 @@ export class GameMap {
       woods: 1.5,
       mountain: 3,
       water: 4,
-      road: 0.3,
+      road: 0.3,  // Low cost encourages reusing existing roads
       building: 1
     };
 
     const pathfinder = new Pathfinder(this);
 
-    // Track which cluster pairs are already connected to avoid parallel roads
-    const connectedPairs = new Set<string>();
-    const getPairKey = (a: number, b: number) => a < b ? `${a},${b}` : `${b},${a}`;
-
     // Connect each cluster to its 2 nearest neighbors
+    // Note: If A→B and B→A both happen, pathfinding will naturally
+    // reuse the existing road (cost 0.3) instead of creating parallel roads
     for (let i = 0; i < clusters.length; i++) {
       const cluster = clusters[i]!;
 
@@ -369,15 +361,8 @@ export class GameMap {
         .sort((a, b) => a.dist - b.dist)
         .slice(0, 2);
 
-      // Connect to each of the 2 nearest (if not already connected)
+      // Connect to each of the 2 nearest
       for (const { idx } of distances) {
-        const pairKey = getPairKey(i, idx);
-
-        // Skip if these clusters are already connected
-        if (connectedPairs.has(pairKey)) {
-          continue;
-        }
-
         const target = clusters[idx]!;
 
         // Use A* pathfinding to create road
@@ -395,9 +380,6 @@ export class GameMap {
               this.setTile(q, r, TILE_TYPES.ROAD);
             }
           }
-
-          // Mark this pair as connected
-          connectedPairs.add(pairKey);
         }
       }
     }
