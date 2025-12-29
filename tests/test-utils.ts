@@ -31,12 +31,7 @@ import {
 // Test Map - Simple map for testing (no procedural generation)
 // ============================================================================
 
-// Minimal Tile type for tests
-interface Tile {
-  q: number;
-  r: number;
-  type: string;
-}
+import { type TileType, type Tile } from '../src/core.js';
 
 export class TestMap {
   private width: number;
@@ -50,7 +45,7 @@ export class TestMap {
 
   getTile(q: number, r: number): Tile | undefined {
     if (q >= 0 && q < this.width && r >= 0 && r < this.height) {
-      return { q, r, type: 'grass' };
+      return { q, r, type: 'grass' as TileType };
     }
     return undefined;
   }
@@ -59,7 +54,7 @@ export class TestMap {
     const tiles: Tile[] = [];
     for (let r = 0; r < this.height; r++) {
       for (let q = 0; q < this.width; q++) {
-        tiles.push({ q, r, type: 'grass' });
+        tiles.push({ q, r, type: 'grass' as TileType });
       }
     }
     return tiles;
@@ -124,7 +119,11 @@ export class TestGame {
   }
 
   addUnit(team: string, q: number, r: number, templateId: string = 'soldier'): Unit {
-    const template = getTemplate(templateId);
+    // Try team-specific template first, fall back to default templates
+    const template = getTeamTemplate(team, templateId) ?? getTemplate(templateId);
+    if (!template) {
+      throw new Error(`Template ${templateId} not found for team ${team}`);
+    }
     const unit = new Unit(
       `${templateId}_${this.nextUnitId++}`,
       team,
