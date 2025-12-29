@@ -3,7 +3,7 @@
 // ============================================================================
 // Common helpers for tests to avoid duplication and ensure tests use real game logic.
 
-import { HexUtil, TEAM_COLORS, type Tile } from '../src/core.js';
+import { TEAM_COLORS } from '../src/core.js';
 import { type Building } from '../src/building.js';
 import { Unit } from '../src/unit.js';
 import { Combat } from '../src/combat.js';
@@ -11,7 +11,7 @@ import { Pathfinder } from '../src/pathfinder.js';
 import { ResourceManager } from '../src/resources.js';
 import { type AIAction } from '../src/ai/actions.js';
 import { type AIController } from '../src/ai/controller.js';
-import { type GameStateView, type UnitView } from '../src/ai/game-state.js';
+import { type AIGameState } from '../src/ai/game-state.js';
 import {
   initTeamTemplates,
   getTeamTemplates,
@@ -19,7 +19,7 @@ import {
   getTemplate,
   registerTemplate,
 } from '../src/unit-templates.js';
-import { initTeamResearch, getUnlockedTechs } from '../src/research.js';
+import { initTeamResearch } from '../src/research.js';
 import { getTechTreeState, purchaseTech } from '../src/tech-tree.js';
 import {
   getResearchedChassis,
@@ -30,6 +30,13 @@ import {
 // ============================================================================
 // Test Map - Simple map for testing (no procedural generation)
 // ============================================================================
+
+// Minimal Tile type for tests
+interface Tile {
+  q: number;
+  r: number;
+  type: string;
+}
 
 export class TestMap {
   private width: number;
@@ -143,121 +150,20 @@ export class TestGame {
     this.map.addBuilding({ q, r, type, owner });
   }
 
-  private unitToView(unit: Unit): UnitView {
-    return {
-      id: unit.id,
-      team: unit.team,
-      q: unit.q,
-      r: unit.r,
-      speed: unit.speed,
-      attack: unit.attack,
-      range: unit.range,
-      health: unit.health,
-      terrainCosts: unit.terrainCosts,
-      canCapture: unit.canCapture,
-      canBuild: unit.canBuild,
-      armored: unit.armored,
-      armorPiercing: unit.armorPiercing,
-      hasActed: unit.hasActed,
-    };
-  }
-
-  createGameStateView(): GameStateView {
-    const self = this;
-    const aliveUnits = this.units.filter(u => u.isAlive());
-
+  createAIState(): AIGameState {
     return {
       currentTeam: this.currentTeam,
       turnNumber: this.turn,
-
-      getTile: (q, r) => self.map.getTile(q, r),
-      getAllTiles: () => self.map.getAllTiles(),
-      getBuilding: (q, r) => self.map.getBuilding(q, r),
-      getAllBuildings: () => self.map.getAllBuildings(),
-      getBuildingsByOwner: (owner) => self.map.getBuildingsByOwner(owner),
-      getBuildingsByType: (type) => self.map.getBuildingsByType(type),
-
-      getUnit: (id) => {
-        const unit = aliveUnits.find(u => u.id === id);
-        return unit ? self.unitToView(unit) : undefined;
-      },
-      getUnitAt: (q, r) => {
-        const unit = aliveUnits.find(u => u.q === q && u.r === r);
-        return unit ? self.unitToView(unit) : undefined;
-      },
-      getAllUnits: () => aliveUnits.map(u => self.unitToView(u)),
-      getTeamUnits: (team) => aliveUnits.filter(u => u.team === team).map(u => self.unitToView(u)),
-      getActiveUnits: (team) => aliveUnits.filter(u => u.team === team && !u.hasActed).map(u => self.unitToView(u)),
-
-      getResources: (team) => self.resources.getResources(team),
-      getTeamTemplates: (team) => getTeamTemplates(team),
-      getUnlockedTechs: (team) => getUnlockedTechs(team),
-
-      getAvailableTechs: (team) => {
-        const teamResources = self.resources.getResources(team);
-        const nodes = getTechTreeState(team, teamResources.science);
-        return nodes.map(n => ({
-          id: n.tech.id,
-          name: n.tech.name,
-          cost: n.tech.cost,
-          state: n.state,
-        }));
-      },
-
-      getUnlockedChassis: (team) => getResearchedChassis(team).map(c => ({
-        id: c.id,
-        name: c.name,
-        maxWeight: c.maxWeight,
-      })),
-      getUnlockedWeapons: (team) => getResearchedWeapons(team).map(w => ({
-        id: w.id,
-        name: w.name,
-        weight: w.weight,
-      })),
-      getUnlockedSystems: (team) => getResearchedSystems(team).map(s => ({
-        id: s.id,
-        name: s.name,
-        weight: s.weight,
-        requiresChassis: s.requiresChassis,
-      })),
-
-      getReachablePositions: (startQ, startR, speed, terrainCosts, blocked, occupied) => {
-        return self.pathfinder.getReachablePositions(startQ, startR, speed, terrainCosts, blocked, occupied);
-      },
-
-      findPath: (startQ, startR, goalQ, goalR, terrainCosts, blocked) => {
-        return self.pathfinder.findPath(startQ, startR, goalQ, goalR, terrainCosts, blocked);
-      },
-
-      // Use REAL Combat functions
-      calculateExpectedDamage: (attacker, defender) => {
-        const attackerUnit = new Unit(attacker.id, attacker.team, attacker.q, attacker.r, {
-          attack: attacker.attack,
-          armored: attacker.armored,
-          armorPiercing: attacker.armorPiercing,
-        } as any);
-        attackerUnit.health = attacker.health;
-
-        const defenderUnit = new Unit(defender.id, defender.team, defender.q, defender.r, {
-          armored: defender.armored,
-        } as any);
-        defenderUnit.health = defender.health;
-
-        return Combat.calculateExpectedDamage(attackerUnit, defenderUnit);
-      },
-
-      // Use REAL HexUtil for distance
-      isInRange: (attacker, target) => {
-        const dist = HexUtil.distance(attacker.q, attacker.r, target.q, target.r);
-        return dist <= attacker.range;
-      },
-
-      getTargetsInRange: (attacker) => {
-        return aliveUnits
-          .filter(u => u.team !== attacker.team)
-          .filter(u => HexUtil.distance(attacker.q, attacker.r, u.q, u.r) <= attacker.range)
-          .map(u => self.unitToView(u));
-      },
+      units: this.units,
+      map: this.map as any, // TestMap is compatible with GameMap interface
+      buildings: this.map.getAllBuildings(),
+      resources: this.resources,
+      pathfinder: this.pathfinder,
+      getTeamTemplates,
+      getResearchedChassis,
+      getResearchedWeapons,
+      getResearchedSystems,
+      getAvailableTechs: (team) => getTechTreeState(team, this.resources.getResources(team).science),
     };
   }
 
@@ -419,8 +325,8 @@ export function createEconomyScenario(
  * Runs a single AI turn: plan actions, execute them, end turn.
  */
 export function runAITurn(game: TestGame, ai: AIController): AIAction[] {
-  const stateView = game.createGameStateView();
-  const actions = ai.planTurn(stateView, game.currentTeam);
+  const aiState = game.createAIState();
+  const actions = ai.planTurn(aiState, game.currentTeam);
 
   for (const action of actions) {
     if (action.type === 'endTurn') break;

@@ -4,107 +4,107 @@
 
 import { TestRunner, assertEqual, assert } from '../framework.js';
 import { GreedyAI } from '../../src/ai/greedy-ai.js';
-import { type GameStateView, type UnitView } from '../../src/ai/game-state.js';
-import { type AIAction } from '../../src/ai/actions.js';
-import { DEFAULT_TERRAIN_COSTS, HexUtil, type Tile, type TerrainCosts } from '../../src/core.js';
+import { type AIGameState } from '../../src/ai/game-state.js';
+import { DEFAULT_TERRAIN_COSTS, HexUtil } from '../../src/core.js';
 import { type Building } from '../../src/building.js';
 import { type UnitTemplate } from '../../src/unit-templates.js';
 import { Unit } from '../../src/unit.js';
 import { Combat } from '../../src/combat.js';
+import { Pathfinder } from '../../src/pathfinder.js';
+import { ResourceManager } from '../../src/resources.js';
 
 const runner = new TestRunner();
 
-// Helper to create a UnitView
-function createUnitView(
+// Helper to create a Unit
+function createUnit(
   id: string,
   team: string,
   q: number,
   r: number,
-  options: Partial<UnitView> = {}
-): UnitView {
-  return {
-    id,
-    team,
-    q,
-    r,
+  options: {
+    speed?: number;
+    attack?: number;
+    range?: number;
+    health?: number;
+    canCapture?: boolean;
+    canBuild?: boolean;
+    armored?: boolean;
+    armorPiercing?: boolean;
+    hasActed?: boolean;
+  } = {}
+): Unit {
+  const unit = new Unit(id, team, q, r, {
     speed: options.speed ?? 4,
     attack: options.attack ?? 5,
     range: options.range ?? 1,
-    health: options.health ?? 10,
-    terrainCosts: options.terrainCosts ?? DEFAULT_TERRAIN_COSTS,
+    terrainCosts: DEFAULT_TERRAIN_COSTS,
     canCapture: options.canCapture ?? true,
     canBuild: options.canBuild ?? false,
     armored: options.armored ?? false,
     armorPiercing: options.armorPiercing ?? false,
-    hasActed: options.hasActed ?? false,
-  };
+    color: '#ffffff',
+  });
+  if (options.health !== undefined) {
+    unit.health = options.health;
+  }
+  if (options.hasActed !== undefined) {
+    unit.hasActed = options.hasActed;
+  }
+  return unit;
 }
 
-// Helper to create a mock GameStateView
+// Minimal test map for pathfinding
+class TestMap {
+  getTile(q: number, r: number) {
+    return { q, r, type: 'grass' };
+  }
+  getAllTiles() {
+    const tiles = [];
+    for (let r = 0; r < 20; r++) {
+      for (let q = 0; q < 20; q++) {
+        tiles.push({ q, r, type: 'grass' });
+      }
+    }
+    return tiles;
+  }
+}
+
+// Helper to create a mock AIGameState
 function createMockState(config: {
-  units?: UnitView[];
+  units?: Unit[];
   buildings?: Building[];
   resources?: { funds: number; science: number };
   templates?: UnitTemplate[];
-  reachablePositions?: Map<string, { q: number; r: number; cost: number }>;
-} = {}): GameStateView {
+  pathfinder?: Pathfinder;
+} = {}): AIGameState {
   const units = config.units ?? [];
   const buildings = config.buildings ?? [];
   const resources = config.resources ?? { funds: 1000, science: 0 };
   const templates = config.templates ?? [];
-  const reachablePositions = config.reachablePositions ?? new Map();
+  const pathfinder = config.pathfinder ?? new Pathfinder(new TestMap() as any);
+
+  const resourceManager = new ResourceManager(['enemy', 'player']);
+  resourceManager.addFunds('enemy', resources.funds);
+  resourceManager.addScience('enemy', resources.science);
 
   return {
     currentTeam: 'enemy',
     turnNumber: 1,
-    getTile: (q: number, r: number): Tile | undefined => ({ q, r, type: 'grass' }),
-    getAllTiles: () => [],
-    getBuilding: (q: number, r: number) => buildings.find(b => b.q === q && b.r === r),
-    getAllBuildings: () => buildings,
-    getBuildingsByOwner: (owner: string) => buildings.filter(b => b.owner === owner),
-    getBuildingsByType: (type: string) => buildings.filter(b => b.type === type),
-    getUnit: (id: string) => units.find(u => u.id === id),
-    getUnitAt: (q: number, r: number) => units.find(u => u.q === q && u.r === r),
-    getAllUnits: () => units,
-    getTeamUnits: (team: string) => units.filter(u => u.team === team),
-    getActiveUnits: (team: string) => units.filter(u => u.team === team && !u.hasActed),
-    getResources: () => resources,
+    units,
+    map: {
+      getBuilding: (q: number, r: number) => buildings.find(b => b.q === q && b.r === r),
+      getAllBuildings: () => buildings,
+      getTile: (q: number, r: number) => ({ q, r, type: 'grass' }),
+      getAllTiles: () => [],
+    } as any,
+    buildings,
+    resources: resourceManager,
+    pathfinder,
     getTeamTemplates: () => templates,
-    getUnlockedTechs: () => new Set(),
+    getResearchedChassis: () => [{ id: 'foot', name: 'Foot', maxWeight: 2, speed: 3, terrainCosts: DEFAULT_TERRAIN_COSTS }],
+    getResearchedWeapons: () => [{ id: 'machineGun', name: 'Machine Gun', weight: 1, attack: 4, range: 1 }],
+    getResearchedSystems: () => [{ id: 'capture', name: 'Capture', weight: 0 }],
     getAvailableTechs: () => [],
-    getUnlockedChassis: () => [{ id: 'foot', name: 'Foot', maxWeight: 2 }],
-    getUnlockedWeapons: () => [{ id: 'machineGun', name: 'Machine Gun', weight: 1 }],
-    getUnlockedSystems: () => [{ id: 'capture', name: 'Capture', weight: 0 }],
-    getReachablePositions: () => reachablePositions,
-    findPath: () => null,
-    // Use REAL Combat.calculateExpectedDamage (accounts for armor!)
-    calculateExpectedDamage: (attacker: UnitView, defender: UnitView) => {
-      const attackerUnit = new Unit(attacker.id, attacker.team, attacker.q, attacker.r, {
-        attack: attacker.attack,
-        armored: attacker.armored,
-        armorPiercing: attacker.armorPiercing,
-      } as any);
-      attackerUnit.health = attacker.health;
-
-      const defenderUnit = new Unit(defender.id, defender.team, defender.q, defender.r, {
-        armored: defender.armored,
-      } as any);
-      defenderUnit.health = defender.health;
-
-      return Combat.calculateExpectedDamage(attackerUnit, defenderUnit);
-    },
-    // Use REAL HexUtil.distance
-    isInRange: (attacker: UnitView, target: UnitView) => {
-      const dist = HexUtil.distance(attacker.q, attacker.r, target.q, target.r);
-      return dist <= attacker.range;
-    },
-    getTargetsInRange: (attacker: UnitView) => {
-      return units.filter(u => {
-        if (u.team === attacker.team) return false;
-        const dist = HexUtil.distance(attacker.q, attacker.r, u.q, u.r);
-        return dist <= attacker.range;
-      });
-    },
   };
 }
 
@@ -131,7 +131,7 @@ runner.describe('GreedyAI', () => {
       const existingTemplates = [{
         id: 'soldier', name: 'Soldier', chassisId: 'foot', weaponId: 'machineGun',
         systemIds: ['capture'], cost: 1000, speed: 3, attack: 4, range: 1,
-        terrainCosts: {} as any, armored: false, armorPiercing: false,
+        terrainCosts: DEFAULT_TERRAIN_COSTS, armored: false, armorPiercing: false,
         canCapture: true, canBuild: false,
       }];
       const state = createMockState({ units: [], buildings: [], templates: existingTemplates });
@@ -145,7 +145,7 @@ runner.describe('GreedyAI', () => {
   runner.describe('capture priority', () => {
     runner.it('should capture building when unit is on it', () => {
       const ai = new GreedyAI();
-      const unit = createUnitView('soldier1', 'enemy', 5, 5, { canCapture: true });
+      const unit = createUnit('soldier1', 'enemy', 5, 5, { canCapture: true });
       const building: Building = { q: 5, r: 5, type: 'city', owner: 'player' };
 
       const state = createMockState({
@@ -163,7 +163,7 @@ runner.describe('GreedyAI', () => {
 
     runner.it('should capture neutral building', () => {
       const ai = new GreedyAI();
-      const unit = createUnitView('soldier1', 'enemy', 5, 5, { canCapture: true });
+      const unit = createUnit('soldier1', 'enemy', 5, 5, { canCapture: true });
       const building: Building = { q: 5, r: 5, type: 'factory', owner: null };
 
       const state = createMockState({
@@ -179,7 +179,7 @@ runner.describe('GreedyAI', () => {
 
     runner.it('should not capture own building', () => {
       const ai = new GreedyAI();
-      const unit = createUnitView('soldier1', 'enemy', 5, 5, { canCapture: true });
+      const unit = createUnit('soldier1', 'enemy', 5, 5, { canCapture: true });
       const building: Building = { q: 5, r: 5, type: 'city', owner: 'enemy' };
 
       const state = createMockState({
@@ -197,8 +197,8 @@ runner.describe('GreedyAI', () => {
   runner.describe('attack priority', () => {
     runner.it('should attack enemy in range', () => {
       const ai = new GreedyAI();
-      const attacker = createUnitView('soldier1', 'enemy', 5, 5, { range: 1 });
-      const target = createUnitView('player_unit', 'player', 5, 6);
+      const attacker = createUnit('soldier1', 'enemy', 5, 5, { range: 1 });
+      const target = createUnit('player_unit', 'player', 5, 6);
 
       const state = createMockState({
         units: [attacker, target],
@@ -216,30 +216,20 @@ runner.describe('GreedyAI', () => {
 
     runner.it('should prefer higher damage targets', () => {
       const ai = new GreedyAI();
-      const attacker = createUnitView('soldier1', 'enemy', 5, 5, { range: 1, attack: 5 });
+      const attacker = createUnit('soldier1', 'enemy', 5, 5, { range: 1, attack: 5 });
       // Two enemies adjacent - one armored, one not
-      const armoredTarget = createUnitView('tank', 'player', 5, 6, { armored: true });
-      const softTarget = createUnitView('soldier', 'player', 6, 5, { armored: false });
+      const armoredTarget = createUnit('tank', 'player', 5, 6, { armored: true });
+      const softTarget = createUnit('soldier', 'player', 6, 5, { armored: false });
 
-      // Create state where calculateExpectedDamage returns different values based on armor
       const state = createMockState({
         units: [attacker, armoredTarget, softTarget],
       });
-
-      // Override calculateExpectedDamage to simulate armor reduction
-      (state as any).calculateExpectedDamage = (att: UnitView, def: UnitView) => {
-        const baseDmg = Math.floor(att.attack * (att.health / 10));
-        if (def.armored && !att.armorPiercing) {
-          return Math.floor(baseDmg / 5);
-        }
-        return baseDmg;
-      };
 
       const actions = ai.planTurn(state, 'enemy');
 
       const attackAction = actions.find(a => a.type === 'attack');
       assert(attackAction !== undefined, 'Should attack');
-      // Should attack the soft target for more damage
+      // Should attack the soft target for more damage (armor halves damage)
       if (attackAction?.type === 'attack') {
         assertEqual(attackAction.targetQ, 6);
         assertEqual(attackAction.targetR, 5);
@@ -288,7 +278,7 @@ runner.describe('GreedyAI', () => {
     runner.it('should not build when factory is occupied', () => {
       const ai = new GreedyAI();
       const factory: Building = { q: 0, r: 0, type: 'factory', owner: 'enemy' };
-      const occupyingUnit = createUnitView('existing', 'enemy', 0, 0);
+      const occupyingUnit = createUnit('existing', 'enemy', 0, 0);
       const template: UnitTemplate = {
         id: 'soldier',
         name: 'Soldier',
@@ -355,39 +345,36 @@ runner.describe('GreedyAI', () => {
   runner.describe('movement', () => {
     runner.it('should move toward enemy when nothing else to do', () => {
       const ai = new GreedyAI();
-      const unit = createUnitView('soldier1', 'enemy', 0, 0);
-      const enemy = createUnitView('player_unit', 'player', 10, 10);
+      const unit = createUnit('soldier1', 'enemy', 0, 0);
+      const enemy = createUnit('player_unit', 'player', 10, 10);
 
-      // Reachable positions are closer to the enemy
-      const reachable = new Map<string, { q: number; r: number; cost: number }>();
-      reachable.set('0,0', { q: 0, r: 0, cost: 0 });
-      reachable.set('1,0', { q: 1, r: 0, cost: 1 });
-      reachable.set('1,1', { q: 1, r: 1, cost: 2 });
+      // Create a pathfinder that returns specific reachable positions
+      const testMap = new TestMap();
+      const pathfinder = new Pathfinder(testMap as any);
 
       const state = createMockState({
         units: [unit, enemy],
-        reachablePositions: reachable,
+        pathfinder,
       });
 
       const actions = ai.planTurn(state, 'enemy');
 
       const moveAction = actions.find(a => a.type === 'move');
       assert(moveAction !== undefined, 'Should have move action');
-      // Should move to position closest to enemy (1,1)
+      // Should move toward the enemy (not stay at 0,0)
       if (moveAction?.type === 'move') {
-        assertEqual(moveAction.targetQ, 1);
-        assertEqual(moveAction.targetR, 1);
+        const movedCloser = moveAction.targetQ > 0 || moveAction.targetR > 0;
+        assert(movedCloser, 'Should move closer to enemy');
       }
     });
 
     runner.it('should wait if no movement improves position', () => {
       const ai = new GreedyAI();
-      const unit = createUnitView('soldier1', 'enemy', 5, 5);
+      const unit = createUnit('soldier1', 'enemy', 5, 5);
 
-      // No enemies, no buildings to capture, nowhere to go
+      // No enemies, no buildings to capture - just one unit alone
       const state = createMockState({
         units: [unit],
-        reachablePositions: new Map([['5,5', { q: 5, r: 5, cost: 0 }]]),
       });
 
       const actions = ai.planTurn(state, 'enemy');

@@ -64,8 +64,8 @@ runner.describe('AI Smoke Tests', () => {
       const { game, attacker, defender } = createDuelScenario('soldier', 'soldier');
       const ai = new GreedyAI();
 
-      const stateView = game.createGameStateView();
-      const actions = ai.planTurn(stateView, 'attacker');
+      const aiState = game.createAIState();
+      const actions = ai.planTurn(aiState, 'attacker');
 
       const attackAction = actions.find(a => a.type === 'attack');
       assert(attackAction !== undefined, 'AI should plan an attack');

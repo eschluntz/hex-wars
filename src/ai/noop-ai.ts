@@ -5,13 +5,13 @@
 
 import { type AIController } from './controller.js';
 import { type AIAction } from './actions.js';
-import { type GameStateView } from './game-state.js';
+import { type AIGameState } from './game-state.js';
 
 export class NoOpAI implements AIController {
   readonly id = 'noop';
   readonly name = 'No-Op AI';
 
-  planTurn(_state: GameStateView, _team: string): AIAction[] {
+  planTurn(_state: AIGameState, _team: string): AIAction[] {
     return [{ type: 'endTurn' }];
   }
 }

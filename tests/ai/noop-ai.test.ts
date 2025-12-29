@@ -4,38 +4,46 @@
 
 import { TestRunner, assertEqual, assert } from '../framework.js';
 import { NoOpAI } from '../../src/ai/noop-ai.js';
-import { type GameStateView } from '../../src/ai/game-state.js';
+import { type AIGameState } from '../../src/ai/game-state.js';
+import { ResourceManager } from '../../src/resources.js';
+import { Pathfinder } from '../../src/pathfinder.js';
 
 const runner = new TestRunner();
 
-// Create a minimal mock GameStateView
-function createMockState(): GameStateView {
+// Minimal test map
+class TestMap {
+  getTile(q: number, r: number) {
+    return { q, r, type: 'grass' };
+  }
+  getAllTiles() {
+    return [];
+  }
+  getBuilding() {
+    return undefined;
+  }
+  getAllBuildings() {
+    return [];
+  }
+}
+
+// Create a minimal mock AIGameState
+function createMockState(): AIGameState {
+  const resourceManager = new ResourceManager(['enemy']);
+  const testMap = new TestMap();
+
   return {
     currentTeam: 'enemy',
     turnNumber: 1,
-    getTile: () => undefined,
-    getAllTiles: () => [],
-    getBuilding: () => undefined,
-    getAllBuildings: () => [],
-    getBuildingsByOwner: () => [],
-    getBuildingsByType: () => [],
-    getUnit: () => undefined,
-    getUnitAt: () => undefined,
-    getAllUnits: () => [],
-    getTeamUnits: () => [],
-    getActiveUnits: () => [],
-    getResources: () => ({ funds: 0, science: 0 }),
+    units: [],
+    map: testMap as any,
+    buildings: [],
+    resources: resourceManager,
+    pathfinder: new Pathfinder(testMap as any),
     getTeamTemplates: () => [],
-    getUnlockedTechs: () => new Set(),
+    getResearchedChassis: () => [],
+    getResearchedWeapons: () => [],
+    getResearchedSystems: () => [],
     getAvailableTechs: () => [],
-    getUnlockedChassis: () => [] as Array<{ id: string; name: string; maxWeight: number }>,
-    getUnlockedWeapons: () => [] as Array<{ id: string; name: string; weight: number }>,
-    getUnlockedSystems: () => [] as Array<{ id: string; name: string; weight: number; requiresChassis?: string[] }>,
-    getReachablePositions: () => new Map(),
-    findPath: () => null,
-    calculateExpectedDamage: () => 0,
-    isInRange: () => false,
-    getTargetsInRange: () => [],
   };
 }
 
