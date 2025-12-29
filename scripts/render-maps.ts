@@ -6,9 +6,9 @@
 import { createCanvas } from 'canvas';
 import { writeFileSync, mkdirSync } from 'fs';
 import { GameMap } from '../src/game-map.js';
-import { HexUtil, TILE_COLORS, type Tile } from '../src/core.js';
-import { BUILDING_ICONS } from '../src/building.js';
+import { HexUtil, TILE_COLORS } from '../src/core.js';
 import { CONFIG, MAP_CONFIGS } from '../src/config.js';
+import { drawHex, drawBuildingIcon } from '../src/rendering-utils.js';
 
 const HEX_SIZE = 20; // Smaller for overview
 const OUTPUT_DIR = './map-renders';
@@ -56,34 +56,16 @@ function renderMap(map: GameMap, seed: number): Buffer {
     const cx = toCanvasX(world.x);
     const cy = toCanvasY(world.y);
 
-    drawHex(ctx, cx, cy, tile, HEX_SIZE);
+    drawHex(ctx as any, cx, cy, tile, HEX_SIZE);
   }
 
-  // Draw buildings
+  // Draw buildings using shared utility
   for (const building of buildings) {
     const world = HexUtil.axialToPixel(building.q, building.r, HEX_SIZE);
     const cx = toCanvasX(world.x);
     const cy = toCanvasY(world.y);
 
-    // Draw building icon
-    const icon = BUILDING_ICONS[building.type];
-    ctx.font = `${HEX_SIZE * 0.8}px Arial`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    // Background circle for building
-    ctx.beginPath();
-    ctx.arc(cx, cy, HEX_SIZE * 0.7, 0, Math.PI * 2);
-    if (building.owner === 'player') {
-      ctx.fillStyle = '#4caf50';
-    } else if (building.owner === 'enemy') {
-      ctx.fillStyle = '#f44336';
-    } else {
-      ctx.fillStyle = '#999999';
-    }
-    ctx.fill();
-
-    ctx.fillText(icon, cx, cy);
+    drawBuildingIcon(ctx as any, cx, cy, building, HEX_SIZE * 0.6);
   }
 
   // Add title
@@ -122,24 +104,6 @@ function renderMap(map: GameMap, seed: number): Buffer {
   }
 
   return canvas.toBuffer('image/png');
-}
-
-function drawHex(ctx: any, cx: number, cy: number, tile: Tile, size: number): void {
-  const corners = HexUtil.getHexCorners(cx, cy, size);
-  const colors = TILE_COLORS[tile.type];
-
-  ctx.beginPath();
-  ctx.moveTo(corners[0]!.x, corners[0]!.y);
-  for (let i = 1; i < 6; i++) {
-    ctx.lineTo(corners[i]!.x, corners[i]!.y);
-  }
-  ctx.closePath();
-
-  ctx.fillStyle = colors.fill;
-  ctx.fill();
-  ctx.strokeStyle = colors.stroke;
-  ctx.lineWidth = 1;
-  ctx.stroke();
 }
 
 // Generate multiple maps with different seeds
