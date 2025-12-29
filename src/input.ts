@@ -110,7 +110,9 @@ export class InputHandler {
 
     if (e.key === 'Tab') {
       e.preventDefault();
-      this.callbacks.onEndTurn();
+      if (!e.repeat) {  // Ignore auto-repeat from holding the key
+        this.callbacks.onEndTurn();
+      }
       return;
     }
 

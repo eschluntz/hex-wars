@@ -113,7 +113,12 @@ class Game {
       },
       onHexClick: (hex) => this.handleClick(hex),
       onCancel: () => this.handleCancel(),
-      onEndTurn: () => this.endTurn(),
+      onEndTurn: () => {
+        // Only allow manual turn ending during human player's turn
+        if (!this.isCurrentPlayerAI()) {
+          this.endTurn();
+        }
+      },
       onMenuNavigate: (direction) => {
         const buttonCount = this.renderer.getMenuButtonCount();
         if (buttonCount === 0) return;
