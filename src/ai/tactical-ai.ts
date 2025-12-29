@@ -19,10 +19,9 @@ import {
   getOccupiedPositions,
   getEnemyPositions,
   minDistanceToPositions,
-  minPathDistanceToPositions,
   isInRangeFrom,
-  pickRandomTemplate,
 } from './base-utils.js';
+import { planDesignPhase } from './design-utils.js';
 
 export class TacticalAI implements AIController {
   readonly id = 'tactical';
@@ -89,108 +88,8 @@ export class TacticalAI implements AIController {
   }
 
   private planDesign(state: AIGameState, team: string): AIAction[] {
-    const actions: AIAction[] = [];
-    const templates = state.getTeamTemplates(team);
-    const chassisList = state.getResearchedChassis(team);
-    const weapons = state.getResearchedWeapons(team);
-    const systems = state.getResearchedSystems(team);
-
-    // Track what components are already used in templates
-    const usedChassis = new Set(templates.map(t => t.chassisId));
-    const usedWeapons = new Set(templates.map(t => t.weaponId).filter(Boolean));
-    const usedSystems = new Set(templates.flatMap(t => t.systemIds));
-
-    // Create templates for new chassis
-    for (const chassis of chassisList) {
-      if (usedChassis.has(chassis.id)) continue;
-
-      const design = this.designForChassis(chassis, weapons, systems);
-      if (design) {
-        actions.push(design);
-        usedChassis.add(chassis.id);
-        if (design.weaponId) usedWeapons.add(design.weaponId);
-        design.systemIds.forEach(s => usedSystems.add(s));
-      }
-    }
-
-    // Create templates for new weapons
-    for (const weapon of weapons) {
-      if (usedWeapons.has(weapon.id)) continue;
-
-      const design = this.designForWeapon(weapon, chassisList, systems);
-      if (design) {
-        actions.push(design);
-        usedWeapons.add(weapon.id);
-        usedChassis.add(design.chassisId);
-        design.systemIds.forEach(s => usedSystems.add(s));
-      }
-    }
-
-    return actions;
-  }
-
-  private designForChassis(
-    chassis: { id: string; maxWeight: number },
-    weapons: Array<{ id: string; weight: number; requiresChassis?: string[] }>,
-    systems: Array<{ id: string; weight: number; requiresChassis?: string[] }>
-  ): { type: 'design'; name: string; chassisId: string; weaponId: string | null; systemIds: string[] } | null {
-    const chassisId = chassis.id;
-    const maxWeight = chassis.maxWeight;
-
-    // Find best weapon that fits (prioritize higher damage)
-    const validWeapons = weapons
-      .filter(w => {
-        if (w.weight > maxWeight) return false;
-        if (w.requiresChassis && !w.requiresChassis.includes(chassisId)) return false;
-        return true;
-      })
-      .sort((a, b) => b.weight - a.weight); // Heavier weapons tend to be better
-
-    const weaponId = validWeapons.length > 0 ? validWeapons[0]!.id : null;
-    const weaponWeight = validWeapons.length > 0 ? validWeapons[0]!.weight : 0;
-    const remainingWeight = maxWeight - weaponWeight;
-
-    // Find best system that fits
-    const validSystems = systems.filter(s => {
-      if (s.weight > remainingWeight) return false;
-      if (s.requiresChassis && !s.requiresChassis.includes(chassisId)) return false;
-      return true;
-    });
-    const systemIds = validSystems.length > 0 ? [validSystems[0]!.id] : [];
-
-    const name = `TAC_${chassisId}_${Date.now() % 10000}`;
-    return { type: 'design', name, chassisId, weaponId, systemIds };
-  }
-
-  private designForWeapon(
-    weapon: { id: string; weight: number; requiresChassis?: string[] },
-    chassisList: Array<{ id: string; maxWeight: number }>,
-    systems: Array<{ id: string; weight: number; requiresChassis?: string[] }>
-  ): { type: 'design'; name: string; chassisId: string; weaponId: string | null; systemIds: string[] } | null {
-    // Find best chassis that can hold this weapon (prefer more weight capacity)
-    const validChassis = chassisList
-      .filter(c => {
-        if (weapon.weight > c.maxWeight) return false;
-        if (weapon.requiresChassis && !weapon.requiresChassis.includes(c.id)) return false;
-        return true;
-      })
-      .sort((a, b) => b.maxWeight - a.maxWeight);
-
-    if (validChassis.length === 0) return null;
-
-    const chassis = validChassis[0]!;
-    const remainingWeight = chassis.maxWeight - weapon.weight;
-
-    // Find best system
-    const validSystems = systems.filter(s => {
-      if (s.weight > remainingWeight) return false;
-      if (s.requiresChassis && !s.requiresChassis.includes(chassis.id)) return false;
-      return true;
-    });
-    const systemIds = validSystems.length > 0 ? [validSystems[0]!.id] : [];
-
-    const name = `TAC_${weapon.id}_${Date.now() % 10000}`;
-    return { type: 'design', name, chassisId: chassis.id, weaponId: weapon.id, systemIds };
+    // Use shared design phase implementation
+    return planDesignPhase(state, team, 'TAC');
   }
 
   private planProduction(state: AIGameState, team: string): AIAction[] {
