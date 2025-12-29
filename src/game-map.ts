@@ -354,6 +354,10 @@ export class GameMap {
 
     const pathfinder = new Pathfinder(this);
 
+    // Track which cluster pairs are already connected to avoid parallel roads
+    const connectedPairs = new Set<string>();
+    const getPairKey = (a: number, b: number) => a < b ? `${a},${b}` : `${b},${a}`;
+
     // Connect each cluster to its 2 nearest neighbors
     for (let i = 0; i < clusters.length; i++) {
       const cluster = clusters[i]!;
@@ -365,8 +369,15 @@ export class GameMap {
         .sort((a, b) => a.dist - b.dist)
         .slice(0, 2);
 
-      // Connect to each of the 2 nearest
+      // Connect to each of the 2 nearest (if not already connected)
       for (const { idx } of distances) {
+        const pairKey = getPairKey(i, idx);
+
+        // Skip if these clusters are already connected
+        if (connectedPairs.has(pairKey)) {
+          continue;
+        }
+
         const target = clusters[idx]!;
 
         // Use A* pathfinding to create road
@@ -384,6 +395,9 @@ export class GameMap {
               this.setTile(q, r, TILE_TYPES.ROAD);
             }
           }
+
+          // Mark this pair as connected
+          connectedPairs.add(pairKey);
         }
       }
     }

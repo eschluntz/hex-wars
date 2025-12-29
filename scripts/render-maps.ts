@@ -59,13 +59,13 @@ function renderMap(map: GameMap, seed: number): Buffer {
     drawHex(ctx as any, cx, cy, tile, HEX_SIZE);
   }
 
-  // Draw buildings using shared utility
+  // Draw buildings using shared utility (with text fallback for node-canvas)
   for (const building of buildings) {
     const world = HexUtil.axialToPixel(building.q, building.r, HEX_SIZE);
     const cx = toCanvasX(world.x);
     const cy = toCanvasY(world.y);
 
-    drawBuildingIcon(ctx as any, cx, cy, building, HEX_SIZE * 0.6);
+    drawBuildingIcon(ctx as any, cx, cy, building, HEX_SIZE * 0.6, { useTextFallback: true });
   }
 
   // Add title

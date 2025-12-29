@@ -78,10 +78,12 @@ export function drawBuildingIcon(
   options: {
     zoom?: number;
     hasUnit?: boolean;
+    useTextFallback?: boolean; // For node-canvas which doesn't support emoji
   } = {}
 ): void {
   const zoom = options.zoom ?? 1;
   const hasUnit = options.hasUnit ?? false;
+  const useTextFallback = options.useTextFallback ?? false;
   const iconSize = size * (hasUnit ? 0.6 : 1);
 
   // Draw ownership ring
@@ -115,24 +117,35 @@ export function drawBuildingIcon(
   ctx.lineWidth = ringWidth;
   ctx.stroke();
 
-  // Draw building icon
-  const icon = BUILDING_ICONS[building.type];
+  // Draw building icon or text fallback
+  let icon: string;
+  if (useTextFallback) {
+    // Use text abbreviations for node-canvas (emoji not supported)
+    const textIcons: Record<string, string> = {
+      city: 'C',
+      factory: 'F',
+      lab: 'L'
+    };
+    icon = textIcons[building.type] || '?';
+  } else {
+    icon = BUILDING_ICONS[building.type];
+  }
 
   if (hasUnit) {
     // Small icon in corner when unit is present
     const offsetX = size * 0.8;
     const offsetY = -size * 0.8;
-    ctx.font = `${iconSize}px Arial`;
+    ctx.font = useTextFallback ? `bold ${iconSize * 1.2}px Arial` : `${iconSize}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#000000';
+    ctx.fillStyle = '#ffffff';
     ctx.fillText(icon, cx + offsetX, cy + offsetY);
   } else {
     // Centered icon when no unit
-    ctx.font = `${iconSize}px Arial`;
+    ctx.font = useTextFallback ? `bold ${iconSize * 1.5}px Arial` : `${iconSize}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#000000';
+    ctx.fillStyle = '#ffffff';
     ctx.fillText(icon, cx, cy);
   }
 }
