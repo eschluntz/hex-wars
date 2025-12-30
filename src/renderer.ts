@@ -7,9 +7,10 @@ import { CONFIG } from './config.js';
 import { GameMap } from './game-map.js';
 import { Viewport } from './viewport.js';
 import { Unit } from './unit.js';
-import { BUILDING_ICONS, type Building } from './building.js';
+import { type Building } from './building.js';
 import { type UnitTemplate } from './unit-templates.js';
 import { type TeamResources } from './resources.js';
+import { drawHex as drawHexBase, drawBuildingIcon } from './rendering-utils.js';
 
 export interface PathPreview {
   path: AxialCoord[];
@@ -287,21 +288,9 @@ export class Renderer {
   private drawHex(cx: number, cy: number, tile: Tile, isHovered: boolean, zoom: number): void {
     const ctx = this.ctx;
     const size = CONFIG.hexSize * zoom;
-    const corners = HexUtil.getHexCorners(cx, cy, size);
-    const colors = TILE_COLORS[tile.type];
 
-    ctx.beginPath();
-    ctx.moveTo(corners[0]!.x, corners[0]!.y);
-    for (let i = 1; i < 6; i++) {
-      ctx.lineTo(corners[i]!.x, corners[i]!.y);
-    }
-    ctx.closePath();
-
-    ctx.fillStyle = colors.fill;
-    ctx.fill();
-    ctx.strokeStyle = colors.stroke;
-    ctx.lineWidth = Math.max(1, 2 * zoom);
-    ctx.stroke();
+    // Use shared rendering utility for base hex drawing
+    drawHexBase(ctx as any, cx, cy, tile, size, { zoom, isHovered });
 
     // Check for building at this tile
     const building = this.map.getBuilding(tile.q, tile.r);
@@ -318,68 +307,13 @@ export class Renderer {
         ctx.fillText(icon, cx, cy);
       }
     }
-
-    if (isHovered) {
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
-      ctx.fill();
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = Math.max(1, 3 * zoom);
-      ctx.stroke();
-    }
   }
 
   private drawBuilding(cx: number, cy: number, building: Building, zoom: number, hasUnit: boolean): void {
-    const ctx = this.ctx;
-    const size = CONFIG.hexSize * zoom * 0.6;
-
-    // Draw team color background - larger ring if unit is on top
-    const ringSize = hasUnit ? CONFIG.hexSize * zoom * 0.85 : size * 0.9;
-    const ringWidth = hasUnit ? 4 * zoom : 2 * zoom;
-
-    if (building.owner) {
-      const teamColor = TEAM_COLORS[building.owner];
-      if (teamColor) {
-        ctx.beginPath();
-        ctx.arc(cx, cy, ringSize, 0, Math.PI * 2);
-        if (!hasUnit) {
-          ctx.fillStyle = teamColor.primary + '60'; // 60 = ~37% opacity
-          ctx.fill();
-        }
-        ctx.strokeStyle = teamColor.primary;
-        ctx.lineWidth = ringWidth;
-        ctx.stroke();
-      }
-    } else {
-      // Neutral building - gray background
-      ctx.beginPath();
-      ctx.arc(cx, cy, ringSize, 0, Math.PI * 2);
-      if (!hasUnit) {
-        ctx.fillStyle = 'rgba(128, 128, 128, 0.4)';
-        ctx.fill();
-      }
-      ctx.strokeStyle = '#666666';
-      ctx.lineWidth = ringWidth;
-      ctx.stroke();
-    }
-
-    // Draw building icon (smaller and offset if unit present)
+    // Use shared rendering utility for building icons
     if (zoom > 0.3) {
-      const icon = BUILDING_ICONS[building.type];
-      if (hasUnit) {
-        // Draw small icon in corner
-        const iconSize = size * 0.6;
-        const offsetX = CONFIG.hexSize * zoom * 0.5;
-        const offsetY = -CONFIG.hexSize * zoom * 0.5;
-        ctx.font = `${iconSize}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(icon, cx + offsetX, cy + offsetY);
-      } else {
-        ctx.font = `${size}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(icon, cx, cy);
-      }
+      const size = CONFIG.hexSize * zoom * 0.6;
+      drawBuildingIcon(this.ctx as any, cx, cy, building, size, { zoom, hasUnit });
     }
   }
 
