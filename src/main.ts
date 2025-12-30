@@ -10,7 +10,7 @@ import { Renderer } from './renderer.js';
 import { Unit } from './unit.js';
 import { Pathfinder } from './pathfinder.js';
 import { Combat } from './combat.js';
-import { type Building } from './building.js';
+import { type Building, createBuilding } from './building.js';
 import {
   getAvailableTemplates,
   getTemplate,
@@ -278,14 +278,14 @@ class Game {
     // At row 5 (centerR), valid q range is roughly -2 to 9 for width=12
 
     // Player side (left) - q around 1-2
-    this.map.addBuilding({ q: 1, r: centerR, type: 'city', owner: TEAMS.PLAYER });
-    this.map.addBuilding({ q: 1, r: centerR + 1, type: 'factory', owner: TEAMS.PLAYER });
-    this.map.addBuilding({ q: 1, r: centerR - 1, type: 'lab', owner: TEAMS.PLAYER });
+    this.map.addBuilding(createBuilding(1, centerR, 'city', TEAMS.PLAYER));
+    this.map.addBuilding(createBuilding(1, centerR + 1, 'factory', TEAMS.PLAYER));
+    this.map.addBuilding(createBuilding(1, centerR - 1, 'lab', TEAMS.PLAYER));
 
     // Enemy side (right) - q around 7-8
-    this.map.addBuilding({ q: 8, r: centerR, type: 'city', owner: TEAMS.ENEMY });
-    this.map.addBuilding({ q: 8, r: centerR + 1, type: 'factory', owner: TEAMS.ENEMY });
-    this.map.addBuilding({ q: 8, r: centerR - 1, type: 'lab', owner: TEAMS.ENEMY });
+    this.map.addBuilding(createBuilding(8, centerR, 'city', TEAMS.ENEMY));
+    this.map.addBuilding(createBuilding(8, centerR + 1, 'factory', TEAMS.ENEMY));
+    this.map.addBuilding(createBuilding(8, centerR - 1, 'lab', TEAMS.ENEMY));
 
     // Spawn one soldier each
     const soldierTemplate = getTemplate('soldier');
@@ -398,6 +398,9 @@ class Game {
         const unit = this.getUnitById(action.unitId);
         if (!unit || unit.hasActed) return;
 
+        // Reset any capture progress when unit moves
+        this.map.resetCaptureByUnit(unit.id);
+
         unit.q = action.targetQ;
         unit.r = action.targetR;
         console.log(`AI moves ${unit.id} to (${action.targetQ}, ${action.targetR})`);
@@ -419,12 +422,8 @@ class Game {
         const unit = this.getUnitById(action.unitId);
         if (!unit) return;
 
-        const building = this.map.getBuilding(unit.q, unit.r);
-        if (building && building.owner !== unit.team && unit.canCapture) {
-          const previousOwner = building.owner ?? 'neutral';
-          this.map.setBuildingOwner(unit.q, unit.r, unit.team);
-          this.gameStats.recordBuildingCaptured(unit.team);
-          console.log(`AI ${unit.id} captured ${building.type} from ${previousOwner}!`);
+        if (unit.canCapture) {
+          this.executeCapture(unit, 'AI ');
         }
         unit.hasActed = true;
         this.checkAndTriggerGameOver();
@@ -690,13 +689,7 @@ class Game {
     } else if (action === 'attack') {
       this.setState({ type: 'attacking', unit, fromQ: this.state.fromQ, fromR: this.state.fromR });
     } else if (action === 'capture') {
-      const building = this.map.getBuilding(unit.q, unit.r);
-      if (building && building.owner !== unit.team) {
-        const previousOwner = building.owner ?? 'neutral';
-        this.map.setBuildingOwner(unit.q, unit.r, unit.team);
-        this.gameStats.recordBuildingCaptured(unit.team);
-        console.log(`${unit.id} captured ${building.type} from ${previousOwner}!`);
-      }
+      this.executeCapture(unit);
       unit.hasActed = true;
       this.setState({ type: 'idle' });
 
@@ -884,6 +877,9 @@ class Game {
     const fromQ = unit.q;
     const fromR = unit.r;
 
+    // Reset any capture progress when unit moves
+    this.map.resetCaptureByUnit(unit.id);
+
     const result = this.pathfinder.findPath(
       unit.q, unit.r,
       destination.q, destination.r,
@@ -913,12 +909,29 @@ class Game {
     if (result.defenderDied) {
       console.log(`  ${defender.id} destroyed!`);
       this.gameStats.recordUnitKilled(attacker.team, defender.team);
+      this.map.resetCaptureByUnit(defender.id);
     } else if (result.defenderDamage > 0) {
       console.log(`  ${defender.id} counter-attacks for ${result.defenderDamage} damage`);
       if (result.attackerDied) {
         console.log(`  ${attacker.id} destroyed!`);
         this.gameStats.recordUnitKilled(defender.team, attacker.team);
+        this.map.resetCaptureByUnit(attacker.id);
       }
+    }
+  }
+
+  private executeCapture(unit: Unit, logPrefix: string = ''): void {
+    const building = this.map.getBuilding(unit.q, unit.r);
+    if (!building || building.owner === unit.team) return;
+
+    const captured = this.map.applyCaptureProgress(unit.q, unit.r, unit.id, unit.health);
+    if (captured) {
+      const previousOwner = building.owner ?? 'neutral';
+      this.map.setBuildingOwner(unit.q, unit.r, unit.team);
+      this.gameStats.recordBuildingCaptured(unit.team);
+      console.log(`${logPrefix}${unit.id} captured ${building.type} from ${previousOwner}!`);
+    } else {
+      console.log(`${logPrefix}${unit.id} capturing ${building.type}... (${building.captureResistance} resistance remaining)`);
     }
   }
 

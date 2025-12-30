@@ -124,16 +124,17 @@ export class GreedyAI implements AIController {
   private planUnitActions(state: AIGameState, team: string): AIAction[] {
     const actions: AIAction[] = [];
     const units = state.units.filter(u => u.team === team && u.isAlive() && !u.hasActed);
+    const claimedPositions = new Set<string>();
 
     for (const unit of units) {
-      const unitActions = this.planSingleUnitAction(state, team, unit);
+      const unitActions = this.planSingleUnitAction(state, team, unit, claimedPositions);
       actions.push(...unitActions);
     }
 
     return actions;
   }
 
-  private planSingleUnitAction(state: AIGameState, team: string, unit: Unit): AIAction[] {
+  private planSingleUnitAction(state: AIGameState, team: string, unit: Unit, claimedPositions: Set<string>): AIAction[] {
     const actions: AIAction[] = [];
 
     // Priority 1: Capture building if on one
@@ -156,7 +157,7 @@ export class GreedyAI implements AIController {
 
     // Priority 2: Move to capture a building if in range
     if (unit.canCapture) {
-      const captureTarget = this.findBestCaptureTarget(state, team, reachable);
+      const captureTarget = this.findBestCaptureTarget(state, team, reachable, claimedPositions);
       if (captureTarget) {
         if (captureTarget.q !== unit.q || captureTarget.r !== unit.r) {
           actions.push({
@@ -166,6 +167,8 @@ export class GreedyAI implements AIController {
             targetR: captureTarget.r
           });
         }
+        // Claim this building position
+        claimedPositions.add(`${captureTarget.q},${captureTarget.r}`);
         actions.push({ type: 'capture', unitId: unit.id });
         return actions;
       }
@@ -181,6 +184,8 @@ export class GreedyAI implements AIController {
           targetQ: attackResult.moveQ,
           targetR: attackResult.moveR
         });
+        // Claim the move position
+        claimedPositions.add(`${attackResult.moveQ},${attackResult.moveR}`);
       }
       actions.push({
         type: 'attack',
@@ -192,7 +197,7 @@ export class GreedyAI implements AIController {
     }
 
     // Priority 4: Move toward nearest enemy/neutral building
-    const moveTarget = this.findMoveTarget(state, team, unit, reachable);
+    const moveTarget = this.findMoveTarget(state, team, unit, reachable, claimedPositions);
     if (moveTarget && (moveTarget.q !== unit.q || moveTarget.r !== unit.r)) {
       actions.push({
         type: 'move',
@@ -200,6 +205,8 @@ export class GreedyAI implements AIController {
         targetQ: moveTarget.q,
         targetR: moveTarget.r
       });
+      // Claim the move position
+      claimedPositions.add(`${moveTarget.q},${moveTarget.r}`);
     }
 
     // Priority 5: Wait
@@ -210,7 +217,8 @@ export class GreedyAI implements AIController {
   private findBestCaptureTarget(
     state: AIGameState,
     team: string,
-    reachable: Map<string, { q: number; r: number; cost: number }>
+    reachable: Map<string, { q: number; r: number; cost: number }>,
+    claimedPositions: Set<string>
   ): { q: number; r: number } | null {
     const buildings = state.buildings.filter(b => b.owner !== team);
     let bestBuilding: { q: number; r: number } | null = null;
@@ -218,6 +226,8 @@ export class GreedyAI implements AIController {
 
     for (const building of buildings) {
       const key = `${building.q},${building.r}`;
+      // Skip buildings already claimed by another unit
+      if (claimedPositions.has(key)) continue;
       const reachablePos = reachable.get(key);
       if (reachablePos && reachablePos.cost < bestCost) {
         bestCost = reachablePos.cost;
@@ -281,7 +291,8 @@ export class GreedyAI implements AIController {
     state: AIGameState,
     team: string,
     unit: Unit,
-    reachable: Map<string, { q: number; r: number; cost: number }>
+    reachable: Map<string, { q: number; r: number; cost: number }>,
+    claimedPositions: Set<string>
   ): { q: number; r: number } | null {
     // Find all target positions
     const targets: Array<{ q: number; r: number }> = [];
@@ -308,7 +319,9 @@ export class GreedyAI implements AIController {
     // Get blocked positions for pathfinding (enemies can't be pathed through)
     const blocked = getBlockedPositions(state, team);
 
-    for (const [_key, pos] of reachable) {
+    for (const [key, pos] of reachable) {
+      // Skip positions already claimed by another unit
+      if (claimedPositions.has(key)) continue;
       const distToNearestTarget = minPathDistanceToPositions(
         state.pathfinder,
         pos.q, pos.r,

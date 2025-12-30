@@ -4,7 +4,7 @@
 // Common helpers for tests to avoid duplication and ensure tests use real game logic.
 
 import { TEAM_COLORS } from '../src/core.js';
-import { type Building } from '../src/building.js';
+import { type Building, createBuilding } from '../src/building.js';
 import { Unit } from '../src/unit.js';
 import { Combat } from '../src/combat.js';
 import { Pathfinder } from '../src/pathfinder.js';
@@ -146,7 +146,7 @@ export class TestGame {
   }
 
   addBuilding(q: number, r: number, type: 'city' | 'factory' | 'lab', owner: string | null): void {
-    this.map.addBuilding({ q, r, type, owner });
+    this.map.addBuilding(createBuilding(q, r, type, owner));
   }
 
   createAIState(): AIGameState {

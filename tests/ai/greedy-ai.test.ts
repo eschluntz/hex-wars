@@ -6,7 +6,7 @@ import { TestRunner, assertEqual, assert } from '../framework.js';
 import { GreedyAI } from '../../src/ai/greedy-ai.js';
 import { type AIGameState } from '../../src/ai/game-state.js';
 import { DEFAULT_TERRAIN_COSTS, HexUtil } from '../../src/core.js';
-import { type Building } from '../../src/building.js';
+import { type Building, createBuilding, CAPTURE_RESISTANCE } from '../../src/building.js';
 import { type UnitTemplate } from '../../src/unit-templates.js';
 import { Unit } from '../../src/unit.js';
 import { Combat } from '../../src/combat.js';
@@ -146,7 +146,7 @@ runner.describe('GreedyAI', () => {
     runner.it('should capture building when unit is on it', () => {
       const ai = new GreedyAI();
       const unit = createUnit('soldier1', 'enemy', 5, 5, { canCapture: true });
-      const building: Building = { q: 5, r: 5, type: 'city', owner: 'player' };
+      const building = createBuilding(5, 5, 'city', 'player');
 
       const state = createMockState({
         units: [unit],
@@ -164,7 +164,7 @@ runner.describe('GreedyAI', () => {
     runner.it('should capture neutral building', () => {
       const ai = new GreedyAI();
       const unit = createUnit('soldier1', 'enemy', 5, 5, { canCapture: true });
-      const building: Building = { q: 5, r: 5, type: 'factory', owner: null };
+      const building = createBuilding(5, 5, 'factory', null);
 
       const state = createMockState({
         units: [unit],
@@ -180,7 +180,7 @@ runner.describe('GreedyAI', () => {
     runner.it('should not capture own building', () => {
       const ai = new GreedyAI();
       const unit = createUnit('soldier1', 'enemy', 5, 5, { canCapture: true });
-      const building: Building = { q: 5, r: 5, type: 'city', owner: 'enemy' };
+      const building = createBuilding(5, 5, 'city', 'enemy');
 
       const state = createMockState({
         units: [unit],
@@ -240,7 +240,7 @@ runner.describe('GreedyAI', () => {
   runner.describe('production', () => {
     runner.it('should build units at unoccupied factories', () => {
       const ai = new GreedyAI();
-      const factory: Building = { q: 0, r: 0, type: 'factory', owner: 'enemy' };
+      const factory = createBuilding(0, 0, 'factory', 'enemy');
       const template: UnitTemplate = {
         id: 'soldier',
         name: 'Soldier',
@@ -277,7 +277,7 @@ runner.describe('GreedyAI', () => {
 
     runner.it('should not build when factory is occupied', () => {
       const ai = new GreedyAI();
-      const factory: Building = { q: 0, r: 0, type: 'factory', owner: 'enemy' };
+      const factory = createBuilding(0, 0, 'factory', 'enemy');
       const occupyingUnit = createUnit('existing', 'enemy', 0, 0);
       const template: UnitTemplate = {
         id: 'soldier',
@@ -311,7 +311,7 @@ runner.describe('GreedyAI', () => {
 
     runner.it('should not build when cannot afford', () => {
       const ai = new GreedyAI();
-      const factory: Building = { q: 0, r: 0, type: 'factory', owner: 'enemy' };
+      const factory = createBuilding(0, 0, 'factory', 'enemy');
       const template: UnitTemplate = {
         id: 'soldier',
         name: 'Soldier',

@@ -5,7 +5,7 @@
 // and the map rendering script, ensuring consistency.
 
 import { HexUtil, TILE_COLORS, type Tile } from './core.js';
-import { BUILDING_ICONS, type Building } from './building.js';
+import { BUILDING_ICONS, CAPTURE_RESISTANCE, type Building } from './building.js';
 
 export interface CanvasContext {
   beginPath(): void;
@@ -16,6 +16,8 @@ export interface CanvasContext {
   stroke(): void;
   arc(x: number, y: number, radius: number, startAngle: number, endAngle: number): void;
   fillText(text: string, x: number, y: number): void;
+  fillRect(x: number, y: number, width: number, height: number): void;
+  strokeRect(x: number, y: number, width: number, height: number): void;
   fillStyle: string;
   strokeStyle: string;
   lineWidth: number;
@@ -82,6 +84,7 @@ export function drawBuildingIcon(
     useTextFallback?: boolean; // For node-canvas which doesn't support emoji
   } = {}
 ): void {
+  const zoom = options.zoom ?? 1;
   const hasUnit = options.hasUnit ?? false;
   const useTextFallback = options.useTextFallback ?? false;
   const iconSize = size * (hasUnit ? 0.6 : 1);
@@ -116,5 +119,29 @@ export function drawBuildingIcon(
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#ffffff';
     ctx.fillText(icon, cx, cy);
+  }
+
+  // Draw capture resistance bar if not at max
+  if (building.captureResistance < CAPTURE_RESISTANCE) {
+    const barWidth = Math.max(3, 4 * zoom);
+    const barHeight = size * 1.4;
+    const barX = cx - size * 0.9 - barWidth / 2;
+    const barY = cy - barHeight / 2;
+    const resistanceRatio = building.captureResistance / CAPTURE_RESISTANCE;
+
+    // Background (empty portion)
+    ctx.fillStyle = '#333333';
+    ctx.fillRect(barX, barY, barWidth, barHeight);
+
+    // Resistance remaining (fills from bottom up)
+    const filledHeight = barHeight * resistanceRatio;
+    const filledY = barY + barHeight - filledHeight;
+    ctx.fillStyle = resistanceRatio > 0.5 ? '#4caf50' : resistanceRatio > 0.25 ? '#ff9800' : '#f44336';
+    ctx.fillRect(barX, filledY, barWidth, filledHeight);
+
+    // Border
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(barX, barY, barWidth, barHeight);
   }
 }

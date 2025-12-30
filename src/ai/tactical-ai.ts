@@ -137,16 +137,17 @@ export class TacticalAI implements AIController {
   private planUnitActions(state: AIGameState, team: string): AIAction[] {
     const actions: AIAction[] = [];
     const units = state.units.filter(u => u.team === team && u.isAlive() && !u.hasActed);
+    const claimedPositions = new Set<string>();
 
     for (const unit of units) {
-      const unitActions = this.planSingleUnitAction(state, team, unit);
+      const unitActions = this.planSingleUnitAction(state, team, unit, claimedPositions);
       actions.push(...unitActions);
     }
 
     return actions;
   }
 
-  private planSingleUnitAction(state: AIGameState, team: string, unit: Unit): AIAction[] {
+  private planSingleUnitAction(state: AIGameState, team: string, unit: Unit, claimedPositions: Set<string>): AIAction[] {
     const actions: AIAction[] = [];
 
     // Priority 1: Capture building if on one
@@ -172,7 +173,7 @@ export class TacticalAI implements AIController {
     const attackResult = this.findBestAttack(state, team, unit, reachable);
     let captureTarget: { q: number; r: number } | null = null;
     if (unit.canCapture) {
-      captureTarget = this.findBestCaptureTarget(state, team, reachable);
+      captureTarget = this.findBestCaptureTarget(state, team, reachable, claimedPositions);
     }
 
     // If we have a great attack opportunity (high score), prioritize it over distant captures
@@ -187,6 +188,7 @@ export class TacticalAI implements AIController {
             targetQ: attackResult.moveQ,
             targetR: attackResult.moveR
           });
+          claimedPositions.add(`${attackResult.moveQ},${attackResult.moveR}`);
         }
         actions.push({
           type: 'attack',
@@ -208,6 +210,8 @@ export class TacticalAI implements AIController {
           targetR: captureTarget.r
         });
       }
+      // Claim the capture target
+      claimedPositions.add(`${captureTarget.q},${captureTarget.r}`);
       actions.push({ type: 'capture', unitId: unit.id });
       return actions;
     }
@@ -221,6 +225,7 @@ export class TacticalAI implements AIController {
           targetQ: attackResult.moveQ,
           targetR: attackResult.moveR
         });
+        claimedPositions.add(`${attackResult.moveQ},${attackResult.moveR}`);
       }
       actions.push({
         type: 'attack',
@@ -232,7 +237,7 @@ export class TacticalAI implements AIController {
     }
 
     // Priority 4: Move toward best target (buildings > enemies)
-    const moveTarget = this.findMoveTarget(state, team, unit, reachable);
+    const moveTarget = this.findMoveTarget(state, team, unit, reachable, claimedPositions);
     if (moveTarget && (moveTarget.q !== unit.q || moveTarget.r !== unit.r)) {
       actions.push({
         type: 'move',
@@ -240,6 +245,7 @@ export class TacticalAI implements AIController {
         targetQ: moveTarget.q,
         targetR: moveTarget.r
       });
+      claimedPositions.add(`${moveTarget.q},${moveTarget.r}`);
     }
 
     // Priority 5: Wait
@@ -250,7 +256,8 @@ export class TacticalAI implements AIController {
   private findBestCaptureTarget(
     state: AIGameState,
     team: string,
-    reachable: Map<string, { q: number; r: number; cost: number }>
+    reachable: Map<string, { q: number; r: number; cost: number }>,
+    claimedPositions: Set<string>
   ): { q: number; r: number } | null {
     const buildings = state.buildings.filter(b => b.owner !== team);
     let bestBuilding: { q: number; r: number } | null = null;
@@ -258,6 +265,8 @@ export class TacticalAI implements AIController {
 
     for (const building of buildings) {
       const key = `${building.q},${building.r}`;
+      // Skip buildings already claimed by another unit
+      if (claimedPositions.has(key)) continue;
       const reachablePos = reachable.get(key);
       if (reachablePos) {
         // Prioritize by: 1) building type value, 2) closer is better
@@ -357,7 +366,8 @@ export class TacticalAI implements AIController {
     state: AIGameState,
     team: string,
     unit: Unit,
-    reachable: Map<string, { q: number; r: number; cost: number }>
+    reachable: Map<string, { q: number; r: number; cost: number }>,
+    claimedPositions: Set<string>
   ): { q: number; r: number } | null {
     const targets: Array<{ q: number; r: number; priority: number }> = [];
 
@@ -383,7 +393,9 @@ export class TacticalAI implements AIController {
     let bestPos: { q: number; r: number } | null = null;
     let bestScore = -Infinity;
 
-    for (const [_key, pos] of reachable) {
+    for (const [key, pos] of reachable) {
+      // Skip positions already claimed by another unit
+      if (claimedPositions.has(key)) continue;
       // Calculate weighted score based on distance to targets
       let score = 0;
       for (const target of targets) {

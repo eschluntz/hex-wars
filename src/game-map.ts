@@ -5,7 +5,7 @@
 import { TILE_TYPES, HexUtil, type Tile, type TileType, type TerrainCosts } from './core.js';
 import { PerlinNoise, SeededRandom } from './noise.js';
 import { GEN_PARAMS, type MapConfig } from './config.js';
-import { type Building, type BuildingType, createBuilding, getBuildingKey } from './building.js';
+import { type Building, type BuildingType, createBuilding, getBuildingKey, CAPTURE_RESISTANCE } from './building.js';
 import { Pathfinder } from './pathfinder.js';
 
 export class GameMap {
@@ -50,6 +50,37 @@ export class GameMap {
     const building = this.buildings.get(getBuildingKey(q, r));
     if (building) {
       building.owner = owner;
+    }
+  }
+
+  applyCaptureProgress(q: number, r: number, unitId: string, damage: number): boolean {
+    const building = this.buildings.get(getBuildingKey(q, r));
+    if (!building) return false;
+
+    // If a different unit was capturing, reset resistance first
+    if (building.capturingUnitId !== null && building.capturingUnitId !== unitId) {
+      building.captureResistance = CAPTURE_RESISTANCE;
+    }
+
+    building.capturingUnitId = unitId;
+    building.captureResistance -= damage;
+
+    if (building.captureResistance <= 0) {
+      // Capture complete - owner will be set by caller
+      building.captureResistance = CAPTURE_RESISTANCE;
+      building.capturingUnitId = null;
+      return true;
+    }
+
+    return false;
+  }
+
+  resetCaptureByUnit(unitId: string): void {
+    for (const building of this.buildings.values()) {
+      if (building.capturingUnitId === unitId) {
+        building.captureResistance = CAPTURE_RESISTANCE;
+        building.capturingUnitId = null;
+      }
     }
   }
 

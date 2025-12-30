@@ -7,7 +7,7 @@ import { CONFIG } from './config.js';
 import { GameMap } from './game-map.js';
 import { Viewport } from './viewport.js';
 import { Unit } from './unit.js';
-import { type Building } from './building.js';
+import { type Building, CAPTURE_RESISTANCE } from './building.js';
 import { type UnitTemplate } from './unit-templates.js';
 import { type TeamResources } from './resources.js';
 import { drawHex as drawHexBase, drawBuildingIcon } from './rendering-utils.js';
@@ -661,7 +661,11 @@ export class Renderer {
         const building = this.map.getBuilding(this.hoveredHex.q, this.hoveredHex.r);
         if (building) {
           const ownerStr = building.owner ? building.owner.toUpperCase() : 'NEUTRAL';
-          lines.push(`Building: ${building.type.toUpperCase()} (${ownerStr})`);
+          let buildingLine = `Building: ${building.type.toUpperCase()} (${ownerStr})`;
+          if (building.captureResistance < CAPTURE_RESISTANCE) {
+            buildingLine += ` | <span style="color: #ff9800">Capture: ${building.captureResistance}/${CAPTURE_RESISTANCE}</span>`;
+          }
+          lines.push(buildingLine);
         }
       } else {
         lines.push(`Hex: (${this.hoveredHex.q}, ${this.hoveredHex.r}) empty`);
