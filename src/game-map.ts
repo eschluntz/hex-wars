@@ -121,76 +121,21 @@ export class GameMap {
     }
 
     // Step 2: Generate buildings (which also generates cluster-based roads)
-    if (cfg?.buildings) {
+    if (cfg?.clusters) {
       this.generateBuildings(rng, width, height, cfg);
     }
 
     console.log(`Generated map: ${this.tiles.size} tiles, ${this.buildings.size} buildings`);
   }
 
-  private generateRoads(rng: SeededRandom, width: number, height: number, cfg?: MapConfig | null): void {
-    const directions = [
-      { q: 1, r: 0 },
-      { q: 1, r: -1 },
-      { q: 0, r: -1 },
-      { q: -1, r: 0 },
-      { q: -1, r: 1 },
-      { q: 0, r: 1 }
-    ];
-
-    const roadCount = cfg?.roadCount ?? GEN_PARAMS.roadCount;
-    const roadMinLength = cfg?.roadMinLength ?? GEN_PARAMS.roadMinLength;
-    const roadMaxLength = cfg?.roadMaxLength ?? GEN_PARAMS.roadMaxLength;
-    const roadCurviness = cfg?.roadCurviness ?? GEN_PARAMS.roadCurviness;
-
-    for (let i = 0; i < roadCount; i++) {
-      let startQ: number, startR: number;
-      let attempts = 0;
-      do {
-        startR = rng.nextInt(0, height - 1);
-        const rOffset = Math.floor(startR / 2);
-        startQ = rng.nextInt(-rOffset, width - rOffset - 1);
-        attempts++;
-      } while (!this.isValidLandTile(startQ, startR) && attempts < 100);
-
-      if (attempts >= 100) continue;
-
-      const length = rng.nextInt(roadMinLength, roadMaxLength);
-      let direction = rng.nextInt(0, 5);
-
-      let q = startQ;
-      let r = startR;
-
-      for (let step = 0; step < length; step++) {
-        if (this.isValidLandTile(q, r)) {
-          this.setTile(q, r, TILE_TYPES.ROAD);
-        }
-
-        if (rng.next() < roadCurviness) {
-          direction = (direction + (rng.next() < 0.5 ? 1 : 5)) % 6;
-        }
-
-        const dir = directions[direction]!;
-        q += dir.q;
-        r += dir.r;
-
-        const tile = this.getTile(q, r);
-        if (!tile || tile.type === TILE_TYPES.WATER || tile.type === TILE_TYPES.MOUNTAIN) {
-          break;
-        }
-      }
-    }
-  }
-
-  private generateBuildings(rng: SeededRandom, width: number, height: number, cfg?: MapConfig | null): void {
-    const numSingletons = 8;
-    const minClusterDistance = 13; // Minimum hex distance between cluster centers
+  private generateBuildings(rng: SeededRandom, width: number, height: number, cfg: MapConfig): void {
+    const clusterCfg = cfg.clusters!;
     const clusters: Array<{ centerQ: number; centerR: number; buildings: Array<{ q: number; r: number }> }> = [];
 
     // Step 1: Generate clusters using Mitchell's Best-Candidate algorithm
     // This naturally fills corners and gaps by always picking the point farthest from existing clusters
     while (true) {
-      const numCandidates = 50;
+      const numCandidates = clusterCfg.candidatesPerCluster;
       let bestQ = 0, bestR = 0;
       let bestMinDist = 0;
 
@@ -223,14 +168,14 @@ export class GameMap {
       }
 
       // Stop if best candidate doesn't meet minimum distance requirement
-      if (bestMinDist < minClusterDistance) break;
+      if (bestMinDist < clusterCfg.minDistance) break;
 
-      // Generate 5-8 buildings in this cluster
-      const numBuildings = rng.nextInt(5, 8);
+      // Generate buildings in this cluster
+      const numBuildings = rng.nextInt(clusterCfg.buildingsMin, clusterCfg.buildingsMax);
       const clusterBuildings: Array<{ q: number; r: number }> = [];
 
-      // Try to place buildings near the center (small radius for tight clusters)
-      const radius = 2;
+      // Try to place buildings near the center
+      const radius = clusterCfg.radius;
       let placedCount = 0;
       let buildingAttempts = 0;
 
@@ -305,17 +250,17 @@ export class GameMap {
     this.assignHomeClusterBuildings(clusters[playerClusterIdx]!, 'player');
     this.assignHomeClusterBuildings(clusters[enemyClusterIdx]!, 'enemy');
 
-    // Step 5: Generate M random singleton buildings (all neutral)
+    // Step 5: Generate random singleton buildings (all neutral)
     let singletonsPlaced = 0;
     let singletonAttempts = 0;
     const allClusterBuildings = clusters.flatMap(c => c.buildings);
 
-    while (singletonsPlaced < numSingletons && singletonAttempts < 500) {
+    while (singletonsPlaced < clusterCfg.singletonCount && singletonAttempts < 500) {
       const r = rng.nextInt(0, height - 1);
       const rOffset = Math.floor(r / 2);
       const q = rng.nextInt(-rOffset, width - rOffset - 1);
 
-      if (this.isValidBuildingTile(q, r) && !this.isTooCloseToBuilding(q, r, allClusterBuildings, 3)) {
+      if (this.isValidBuildingTile(q, r) && !this.isTooCloseToBuilding(q, r, allClusterBuildings, clusterCfg.singletonMinDistance)) {
         // Set tile to grass
         this.setTile(q, r, TILE_TYPES.GRASS);
 

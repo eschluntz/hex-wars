@@ -94,6 +94,33 @@ const DEFAULT_TEMPLATES: Record<string, UnitTemplate> = {
 export const UNIT_TEMPLATES = DEFAULT_TEMPLATES;
 
 // ============================================================================
+// TEMPLATE UTILITIES
+// ============================================================================
+
+/** Extract stats from a template for creating a Unit (add color separately) */
+export function getTemplateStats(template: UnitTemplate): {
+  speed: number;
+  attack: number;
+  range: number;
+  terrainCosts: import('./core.js').TerrainCosts;
+  canCapture: boolean;
+  canBuild: boolean;
+  armored: boolean;
+  armorPiercing: boolean;
+} {
+  return {
+    speed: template.speed,
+    attack: template.attack,
+    range: template.range,
+    terrainCosts: template.terrainCosts,
+    canCapture: template.canCapture,
+    canBuild: template.canBuild,
+    armored: template.armored,
+    armorPiercing: template.armorPiercing,
+  };
+}
+
+// ============================================================================
 // PER-TEAM TEMPLATE REGISTRY
 // ============================================================================
 

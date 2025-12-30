@@ -16,6 +16,7 @@ import {
   getTemplate,
   getTeamTemplates,
   getTeamTemplate,
+  getTemplateStats,
   initTeamTemplates,
   registerTemplate,
   updateTemplate,
@@ -286,33 +287,19 @@ class Game {
     this.map.addBuilding({ q: 8, r: centerR + 1, type: 'factory', owner: TEAMS.ENEMY });
     this.map.addBuilding({ q: 8, r: centerR - 1, type: 'lab', owner: TEAMS.ENEMY });
 
-    // Spawn one soldier each (using soldier template stats)
+    // Spawn one soldier each
     const soldierTemplate = getTemplate('soldier');
-    const playerUnit = new Unit(`soldier_${this.nextUnitId++}`, TEAMS.PLAYER, 3, centerR, {
-      speed: soldierTemplate.speed,
-      attack: soldierTemplate.attack,
-      range: soldierTemplate.range,
-      terrainCosts: soldierTemplate.terrainCosts,
-      color: TEAM_COLORS[TEAMS.PLAYER]!.unitColor,
-      canCapture: soldierTemplate.canCapture,
-      canBuild: soldierTemplate.canBuild,
-      armored: soldierTemplate.armored,
-      armorPiercing: soldierTemplate.armorPiercing,
-    });
-    this.units.push(playerUnit);
+    const soldierStats = getTemplateStats(soldierTemplate);
 
-    const enemyUnit = new Unit(`soldier_${this.nextUnitId++}`, TEAMS.ENEMY, 6, centerR, {
-      speed: soldierTemplate.speed,
-      attack: soldierTemplate.attack,
-      range: soldierTemplate.range,
-      terrainCosts: soldierTemplate.terrainCosts,
+    this.units.push(new Unit(`soldier_${this.nextUnitId++}`, TEAMS.PLAYER, 3, centerR, {
+      ...soldierStats,
+      color: TEAM_COLORS[TEAMS.PLAYER]!.unitColor,
+    }));
+
+    this.units.push(new Unit(`soldier_${this.nextUnitId++}`, TEAMS.ENEMY, 6, centerR, {
+      ...soldierStats,
       color: TEAM_COLORS[TEAMS.ENEMY]!.unitColor,
-      canCapture: soldierTemplate.canCapture,
-      canBuild: soldierTemplate.canBuild,
-      armored: soldierTemplate.armored,
-      armorPiercing: soldierTemplate.armorPiercing,
-    });
-    this.units.push(enemyUnit);
+    }));
 
     console.log('Small map setup: 1 city, 1 factory, 1 infantry per team');
   }
@@ -325,66 +312,6 @@ class Game {
     }
     // Record income in stats
     this.gameStats.recordIncome(team, income.funds, income.science);
-  }
-
-  private spawnUnits(): void {
-    const cfg = MAP_CONFIGS[this.currentMapType];
-    const centerQ = Math.floor((cfg?.width ?? GEN_PARAMS.mapWidth) / 2);
-    const centerR = Math.floor((cfg?.height ?? GEN_PARAMS.mapHeight) / 2);
-
-    // Filter tiles near center that are passable
-    const centerTiles = this.map.getAllTiles().filter(t => {
-      if (t.type !== 'grass' && t.type !== 'road') return false;
-      const dist = HexUtil.distance(t.q, t.r, centerQ, centerR);
-      return dist <= 5;
-    });
-
-    // Use templates for spawning units
-    const soldierT = getTemplate('soldier');
-    const tankT = getTemplate('tank');
-    const reconT = getTemplate('recon');
-
-    const unitConfigs = [
-      // Player units on left side of center
-      { template: reconT, team: TEAMS.PLAYER, offsetQ: -2, offsetR: 0 },
-      { template: tankT, team: TEAMS.PLAYER, offsetQ: -2, offsetR: 1 },
-      { template: soldierT, team: TEAMS.PLAYER, offsetQ: -2, offsetR: -1 },
-      // Enemy units on right side of center
-      { template: soldierT, team: TEAMS.ENEMY, offsetQ: 2, offsetR: 0 },
-      { template: tankT, team: TEAMS.ENEMY, offsetQ: 2, offsetR: 1 },
-    ];
-
-    for (const config of unitConfigs) {
-      // Try to place at offset from center, fall back to nearest valid tile
-      let q = centerQ + config.offsetQ;
-      let r = centerR + config.offsetR;
-
-      const tile = this.map.getTile(q, r);
-      if (!tile || (tile.type !== 'grass' && tile.type !== 'road')) {
-        // Find nearest valid tile from center tiles
-        const fallback = centerTiles.find(t => !this.units.some(u => u.q === t.q && u.r === t.r));
-        if (fallback) {
-          q = fallback.q;
-          r = fallback.r;
-        }
-      }
-
-      const teamColors = TEAM_COLORS[config.team]!;
-      const unit = new Unit(`${config.template.id}_${this.nextUnitId++}`, config.team, q, r, {
-        speed: config.template.speed,
-        attack: config.template.attack,
-        range: config.template.range,
-        terrainCosts: config.template.terrainCosts,
-        color: teamColors.unitColor,
-        canCapture: config.template.canCapture,
-        canBuild: config.template.canBuild,
-        armored: config.template.armored,
-        armorPiercing: config.template.armorPiercing,
-      });
-      this.units.push(unit);
-    }
-
-    console.log(`Spawned ${this.units.length} units near center`);
   }
 
   // --- Position helpers ---
@@ -533,23 +460,12 @@ class Game {
 
         this.resources.spendFunds(this.currentTeam, template.cost);
 
-        const teamColors = TEAM_COLORS[this.currentTeam]!;
         const unit = new Unit(
           `${template.id}_${this.nextUnitId++}`,
           this.currentTeam,
           action.factoryQ,
           action.factoryR,
-          {
-            speed: template.speed,
-            attack: template.attack,
-            range: template.range,
-            terrainCosts: template.terrainCosts,
-            color: teamColors.unitColor,
-            canCapture: template.canCapture,
-            canBuild: template.canBuild,
-            armored: template.armored,
-            armorPiercing: template.armorPiercing,
-          }
+          { ...getTemplateStats(template), color: TEAM_COLORS[this.currentTeam]!.unitColor }
         );
         unit.hasActed = true;
         this.units.push(unit);
@@ -890,23 +806,12 @@ class Game {
       // Spend funds and create unit
       this.resources.spendFunds(this.currentTeam, template.cost);
 
-      const teamColors = TEAM_COLORS[this.currentTeam]!;
       const unit = new Unit(
         `${template.id}_${this.nextUnitId++}`,
         this.currentTeam,
         factory.q,
         factory.r,
-        {
-          speed: template.speed,
-          attack: template.attack,
-          range: template.range,
-          terrainCosts: template.terrainCosts,
-          color: teamColors.unitColor,
-          canCapture: template.canCapture,
-          canBuild: template.canBuild,
-          armored: template.armored,
-          armorPiercing: template.armorPiercing,
-        }
+        { ...getTemplateStats(template), color: TEAM_COLORS[this.currentTeam]!.unitColor }
       );
       unit.hasActed = true; // New units can't act this turn
       this.units.push(unit);

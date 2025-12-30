@@ -24,15 +24,15 @@ export interface MapConfig {
     vegOctaves: number;
     forestThreshold: number;
   } | null;
-  // Roads
-  roadCount: number;
-  roadMinLength: number;
-  roadMaxLength: number;
-  roadCurviness: number;
-  // Buildings (null = manual placement only)
-  buildings: {
-    density: number;
-    roadAffinity: number;
+  // Building cluster generation (null = manual placement only)
+  clusters: {
+    minDistance: number;        // Min hex distance between cluster centers
+    buildingsMin: number;       // Min buildings per cluster
+    buildingsMax: number;       // Max buildings per cluster
+    radius: number;             // Max offset from cluster center
+    candidatesPerCluster: number; // Candidates for Mitchell's Best-Candidate
+    singletonCount: number;     // Random standalone buildings
+    singletonMinDistance: number; // Min distance from clusters for singletons
   } | null;
 }
 
@@ -43,12 +43,8 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
     width: 12,
     height: 10,
     seed: 1,
-    terrain: null, // All grass
-    roadCount: 0,
-    roadMinLength: 0,
-    roadMaxLength: 0,
-    roadCurviness: 0,
-    buildings: null // Manual placement
+    terrain: null,
+    clusters: null // Manual placement
   },
   normal: {
     name: 'Normal',
@@ -65,13 +61,14 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
       vegOctaves: 3,
       forestThreshold: 0.1
     },
-    roadCount: 8,
-    roadMinLength: 10,
-    roadMaxLength: 40,
-    roadCurviness: 0.15,
-    buildings: {
-      density: 0.02,
-      roadAffinity: 0.7
+    clusters: {
+      minDistance: 13,
+      buildingsMin: 5,
+      buildingsMax: 8,
+      radius: 2,
+      candidatesPerCluster: 50,
+      singletonCount: 8,
+      singletonMinDistance: 3
     }
   }
 };
@@ -94,22 +91,9 @@ export function rerollNormalSeed(): number {
   return currentNormalSeed;
 }
 
-// Default config for backwards compatibility
+// Default fallbacks (used when no config provided)
 export const GEN_PARAMS = {
   seed: 12345,
   mapWidth: 50,
-  mapHeight: 40,
-  altitudeScale: 0.08,
-  altitudeOctaves: 4,
-  waterThreshold: -0.16,
-  mountainThreshold: 0.26,
-  vegScale: 0.1,
-  vegOctaves: 3,
-  forestThreshold: 0.1,
-  roadCount: 8,
-  roadMinLength: 10,
-  roadMaxLength: 40,
-  roadCurviness: 0.15,
-  buildingDensity: 0.02,
-  buildingRoadAffinity: 0.7
+  mapHeight: 40
 } as const;
