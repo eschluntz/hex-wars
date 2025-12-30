@@ -342,6 +342,7 @@ this.drawPopupMenu({
 - [x] Tech tree (spend science to unlock new components)
 - [x] AI opponent (GreedyAI with research, design, production, combat)
 - [x] View enemy lab (click to see their tech tree and designs, read-only)
+- [x] Improving road generation
 
 ### Upcoming
 - [ ] Upgrade Map visuals
@@ -354,9 +355,10 @@ this.drawPopupMenu({
   - [ ] More system modules (stealth, repair, sensors)
   - [ ] more building types? Resources?
 - [ ] Satisfying battle animations
-- [ ] Improving road generation
+
 
 ### Potential future additions?
+- [ ] transport units
 - [ ] fog of war?
 - [ ] Building construction (using units with Build ability)
   - [ ] either light buildings like roads, foxholes, walls, or

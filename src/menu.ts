@@ -406,12 +406,6 @@ export class HTMLMenuController {
     this.btnNormal.addEventListener('click', () => this.startGame('normal'));
     this.btnReroll.addEventListener('click', () => this.rerollSeed());
 
-    // Handle R key for reroll when menu is visible
-    document.addEventListener('keydown', (e) => {
-      if (!this.overlay.classList.contains('hidden') && e.key.toLowerCase() === 'r') {
-        this.rerollSeed();
-      }
-    });
   }
 
   private rerollSeed(): void {

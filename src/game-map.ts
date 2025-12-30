@@ -184,7 +184,7 @@ export class GameMap {
 
   private generateBuildings(rng: SeededRandom, width: number, height: number, cfg?: MapConfig | null): void {
     const numSingletons = 8;
-    const minClusterDistance = 15; // Minimum hex distance between cluster centers
+    const minClusterDistance = 13; // Minimum hex distance between cluster centers
     const clusters: Array<{ centerQ: number; centerR: number; buildings: Array<{ q: number; r: number }> }> = [];
 
     // Step 1: Generate clusters using Mitchell's Best-Candidate algorithm
