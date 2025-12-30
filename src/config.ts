@@ -76,6 +76,24 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
   }
 };
 
+// Mutable seed for re-rolling maps
+let currentNormalSeed = 12345;
+
+export function getNormalSeed(): number {
+  return currentNormalSeed;
+}
+
+export function setNormalSeed(seed: number): void {
+  currentNormalSeed = seed;
+  MAP_CONFIGS.normal!.seed = seed;
+}
+
+export function rerollNormalSeed(): number {
+  currentNormalSeed = Math.floor(Math.random() * 1000000);
+  MAP_CONFIGS.normal!.seed = currentNormalSeed;
+  return currentNormalSeed;
+}
+
 // Default config for backwards compatibility
 export const GEN_PARAMS = {
   seed: 12345,

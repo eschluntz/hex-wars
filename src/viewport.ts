@@ -98,6 +98,12 @@ export class Viewport {
     this.y = this.targetY = pos.y;
   }
 
+  setPosition(x: number, y: number, zoom: number): void {
+    this.x = this.targetX = x;
+    this.y = this.targetY = y;
+    this.zoom = this.targetZoom = zoom;
+  }
+
   update(): void {
     const panSpeed = CONFIG.panSpeed / this.zoom;
     if (this.keys.w) this.targetY -= panSpeed;

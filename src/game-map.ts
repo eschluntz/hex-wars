@@ -183,31 +183,54 @@ export class GameMap {
   }
 
   private generateBuildings(rng: SeededRandom, width: number, height: number, cfg?: MapConfig | null): void {
-    const numClusters = 4;
     const numSingletons = 8;
+    const minClusterDistance = 15; // Minimum hex distance between cluster centers
     const clusters: Array<{ centerQ: number; centerR: number; buildings: Array<{ q: number; r: number }> }> = [];
 
-    // Step 1: Generate N building clusters (4 for now)
-    for (let i = 0; i < numClusters; i++) {
-      // Try to find a valid center location
-      let attempts = 0;
-      let centerQ: number = 0, centerR: number = 0;
+    // Step 1: Generate clusters using Mitchell's Best-Candidate algorithm
+    // This naturally fills corners and gaps by always picking the point farthest from existing clusters
+    while (true) {
+      const numCandidates = 50;
+      let bestQ = 0, bestR = 0;
+      let bestMinDist = 0;
 
-      do {
-        centerR = rng.nextInt(5, height - 5);
-        const rOffset = Math.floor(centerR / 2);
-        centerQ = rng.nextInt(-rOffset + 5, width - rOffset - 5);
-        attempts++;
-      } while (!this.isValidBuildingTile(centerQ, centerR) && attempts < 100);
+      // Generate candidates and pick the one farthest from all existing clusters
+      for (let i = 0; i < numCandidates; i++) {
+        const r = rng.nextInt(5, height - 5);
+        const rOffset = Math.floor(r / 2);
+        const q = rng.nextInt(-rOffset + 5, width - rOffset - 5);
 
-      if (attempts >= 100) continue;
+        if (!this.isValidBuildingTile(q, r)) continue;
 
-      // Generate 4-8 buildings in this cluster
-      const numBuildings = rng.nextInt(4, 8);
+        // Find distance to nearest existing cluster
+        let minDist = Infinity;
+        for (const existing of clusters) {
+          const dist = HexUtil.distance(q, r, existing.centerQ, existing.centerR);
+          minDist = Math.min(minDist, dist);
+        }
+
+        // First cluster has no existing clusters, so minDist stays Infinity
+        if (clusters.length === 0) {
+          minDist = 1000; // Arbitrary large value for first cluster
+        }
+
+        // Keep the candidate that's farthest from any existing cluster
+        if (minDist > bestMinDist) {
+          bestMinDist = minDist;
+          bestQ = q;
+          bestR = r;
+        }
+      }
+
+      // Stop if best candidate doesn't meet minimum distance requirement
+      if (bestMinDist < minClusterDistance) break;
+
+      // Generate 5-8 buildings in this cluster
+      const numBuildings = rng.nextInt(5, 8);
       const clusterBuildings: Array<{ q: number; r: number }> = [];
 
-      // Try to place buildings near the center
-      const radius = 5;
+      // Try to place buildings near the center (small radius for tight clusters)
+      const radius = 2;
       let placedCount = 0;
       let buildingAttempts = 0;
 
@@ -215,23 +238,41 @@ export class GameMap {
         // Random position near center
         const offsetQ = rng.nextInt(-radius, radius);
         const offsetR = rng.nextInt(-radius, radius);
-        const q = centerQ + offsetQ;
-        const r = centerR + offsetR;
+        const q = bestQ + offsetQ;
+        const r = bestR + offsetR;
 
-        // Check if valid and not too close to other buildings
-        if (this.isValidBuildingTile(q, r) && !this.isTooCloseToBuilding(q, r, clusterBuildings, 2)) {
+        // Check if valid tile and not already used
+        const alreadyUsed = clusterBuildings.some(b => b.q === q && b.r === r);
+        if (this.isValidBuildingTile(q, r) && !alreadyUsed) {
           clusterBuildings.push({ q, r });
           placedCount++;
         }
         buildingAttempts++;
       }
 
-      clusters.push({ centerQ, centerR, buildings: clusterBuildings });
+      clusters.push({ centerQ: bestQ, centerR: bestR, buildings: clusterBuildings });
     }
 
-    // Step 2: Place buildings in clusters
-    const centerQ = Math.floor(width / 2);
+    // Step 2: Find the two furthest clusters for player home bases
+    let maxDistance = 0;
+    let playerClusterIdx = 0;
+    let enemyClusterIdx = 1;
 
+    for (let i = 0; i < clusters.length; i++) {
+      for (let j = i + 1; j < clusters.length; j++) {
+        const dist = HexUtil.distance(
+          clusters[i]!.centerQ, clusters[i]!.centerR,
+          clusters[j]!.centerQ, clusters[j]!.centerR
+        );
+        if (dist > maxDistance) {
+          maxDistance = dist;
+          playerClusterIdx = i;
+          enemyClusterIdx = j;
+        }
+      }
+    }
+
+    // Step 3: Place buildings in clusters (all neutral initially)
     for (const cluster of clusters) {
       for (let i = 0; i < cluster.buildings.length; i++) {
         const pos = cluster.buildings[i]!;
@@ -254,24 +295,17 @@ export class GameMap {
           }
         }
 
-        // Assign ownership based on horizontal position
-        // Left third = player, right third = enemy, middle = neutral
-        let owner: string | null;
-        const relativeQ = pos.q + Math.floor(pos.r / 2);
-        if (relativeQ < centerQ - 8) {
-          owner = 'player';
-        } else if (relativeQ > centerQ + 8) {
-          owner = 'enemy';
-        } else {
-          owner = null;
-        }
-
-        const building = createBuilding(pos.q, pos.r, buildingType, owner);
+        // All buildings start neutral - ownership assigned after
+        const building = createBuilding(pos.q, pos.r, buildingType, null);
         this.buildings.set(getBuildingKey(pos.q, pos.r), building);
       }
     }
 
-    // Step 3: Generate M random singleton buildings
+    // Step 4: Assign home cluster buildings to players (2 cities + 1 factory each)
+    this.assignHomeClusterBuildings(clusters[playerClusterIdx]!, 'player');
+    this.assignHomeClusterBuildings(clusters[enemyClusterIdx]!, 'enemy');
+
+    // Step 5: Generate M random singleton buildings (all neutral)
     let singletonsPlaced = 0;
     let singletonAttempts = 0;
     const allClusterBuildings = clusters.flatMap(c => c.buildings);
@@ -296,18 +330,8 @@ export class GameMap {
           buildingType = 'lab';
         }
 
-        // Assign ownership
-        let owner: string | null;
-        const relativeQ = q + Math.floor(r / 2);
-        if (relativeQ < centerQ - 8) {
-          owner = 'player';
-        } else if (relativeQ > centerQ + 8) {
-          owner = 'enemy';
-        } else {
-          owner = null;
-        }
-
-        const building = createBuilding(q, r, buildingType, owner);
+        // All singletons are neutral
+        const building = createBuilding(q, r, buildingType, null);
         this.buildings.set(getBuildingKey(q, r), building);
         allClusterBuildings.push({ q, r });
         singletonsPlaced++;
@@ -333,6 +357,42 @@ export class GameMap {
       if (dist < minDist) return true;
     }
     return false;
+  }
+
+  private assignHomeClusterBuildings(cluster: { centerQ: number; centerR: number; buildings: Array<{ q: number; r: number }> }, owner: string): void {
+    // Find buildings in this cluster and assign 2 cities + 1 factory to owner
+    let citiesAssigned = 0;
+    let factoriesAssigned = 0;
+
+    for (const pos of cluster.buildings) {
+      const building = this.buildings.get(getBuildingKey(pos.q, pos.r));
+      if (!building) continue;
+
+      if (building.type === 'city' && citiesAssigned < 2) {
+        building.owner = owner;
+        citiesAssigned++;
+      } else if (building.type === 'factory' && factoriesAssigned < 1) {
+        building.owner = owner;
+        factoriesAssigned++;
+      }
+    }
+
+    // If we didn't find enough cities/factories, assign any remaining slots to whatever we have
+    if (citiesAssigned < 2 || factoriesAssigned < 1) {
+      for (const pos of cluster.buildings) {
+        const building = this.buildings.get(getBuildingKey(pos.q, pos.r));
+        if (!building || building.owner === owner) continue;
+
+        // Fill remaining slots with any building type
+        const needsMore = (citiesAssigned + factoriesAssigned) < 3;
+        if (needsMore) {
+          building.owner = owner;
+          if (building.type === 'city') citiesAssigned++;
+          else if (building.type === 'factory') factoriesAssigned++;
+          else citiesAssigned++; // Count labs toward the 3 total
+        }
+      }
+    }
   }
 
   private generateClusterRoads(clusters: Array<{ centerQ: number; centerR: number; buildings: Array<{ q: number; r: number }> }>): void {

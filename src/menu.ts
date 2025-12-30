@@ -353,6 +353,7 @@ export class MenuRenderer {
 
 export interface HTMLMenuCallbacks {
   onStartGame: (mapType: string, playerConfigs: PlayerConfig[]) => void;
+  onRerollSeed: () => number;
 }
 
 export class HTMLMenuController {
@@ -361,6 +362,8 @@ export class HTMLMenuController {
   private enemySelect: HTMLSelectElement;
   private btnSmall: HTMLButtonElement;
   private btnNormal: HTMLButtonElement;
+  private btnReroll: HTMLButtonElement;
+  private seedDisplay: HTMLElement;
   private callbacks: HTMLMenuCallbacks;
 
   constructor(callbacks: HTMLMenuCallbacks) {
@@ -371,6 +374,8 @@ export class HTMLMenuController {
     this.enemySelect = document.getElementById('enemy-select') as HTMLSelectElement;
     this.btnSmall = document.getElementById('btn-small-map') as HTMLButtonElement;
     this.btnNormal = document.getElementById('btn-normal-map') as HTMLButtonElement;
+    this.btnReroll = document.getElementById('btn-reroll-seed') as HTMLButtonElement;
+    this.seedDisplay = document.getElementById('seed-display')!;
 
     this.populateDropdowns();
     this.setupEventListeners();
@@ -399,6 +404,23 @@ export class HTMLMenuController {
   private setupEventListeners(): void {
     this.btnSmall.addEventListener('click', () => this.startGame('small'));
     this.btnNormal.addEventListener('click', () => this.startGame('normal'));
+    this.btnReroll.addEventListener('click', () => this.rerollSeed());
+
+    // Handle R key for reroll when menu is visible
+    document.addEventListener('keydown', (e) => {
+      if (!this.overlay.classList.contains('hidden') && e.key.toLowerCase() === 'r') {
+        this.rerollSeed();
+      }
+    });
+  }
+
+  private rerollSeed(): void {
+    const newSeed = this.callbacks.onRerollSeed();
+    this.seedDisplay.textContent = String(newSeed);
+  }
+
+  updateSeedDisplay(seed: number): void {
+    this.seedDisplay.textContent = String(seed);
   }
 
   private startGame(mapType: string): void {

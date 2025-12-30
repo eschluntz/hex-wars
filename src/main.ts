@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { HexUtil, TEAM_COLORS, type AxialCoord } from './core.js';
-import { GEN_PARAMS, CONFIG, MAP_CONFIGS } from './config.js';
+import { GEN_PARAMS, CONFIG, MAP_CONFIGS, rerollNormalSeed, getNormalSeed } from './config.js';
 import { GameMap } from './game-map.js';
 import { Viewport } from './viewport.js';
 import { Renderer } from './renderer.js';
@@ -83,8 +83,13 @@ class Game {
     this.menuRenderer = new MenuRenderer(this.ctx, this.canvas.width, this.canvas.height);
     this.htmlMenuController = new HTMLMenuController({
       onStartGame: (mapType, playerConfigs) => this.startNewGame(mapType, playerConfigs),
+      onRerollSeed: () => rerollNormalSeed(),
     });
     this.labModal = new LabModal();
+
+    // In-game reroll button
+    const rerollBtn = document.getElementById('btn-reroll-ingame');
+    rerollBtn?.addEventListener('click', () => this.rerollAndRegenerate());
 
     // Create a dummy viewport for initial input handler setup
     this.viewport = new Viewport(this.canvas);
@@ -162,9 +167,24 @@ class Game {
   }
 
   private currentMapType: string = 'normal';
+  private currentPlayerConfigs: PlayerConfig[] = [];
 
-  private startNewGame(mapType: string = 'normal', playerConfigs?: PlayerConfig[]): void {
+  private rerollAndRegenerate(): void {
+    if (this.gamePhase !== 'playing') return;
+    // Save viewport state
+    const savedViewport = { x: this.viewport.x, y: this.viewport.y, zoom: this.viewport.zoom };
+    rerollNormalSeed();
+    this.startNewGame(this.currentMapType, this.currentPlayerConfigs, true);
+    // Restore viewport state
+    this.viewport.setPosition(savedViewport.x, savedViewport.y, savedViewport.zoom);
+  }
+
+  private startNewGame(mapType: string = 'normal', playerConfigs?: PlayerConfig[], skipCenterViewport: boolean = false): void {
     this.currentMapType = mapType;
+    this.currentPlayerConfigs = playerConfigs ?? [
+      { id: TEAMS.PLAYER, name: 'Player', type: 'human' },
+      { id: TEAMS.ENEMY, name: 'Enemy AI', type: 'ai', aiType: 'greedy' }
+    ];
     const mapConfig = MAP_CONFIGS[mapType];
 
     this.map = new GameMap(mapConfig);
@@ -185,11 +205,8 @@ class Game {
     this.gameOverData = null;
     this.isAITurnInProgress = false;
 
-    // Initialize players (default: human player vs greedy AI)
-    this.players = this.initializePlayers(playerConfigs ?? [
-      { id: TEAMS.PLAYER, name: 'Player', type: 'human' },
-      { id: TEAMS.ENEMY, name: 'Enemy AI', type: 'ai', aiType: 'greedy' }
-    ]);
+    // Initialize players
+    this.players = this.initializePlayers(this.currentPlayerConfigs);
 
     // Give starting resources
     this.resources.addFunds(TEAMS.PLAYER, 5000);
@@ -202,16 +219,18 @@ class Game {
     initTeamResearch(TEAMS.ENEMY);
 
     // Setup based on map type
+    // Small map gets manual setup with test units; normal map starts with just home bases
     if (mapType === 'small') {
       this.setupSmallMap();
-    } else {
-      this.spawnUnits();
     }
+    // Normal map: no starting units, just owned buildings from map generation
 
     // Collect initial income for player (first turn)
     this.collectIncome(TEAMS.PLAYER);
 
-    this.centerViewport();
+    if (!skipCenterViewport) {
+      this.centerViewport();
+    }
     this.gamePhase = 'playing';
 
     // Show UI elements during game

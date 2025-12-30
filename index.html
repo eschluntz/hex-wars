@@ -17,6 +17,21 @@
     }
     #hud h1 { font-size: 18px; font-weight: 600; margin-bottom: 8px; color: #ffd700; letter-spacing: 1px; }
     #hud p { opacity: 0.8; line-height: 1.5; }
+    .hud-reroll-btn {
+      margin-top: 10px;
+      padding: 8px 14px;
+      border: 1px solid #6495ED50;
+      border-radius: 6px;
+      background: #6495ED30;
+      color: #6495ED;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .hud-reroll-btn:hover {
+      background: #6495ED50;
+      border-color: #6495ED;
+    }
     kbd { background: rgba(255, 255, 255, 0.15); padding: 2px 6px; border-radius: 4px; font-family: inherit; font-size: 12px; }
 
     #coords {
@@ -401,6 +416,34 @@
       font-size: 14px;
       color: #666666;
     }
+    .menu-seed-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-top: 24px;
+    }
+    .menu-seed-label {
+      font-size: 16px;
+      color: #888888;
+    }
+    #seed-display {
+      font-family: 'Courier New', monospace;
+      color: #6495ED;
+    }
+    .menu-btn-reroll {
+      padding: 8px 16px;
+      border: 2px solid #6495ED50;
+      border-radius: 6px;
+      background: #6495ED20;
+      color: #6495ED;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .menu-btn-reroll:hover {
+      background: #6495ED40;
+      border-color: #6495ED;
+    }
   </style>
 </head>
 <body>
@@ -434,12 +477,18 @@
       </button>
     </div>
 
-    <p class="menu-hint">Press 1 for Small, 2 for Normal, or click a button</p>
+    <div class="menu-seed-row">
+      <span class="menu-seed-label">Seed: <span id="seed-display">12345</span></span>
+      <button id="btn-reroll-seed" class="menu-btn-reroll">🎲 Re-roll</button>
+    </div>
+
+    <p class="menu-hint">Press 1 for Small, 2 for Normal, R to re-roll seed</p>
   </div>
 
   <div id="hud">
     <h1>HEX DOMINION</h1>
     <p><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> pan · <kbd>drag</kbd> mouse<br><kbd>scroll</kbd> to zoom</p>
+    <button id="btn-reroll-ingame" class="hud-reroll-btn">🎲 Re-roll Map</button>
   </div>
 
   <div id="coords">--</div>

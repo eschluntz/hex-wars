@@ -116,6 +116,12 @@ export class InputHandler {
       return;
     }
 
+    // R key to reroll map
+    if (e.key.toLowerCase() === 'r') {
+      document.getElementById('btn-reroll-ingame')?.click();
+      return;
+    }
+
     // Menu navigation (when in action, production, or lab menu)
     const menuContext = this.callbacks.getMenuContext();
     if (menuContext !== 'none') {
