@@ -29,12 +29,17 @@ export class InputHandler {
   private canvas: HTMLCanvasElement;
   private viewport: Viewport;
   private callbacks: InputCallbacks;
+  private spacebarHeld = false;
 
   constructor(canvas: HTMLCanvasElement, viewport: Viewport, callbacks: InputCallbacks) {
     this.canvas = canvas;
     this.viewport = viewport;
     this.callbacks = callbacks;
     this.setup();
+  }
+
+  isSpacebarHeld(): boolean {
+    return this.spacebarHeld;
   }
 
   updateViewport(viewport: Viewport): void {
@@ -58,7 +63,16 @@ export class InputHandler {
     });
 
     window.addEventListener('keydown', e => {
+      if (e.code === 'Space') {
+        this.spacebarHeld = true;
+      }
       this.handleKeydown(e);
+    });
+
+    window.addEventListener('keyup', e => {
+      if (e.code === 'Space') {
+        this.spacebarHeld = false;
+      }
     });
   }
 

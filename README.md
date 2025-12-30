@@ -114,6 +114,7 @@ Pluggable AI system with multiple strategies:
 **Available AIs:**
 - **NoOpAI**: Testing baseline — just ends turn
 - **GreedyAI**: First playable AI with greedy decision-making
+- **TacticalAI**: Smarter AI that prioritizes economy and focus-fires damaged units
 
 **GreedyAI Behavior (per turn):**
 1. **Research**: Pick cheapest affordable tech
@@ -171,7 +172,12 @@ Buildings have ownership displayed via colored backgrounds:
 ### Building Capture
 - Units with `canCapture` ability (Soldier) can capture neutral or enemy buildings
 - Move the unit onto a building, then select "Capture" from the action menu
-- Captured buildings immediately switch to the capturing team's ownership
+- **Multi-turn capture**: Buildings have 20 resistance; each capture action subtracts the unit's current HP
+  - Full health unit (10 HP) captures in 2 turns
+  - Damaged units take longer to capture
+- **Resistance resets** if the capturing unit moves away or dies
+- **Contested capture**: If a different unit starts capturing, resistance resets to 20
+- Visual indicator: A vertical bar on the left side of the building shows capture progress
 - Buildings are visible underneath units (ring + small icon in corner)
 
 ### Win/Lose Conditions
@@ -228,7 +234,10 @@ hex-dominion/
 │   │   ├── actions.ts   # AIAction types (move, attack, build, etc.)
 │   │   ├── controller.ts # AIController interface
 │   │   ├── game-state.ts # GameStateView (read-only state for AI)
+│   │   ├── base-utils.ts # Shared AI utilities
+│   │   ├── design-utils.ts # Shared design phase logic
 │   │   ├── greedy-ai.ts # GreedyAI implementation
+│   │   ├── tactical-ai.ts # TacticalAI implementation
 │   │   ├── noop-ai.ts   # NoOpAI (testing baseline)
 │   │   └── registry.ts  # AI type lookup by name
 │   ├── noise.ts         # Perlin noise, seeded RNG
@@ -246,14 +255,16 @@ hex-dominion/
 │   ├── test-utils.ts    # TestGame, scenario helpers, shared utilities
 │   ├── fixtures/        # Test fixtures (isolated from game data)
 │   ├── ai/
-│   │   ├── greedy-ai.test.ts # GreedyAI behavior tests
-│   │   ├── noop-ai.test.ts   # NoOpAI tests
-│   │   └── smoke.test.ts     # AI integration/smoke tests
+│   │   ├── greedy-ai.test.ts   # GreedyAI behavior tests
+│   │   ├── tactical-ai.test.ts # TacticalAI behavior tests
+│   │   ├── conformance.test.ts # AI conformance tests
+│   │   ├── noop-ai.test.ts     # NoOpAI tests
+│   │   └── smoke.test.ts       # AI integration/smoke tests
 │   ├── pathfinding.test.ts
 │   ├── unit.test.ts
 │   ├── combat.test.ts   # Combat system tests (incl. armor/AP)
 │   ├── components.test.ts # Component system tests
-│   ├── building.test.ts # Building system tests
+│   ├── building.test.ts # Building + capture resistance tests
 │   ├── resources.test.ts # Resource management tests
 │   ├── research.test.ts # Research unlock tests
 │   ├── tech-tree.test.ts # Tech tree logic tests
@@ -272,7 +283,7 @@ hex-dominion/
 npm run watch      # Build + serve with auto-rebuild
 npm run build      # One-time build
 npm run typecheck  # Check types without building
-npm test           # Run tests (266 tests)
+npm test           # Run tests (294 tests)
 ```
 
 ### Test Map Helper
@@ -343,8 +354,10 @@ this.drawPopupMenu({
 - [x] AI opponent (GreedyAI with research, design, production, combat)
 - [x] View enemy lab (click to see their tech tree and designs, read-only)
 - [x] Improving road generation
+- [x] Multi-turn building capture (resistance system)
 
 ### Upcoming
+- [ ] see AI moves
 - [ ] Upgrade Map visuals
   - [ ] prettier tiles
   - [ ] better icons for units

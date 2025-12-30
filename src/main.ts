@@ -33,6 +33,7 @@ import { ResourceManager } from './resources.js';
 import { GameStats } from './stats.js';
 import { MenuRenderer, HTMLMenuController, type GamePhase, type GameOverData } from './menu.js';
 import { InputHandler } from './input.js';
+import { AnimationController } from './animation.js';
 import { initTeamResearch } from './research.js';
 import { getTechTreeState, purchaseTech } from './tech-tree.js';
 import { LabModal } from './lab-modal.js';
@@ -67,6 +68,7 @@ class Game {
   private htmlMenuController: HTMLMenuController;
   private inputHandler!: InputHandler;
   private labModal: LabModal;
+  private animationController!: AnimationController;
   private units: Unit[] = [];
   private state: GameState = { type: 'idle' };
   private lastPreviewHex: AxialCoord | null = null;
@@ -195,6 +197,11 @@ class Game {
     this.renderer = new Renderer(this.canvas, this.map, this.viewport);
     this.resources = new ResourceManager([TEAMS.PLAYER, TEAMS.ENEMY]);
     this.gameStats = new GameStats([TEAMS.PLAYER, TEAMS.ENEMY]);
+    this.animationController = new AnimationController(
+      this.renderer,
+      this.viewport,
+      () => this.inputHandler.isSpacebarHeld()
+    );
 
     // Reset game state
     this.units = [];
@@ -240,10 +247,8 @@ class Game {
     if (infoEl) infoEl.style.display = 'block';
     if (hudEl) hudEl.style.display = 'block';
 
-    // If the starting player is AI, trigger their turn
-    if (this.isCurrentPlayerAI()) {
-      setTimeout(() => this.executeAITurn(), 100);
-    }
+    // Show turn announcement and trigger AI if needed
+    this.startTurn();
   }
 
   private initializePlayers(configs: PlayerConfig[]): Player[] {
@@ -398,6 +403,25 @@ class Game {
         const unit = this.getUnitById(action.unitId);
         if (!unit || unit.hasActed) return;
 
+        // Compute path for animation
+        const blocked = this.getBlockedPositions(unit.team);
+        const pathResult = this.pathfinder.findPath(
+          unit.q, unit.r,
+          action.targetQ, action.targetR,
+          unit.terrainCosts,
+          blocked
+        );
+
+        if (pathResult) {
+          // Play move animation
+          await this.animationController.play({
+            type: 'move',
+            hexQ: unit.q,
+            hexR: unit.r,
+            path: pathResult.path
+          });
+        }
+
         // Reset any capture progress when unit moves
         this.map.resetCaptureByUnit(unit.id);
 
@@ -412,7 +436,33 @@ class Game {
         const target = this.getUnitAt(action.targetQ, action.targetR);
         if (!unit || !target) return;
 
-        this.executeAttack(unit, target);
+        // Execute combat first to get result for toast
+        const result = Combat.execute(unit, target);
+
+        // Play combat animation
+        await this.animationController.play({
+          type: 'combat',
+          hexQ: target.q,
+          hexR: target.r,
+          toastText: `+${result.attackerDamage} dmg / -${result.defenderDamage} hlth`
+        });
+
+        // Log combat results
+        console.log(`${unit.id} attacks ${target.id}!`);
+        console.log(`  ${unit.id} deals ${result.attackerDamage} damage`);
+        if (result.defenderDied) {
+          console.log(`  ${target.id} destroyed!`);
+          this.gameStats.recordUnitKilled(unit.team, target.team);
+          this.map.resetCaptureByUnit(target.id);
+        } else if (result.defenderDamage > 0) {
+          console.log(`  ${target.id} counter-attacks for ${result.defenderDamage} damage`);
+          if (result.attackerDied) {
+            console.log(`  ${unit.id} destroyed!`);
+            this.gameStats.recordUnitKilled(target.team, unit.team);
+            this.map.resetCaptureByUnit(unit.id);
+          }
+        }
+
         unit.hasActed = true;
         this.checkAndTriggerGameOver();
         break;
@@ -457,6 +507,14 @@ class Game {
           return;
         }
 
+        // Play build animation before creating unit
+        await this.animationController.play({
+          type: 'build',
+          hexQ: action.factoryQ,
+          hexR: action.factoryR,
+          toastText: `Built ${template.name}`
+        });
+
         this.resources.spendFunds(this.currentTeam, template.cost);
 
         const unit = new Unit(
@@ -473,6 +531,20 @@ class Game {
       }
 
       case 'research': {
+        // Find a lab owned by current team for animation
+        const labs = this.map.getAllBuildings().filter(
+          b => b.type === 'lab' && b.owner === this.currentTeam
+        );
+        if (labs.length > 0) {
+          const lab = labs[0]!;
+          await this.animationController.play({
+            type: 'research',
+            hexQ: lab.q,
+            hexR: lab.r,
+            toastText: `Researched ${action.techId}`
+          });
+        }
+
         const result = purchaseTech(this.currentTeam, action.techId, this.resources);
         if (result.success) {
           console.log(`AI researched: ${action.techId}`);
@@ -483,6 +555,20 @@ class Game {
       }
 
       case 'design': {
+        // Find a lab owned by current team for animation
+        const labs = this.map.getAllBuildings().filter(
+          b => b.type === 'lab' && b.owner === this.currentTeam
+        );
+        if (labs.length > 0) {
+          const lab = labs[0]!;
+          await this.animationController.play({
+            type: 'design',
+            hexQ: lab.q,
+            hexR: lab.r,
+            toastText: `Designed ${action.name}`
+          });
+        }
+
         registerTemplate(
           this.currentTeam,
           action.name,
@@ -602,9 +688,17 @@ class Game {
 
     console.log(`Turn ${this.turnNumber}: ${this.currentTeam}'s turn`);
 
-    // If the new current player is AI, trigger their turn
+    // Show turn announcement and then trigger AI if needed
+    this.startTurn();
+  }
+
+  private async startTurn(): Promise<void> {
+    const teamName = this.currentTeam === TEAMS.PLAYER ? 'Player' : 'Enemy';
+    await this.animationController.playTurnAnnouncement(teamName);
+
+    // If the current player is AI, trigger their turn
     if (this.isCurrentPlayerAI()) {
-      setTimeout(() => this.executeAITurn(), 100);
+      this.executeAITurn();
     }
   }
 
@@ -904,6 +998,9 @@ class Game {
   private executeAttack(attacker: Unit, defender: Unit): void {
     const result = Combat.execute(attacker, defender);
 
+    // Show combat toast (non-blocking for player attacks)
+    this.showCombatToast(defender.q, defender.r, result.attackerDamage, result.defenderDamage);
+
     console.log(`${attacker.id} attacks ${defender.id}!`);
     console.log(`  ${attacker.id} deals ${result.attackerDamage} damage`);
     if (result.defenderDied) {
@@ -918,6 +1015,37 @@ class Game {
         this.map.resetCaptureByUnit(attacker.id);
       }
     }
+  }
+
+  private showCombatToast(hexQ: number, hexR: number, attackerDamage: number, defenderDamage: number): void {
+    const toastText = `+${attackerDamage} dmg / -${defenderDamage} hlth`;
+
+    // Set toast directly on renderer with progress animation
+    this.renderer.activeToast = {
+      q: hexQ,
+      r: hexR,
+      text: toastText,
+      progress: 0
+    };
+
+    const startTime = performance.now();
+    const duration = 1000;
+
+    const animate = () => {
+      const elapsed = performance.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      if (this.renderer.activeToast) {
+        this.renderer.activeToast.progress = progress;
+      }
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        this.renderer.activeToast = null;
+      }
+    };
+    requestAnimationFrame(animate);
   }
 
   private executeCapture(unit: Unit, logPrefix: string = ''): void {

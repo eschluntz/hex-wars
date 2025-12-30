@@ -81,6 +81,9 @@ export class Renderer {
   menuHighlightIndex: number = 0;
   currentTeam: string = '';
   turnNumber: number = 1;
+  animationPath: PathPreview | null = null;  // For move animations (separate from player pathPreview)
+  activeToast: { q: number; r: number; text: string; progress: number } | null = null;
+  turnAnnouncement: { text: string; progress: number } | null = null;
   activeUnits: number = 0;
   totalUnits: number = 0;
   resources: TeamResources = { funds: 0, science: 0 };
@@ -322,6 +325,107 @@ export class Renderer {
     drawBuildingIcon(this.ctx as any, cx, cy, building, size, { zoom, hasUnit });
   }
 
+  private drawTurnAnnouncement(announcement: { text: string; progress: number }): void {
+    const ctx = this.ctx;
+
+    // Center of screen
+    const centerX = this.canvas.width / 2;
+    const centerY = this.canvas.height / 2;
+
+    // Fade in/out based on progress (peak at 0.5)
+    const fadeProgress = announcement.progress < 0.2
+      ? announcement.progress / 0.2
+      : announcement.progress > 0.8
+        ? (1 - announcement.progress) / 0.2
+        : 1;
+    const alpha = Math.max(0, Math.min(1, fadeProgress));
+
+    // Measure text
+    ctx.font = 'bold 48px Arial';
+    const textWidth = ctx.measureText(announcement.text).width;
+    const padding = 32;
+    const pillWidth = textWidth + padding * 2;
+    const pillHeight = 72;
+
+    // Draw rounded pill background
+    ctx.globalAlpha = alpha * 0.85;
+    ctx.fillStyle = '#1a1a1a';
+    ctx.beginPath();
+    ctx.roundRect(
+      centerX - pillWidth / 2,
+      centerY - pillHeight / 2,
+      pillWidth,
+      pillHeight,
+      pillHeight / 2
+    );
+    ctx.fill();
+
+    // Draw border
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Draw text
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(announcement.text, centerX, centerY);
+
+    ctx.globalAlpha = 1;
+  }
+
+  private drawToast(toast: { q: number; r: number; text: string; progress: number }, zoom: number): void {
+    const ctx = this.ctx;
+    const world = HexUtil.axialToPixel(toast.q, toast.r, CONFIG.hexSize);
+    const screen = this.viewport.worldToScreen(world.x, world.y);
+
+    // Position above hex
+    const toastY = screen.y - CONFIG.hexSize * zoom - 20;
+
+    // Measure text
+    ctx.font = `bold ${14 * zoom}px Arial`;
+    const textWidth = ctx.measureText(toast.text).width;
+    const padding = 8 * zoom;
+    const pillWidth = textWidth + padding * 2;
+    const pillHeight = 24 * zoom;
+
+    // Fade in/out based on progress (peak at 0.5)
+    const fadeProgress = toast.progress < 0.2
+      ? toast.progress / 0.2
+      : toast.progress > 0.8
+        ? (1 - toast.progress) / 0.2
+        : 1;
+    const alpha = Math.max(0, Math.min(1, fadeProgress));
+
+    // Draw rounded pill background
+    ctx.globalAlpha = alpha * 0.9;
+    ctx.fillStyle = '#1a1a1a';
+    ctx.beginPath();
+    ctx.roundRect(
+      screen.x - pillWidth / 2,
+      toastY - pillHeight / 2,
+      pillWidth,
+      pillHeight,
+      pillHeight / 2
+    );
+    ctx.fill();
+
+    // Draw border
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.5 * zoom;
+    ctx.stroke();
+
+    // Draw text
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(toast.text, screen.x, toastY);
+
+    ctx.globalAlpha = 1;
+  }
+
   render(): void {
     const ctx = this.ctx;
     const zoom = this.viewport.zoom;
@@ -354,9 +458,14 @@ export class Renderer {
       this.drawHex(screen.x, screen.y, tile, isHovered, zoom);
     }
 
-    // Draw path preview
+    // Draw path preview (player input)
     if (this.pathPreview && this.pathPreview.path.length > 1) {
       this.drawPathPreview(this.pathPreview, zoom);
+    }
+
+    // Draw animation path (AI turn animations)
+    if (this.animationPath && this.animationPath.path.length > 1) {
+      this.drawPathPreview(this.animationPath, zoom);
     }
 
     // Draw units
@@ -364,6 +473,11 @@ export class Renderer {
       const world = HexUtil.axialToPixel(unit.q, unit.r, CONFIG.hexSize);
       const screen = this.viewport.worldToScreen(world.x, world.y);
       this.drawUnit(screen.x, screen.y, unit, zoom);
+    }
+
+    // Draw active toast (for animations)
+    if (this.activeToast) {
+      this.drawToast(this.activeToast, zoom);
     }
 
     // Draw action menu
@@ -374,6 +488,11 @@ export class Renderer {
     // Draw production menu
     if (this.productionMenu) {
       this.drawProductionMenu(this.productionMenu, zoom);
+    }
+
+    // Draw turn announcement (on top of everything)
+    if (this.turnAnnouncement) {
+      this.drawTurnAnnouncement(this.turnAnnouncement);
     }
 
     this.updateInfoPanel(zoom);
