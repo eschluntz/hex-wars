@@ -88,9 +88,9 @@ export class InputHandler {
 
     if (phase === 'main_menu') {
       if (e.key === '1') {
-        this.callbacks.onMainMenuAction('small');
+        document.getElementById('btn-small-map')?.click();
       } else if (e.key === '2' || e.key === 'Enter' || e.key === ' ') {
-        this.callbacks.onMainMenuAction('normal');
+        document.getElementById('btn-normal-map')?.click();
       }
       return;
     }

@@ -9,6 +9,9 @@ import { type AIGameState } from './game-state.js';
 type ComponentWithWeight = { id: string; weight: number; requiresChassis?: string[] };
 type ChassisWithWeight = { id: string; maxWeight: number };
 
+// Specific type for design actions returned by these utility functions
+type DesignAction = Extract<AIAction, { type: 'design' }>;
+
 /**
  * Create a design action for a new chassis.
  * Picks best fitting weapon and system for the chassis.
@@ -18,7 +21,7 @@ export function designForChassis(
   weapons: ComponentWithWeight[],
   systems: ComponentWithWeight[],
   namePrefix: string
-): AIAction | null {
+): DesignAction | null {
   const chassisId = chassis.id;
   const maxWeight = chassis.maxWeight;
 
@@ -53,7 +56,7 @@ export function designForWeapon(
   chassisList: ChassisWithWeight[],
   systems: ComponentWithWeight[],
   namePrefix: string
-): AIAction | null {
+): DesignAction | null {
   // Find a chassis that can hold this weapon
   const validChassis = chassisList.filter(c => {
     if (weapon.weight > c.maxWeight) return false;
@@ -87,7 +90,7 @@ export function designForSystem(
   chassisList: ChassisWithWeight[],
   weapons: ComponentWithWeight[],
   namePrefix: string
-): AIAction | null {
+): DesignAction | null {
   // Find a chassis that can hold this system
   const validChassis = chassisList.filter(c => {
     if (system.weight > c.maxWeight) return false;

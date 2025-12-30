@@ -277,10 +277,165 @@
       stroke: #ffb74d !important;
       stroke-width: 3 !important;
     }
+
+    /* Main Menu Overlay */
+    .menu-overlay {
+      position: fixed;
+      inset: 0;
+      background: #1a1a2e;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .menu-overlay.hidden {
+      display: none;
+    }
+    .menu-title {
+      font-size: 64px;
+      font-weight: bold;
+      color: #ffffff;
+      margin-bottom: 12px;
+      letter-spacing: 2px;
+    }
+    .menu-subtitle {
+      font-size: 24px;
+      color: #888888;
+      margin-bottom: 50px;
+    }
+    .menu-players {
+      display: flex;
+      gap: 40px;
+      margin-bottom: 40px;
+    }
+    .menu-player-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .menu-player-label {
+      font-size: 16px;
+      color: #aaaaaa;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .menu-player-label.player { color: #6495ED; }
+    .menu-player-label.enemy { color: #ff6b6b; }
+    .menu-select {
+      background: #ffffff15;
+      border: 2px solid #ffffff30;
+      border-radius: 6px;
+      padding: 10px 16px;
+      color: #ffffff;
+      font-size: 16px;
+      min-width: 160px;
+      cursor: pointer;
+      outline: none;
+    }
+    .menu-select:hover {
+      border-color: #ffffff50;
+    }
+    .menu-select:focus {
+      border-color: #6495ED;
+    }
+    .menu-select option {
+      background: #1a1a2e;
+      color: #ffffff;
+    }
+    .menu-map-label {
+      font-size: 18px;
+      color: #aaaaaa;
+      margin-bottom: 16px;
+    }
+    .menu-buttons {
+      display: flex;
+      gap: 20px;
+    }
+    .menu-btn {
+      padding: 16px 32px;
+      border: none;
+      border-radius: 8px;
+      font-size: 22px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .menu-btn:hover {
+      transform: scale(1.05);
+    }
+    .menu-btn:active {
+      transform: scale(0.98);
+    }
+    .menu-btn-small {
+      background: #e65100;
+      color: #ffffff;
+    }
+    .menu-btn-small:hover {
+      background: #ff9800;
+    }
+    .menu-btn-small .btn-desc {
+      font-size: 12px;
+      font-weight: normal;
+      color: #ffcc80;
+      display: block;
+      margin-top: 4px;
+    }
+    .menu-btn-normal {
+      background: #2e7d32;
+      color: #ffffff;
+    }
+    .menu-btn-normal:hover {
+      background: #4caf50;
+    }
+    .menu-btn-normal .btn-desc {
+      font-size: 12px;
+      font-weight: normal;
+      color: #a5d6a7;
+      display: block;
+      margin-top: 4px;
+    }
+    .menu-hint {
+      margin-top: 40px;
+      font-size: 14px;
+      color: #666666;
+    }
   </style>
 </head>
 <body>
   <canvas id="gameCanvas"></canvas>
+
+  <!-- Main Menu Overlay -->
+  <div id="main-menu" class="menu-overlay">
+    <h1 class="menu-title">HEX DOMINION</h1>
+    <p class="menu-subtitle">A Turn-Based Strategy Game</p>
+
+    <div class="menu-players">
+      <div class="menu-player-col">
+        <label class="menu-player-label player">Player</label>
+        <select id="player-select" class="menu-select"></select>
+      </div>
+      <div class="menu-player-col">
+        <label class="menu-player-label enemy">Enemy</label>
+        <select id="enemy-select" class="menu-select"></select>
+      </div>
+    </div>
+
+    <p class="menu-map-label">Select Map Size</p>
+    <div class="menu-buttons">
+      <button id="btn-small-map" class="menu-btn menu-btn-small">
+        Small
+        <span class="btn-desc">Test map - all grass</span>
+      </button>
+      <button id="btn-normal-map" class="menu-btn menu-btn-normal">
+        Normal
+        <span class="btn-desc">Full procedural map</span>
+      </button>
+    </div>
+
+    <p class="menu-hint">Press 1 for Small, 2 for Normal, or click a button</p>
+  </div>
 
   <div id="hud">
     <h1>HEX DOMINION</h1>

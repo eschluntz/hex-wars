@@ -36,6 +36,7 @@ export function drawHex(
   options: {
     zoom?: number;
     isHovered?: boolean;
+    fillColorOverride?: string;
   } = {}
 ): void {
   const zoom = options.zoom ?? 1;
@@ -51,7 +52,7 @@ export function drawHex(
   }
   ctx.closePath();
 
-  ctx.fillStyle = colors.fill;
+  ctx.fillStyle = options.fillColorOverride ?? colors.fill;
   ctx.fill();
   ctx.strokeStyle = colors.stroke;
   ctx.lineWidth = Math.max(1, 2 * zoom);
@@ -81,43 +82,11 @@ export function drawBuildingIcon(
     useTextFallback?: boolean; // For node-canvas which doesn't support emoji
   } = {}
 ): void {
-  const zoom = options.zoom ?? 1;
   const hasUnit = options.hasUnit ?? false;
   const useTextFallback = options.useTextFallback ?? false;
   const iconSize = size * (hasUnit ? 0.6 : 1);
 
-  // Draw ownership ring
-  const ringSize = hasUnit ? size * 1.4 : size * 1.2;
-  const ringWidth = hasUnit ? 4 * zoom : 2 * zoom;
-
-  ctx.beginPath();
-  ctx.arc(cx, cy, ringSize, 0, Math.PI * 2);
-
-  if (building.owner === 'player') {
-    if (!hasUnit) {
-      ctx.fillStyle = '#4caf5060'; // Green with transparency
-      ctx.fill();
-    }
-    ctx.strokeStyle = '#4caf50';
-  } else if (building.owner === 'enemy') {
-    if (!hasUnit) {
-      ctx.fillStyle = '#f4433660'; // Red with transparency
-      ctx.fill();
-    }
-    ctx.strokeStyle = '#f44336';
-  } else {
-    // Neutral
-    if (!hasUnit) {
-      ctx.fillStyle = 'rgba(128, 128, 128, 0.4)';
-      ctx.fill();
-    }
-    ctx.strokeStyle = '#666666';
-  }
-
-  ctx.lineWidth = ringWidth;
-  ctx.stroke();
-
-  // Draw building icon or text fallback
+  // Draw building icon (hex background is already team-colored)
   let icon: string;
   if (useTextFallback) {
     // Use text abbreviations for node-canvas (emoji not supported)

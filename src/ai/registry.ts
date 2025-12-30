@@ -27,3 +27,17 @@ export function createAI(type: string): AIController {
 export function getAvailableAITypes(): string[] {
   return Object.keys(AI_REGISTRY);
 }
+
+export interface AITypeInfo {
+  id: string;
+  name: string;
+}
+
+export function getAIMetadata(): AITypeInfo[] {
+  return [
+    { id: 'human', name: 'Human' },
+    { id: 'noop', name: 'No-Op AI' },
+    { id: 'greedy', name: 'Greedy AI' },
+    { id: 'tactical', name: 'Tactical AI' },
+  ];
+}

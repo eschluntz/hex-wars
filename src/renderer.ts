@@ -289,11 +289,17 @@ export class Renderer {
     const ctx = this.ctx;
     const size = CONFIG.hexSize * zoom;
 
-    // Use shared rendering utility for base hex drawing
-    drawHexBase(ctx as any, cx, cy, tile, size, { zoom, isHovered });
-
-    // Check for building at this tile
+    // Check for building to determine hex fill color
     const building = this.map.getBuilding(tile.q, tile.r);
+    let fillColorOverride: string | undefined;
+    if (building) {
+      fillColorOverride = (TEAM_COLORS[building.owner ?? 'neutral'] ?? TEAM_COLORS.neutral)!.primary;
+    }
+
+    // Use shared rendering utility for base hex drawing
+    drawHexBase(ctx as any, cx, cy, tile, size, { zoom, isHovered, fillColorOverride });
+
+    // Draw building icon or terrain icon
     if (building) {
       const hasUnit = this.units.some(u => u.q === tile.q && u.r === tile.r);
       this.drawBuilding(cx, cy, building, zoom, hasUnit);
@@ -311,10 +317,9 @@ export class Renderer {
 
   private drawBuilding(cx: number, cy: number, building: Building, zoom: number, hasUnit: boolean): void {
     // Use shared rendering utility for building icons
-    if (zoom > 0.3) {
-      const size = CONFIG.hexSize * zoom * 0.6;
-      drawBuildingIcon(this.ctx as any, cx, cy, building, size, { zoom, hasUnit });
-    }
+    // Always render buildings regardless of zoom level
+    const size = CONFIG.hexSize * zoom * 0.6;
+    drawBuildingIcon(this.ctx as any, cx, cy, building, size, { zoom, hasUnit });
   }
 
   render(): void {
@@ -599,7 +604,7 @@ export class Renderer {
     const fmt = (v: number) => v === Infinity ? '∞' : String(v);
 
     // Team color
-    const teamColor = u.team === 'player' ? '#4caf50' : '#f44336';
+    const teamColor = TEAM_COLORS[u.team]?.primary ?? '#ffffff';
     const teamName = u.team.toUpperCase();
 
     // Basic stats line

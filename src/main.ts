@@ -30,7 +30,7 @@ import {
 } from './unit-designer.js';
 import { ResourceManager } from './resources.js';
 import { GameStats } from './stats.js';
-import { MenuRenderer, type GamePhase, type GameOverData } from './menu.js';
+import { MenuRenderer, HTMLMenuController, type GamePhase, type GameOverData } from './menu.js';
 import { InputHandler } from './input.js';
 import { initTeamResearch } from './research.js';
 import { getTechTreeState, purchaseTech } from './tech-tree.js';
@@ -63,6 +63,7 @@ class Game {
   private resources!: ResourceManager;
   private gameStats!: GameStats;
   private menuRenderer: MenuRenderer;
+  private htmlMenuController: HTMLMenuController;
   private inputHandler!: InputHandler;
   private labModal: LabModal;
   private units: Unit[] = [];
@@ -80,6 +81,9 @@ class Game {
     this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
     this.ctx = this.canvas.getContext('2d')!;
     this.menuRenderer = new MenuRenderer(this.ctx, this.canvas.width, this.canvas.height);
+    this.htmlMenuController = new HTMLMenuController({
+      onStartGame: (mapType, playerConfigs) => this.startNewGame(mapType, playerConfigs),
+    });
     this.labModal = new LabModal();
 
     // Create a dummy viewport for initial input handler setup
@@ -215,6 +219,11 @@ class Game {
     const hudEl = document.getElementById('hud');
     if (infoEl) infoEl.style.display = 'block';
     if (hudEl) hudEl.style.display = 'block';
+
+    // If the starting player is AI, trigger their turn
+    if (this.isCurrentPlayerAI()) {
+      setTimeout(() => this.executeAITurn(), 100);
+    }
   }
 
   private initializePlayers(configs: PlayerConfig[]): Player[] {
@@ -1052,10 +1061,15 @@ class Game {
 
   private loop = (): void => {
     if (this.gamePhase === 'main_menu') {
-      this.menuRenderer.renderMainMenu();
+      this.htmlMenuController.show();
+      // Clear canvas behind menu
+      this.ctx.fillStyle = '#1a1a2e';
+      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     } else if (this.gamePhase === 'game_over' && this.gameOverData) {
+      this.htmlMenuController.hide();
       this.menuRenderer.renderGameOver(this.gameOverData);
     } else if (this.gamePhase === 'playing') {
+      this.htmlMenuController.hide();
       this.viewport.update();
       this.updatePathPreview();
       this.renderer.units = this.units.filter(u => u.isAlive());

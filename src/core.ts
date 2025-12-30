@@ -140,13 +140,18 @@ export interface TeamColors {
 
 export const TEAM_COLORS: Record<string, TeamColors> = {
   player: {
-    primary: '#4caf50',    // Green
-    secondary: '#2e7d32',
-    unitColor: '#4caf50'
+    primary: '#00bcd4',    // Cyan
+    secondary: '#0097a7',
+    unitColor: '#00bcd4'
   },
   enemy: {
     primary: '#f44336',    // Red
     secondary: '#c62828',
     unitColor: '#f44336'
+  },
+  neutral: {
+    primary: '#d0d0d0',    // Light grey
+    secondary: '#a0a0a0',
+    unitColor: '#888888'
   }
 };

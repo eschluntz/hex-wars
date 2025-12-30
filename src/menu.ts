@@ -4,6 +4,8 @@
 
 import { type TeamStats } from './stats.js';
 import { TEAM_COLORS } from './core.js';
+import { getAIMetadata } from './ai/registry.js';
+import { type PlayerConfig } from './player.js';
 
 export type GamePhase = 'main_menu' | 'playing' | 'game_over';
 
@@ -342,5 +344,95 @@ export class MenuRenderer {
 
   private isPointInRect(px: number, py: number, x: number, y: number, w: number, h: number): boolean {
     return px >= x && px <= x + w && py >= y && py <= y + h;
+  }
+}
+
+// ============================================================================
+// HTML Menu Controller
+// ============================================================================
+
+export interface HTMLMenuCallbacks {
+  onStartGame: (mapType: string, playerConfigs: PlayerConfig[]) => void;
+}
+
+export class HTMLMenuController {
+  private overlay: HTMLElement;
+  private playerSelect: HTMLSelectElement;
+  private enemySelect: HTMLSelectElement;
+  private btnSmall: HTMLButtonElement;
+  private btnNormal: HTMLButtonElement;
+  private callbacks: HTMLMenuCallbacks;
+
+  constructor(callbacks: HTMLMenuCallbacks) {
+    this.callbacks = callbacks;
+
+    this.overlay = document.getElementById('main-menu')!;
+    this.playerSelect = document.getElementById('player-select') as HTMLSelectElement;
+    this.enemySelect = document.getElementById('enemy-select') as HTMLSelectElement;
+    this.btnSmall = document.getElementById('btn-small-map') as HTMLButtonElement;
+    this.btnNormal = document.getElementById('btn-normal-map') as HTMLButtonElement;
+
+    this.populateDropdowns();
+    this.setupEventListeners();
+  }
+
+  private populateDropdowns(): void {
+    const aiOptions = getAIMetadata();
+
+    for (const option of aiOptions) {
+      const playerOpt = document.createElement('option');
+      playerOpt.value = option.id;
+      playerOpt.textContent = option.name;
+      this.playerSelect.appendChild(playerOpt);
+
+      const enemyOpt = document.createElement('option');
+      enemyOpt.value = option.id;
+      enemyOpt.textContent = option.name;
+      this.enemySelect.appendChild(enemyOpt);
+    }
+
+    // Set defaults: Human vs Greedy AI
+    this.playerSelect.value = 'human';
+    this.enemySelect.value = 'greedy';
+  }
+
+  private setupEventListeners(): void {
+    this.btnSmall.addEventListener('click', () => this.startGame('small'));
+    this.btnNormal.addEventListener('click', () => this.startGame('normal'));
+  }
+
+  private startGame(mapType: string): void {
+    const playerConfigs = this.buildPlayerConfigs();
+    this.callbacks.onStartGame(mapType, playerConfigs);
+  }
+
+  private buildPlayerConfigs(): PlayerConfig[] {
+    const playerId = this.playerSelect.value;
+    const enemyId = this.enemySelect.value;
+
+    const configs: PlayerConfig[] = [
+      {
+        id: 'player',
+        name: 'Player',
+        type: playerId === 'human' ? 'human' : 'ai',
+        aiType: playerId === 'human' ? undefined : playerId,
+      },
+      {
+        id: 'enemy',
+        name: 'Enemy',
+        type: enemyId === 'human' ? 'human' : 'ai',
+        aiType: enemyId === 'human' ? undefined : enemyId,
+      },
+    ];
+
+    return configs;
+  }
+
+  show(): void {
+    this.overlay.classList.remove('hidden');
+  }
+
+  hide(): void {
+    this.overlay.classList.add('hidden');
   }
 }

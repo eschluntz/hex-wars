@@ -101,9 +101,9 @@ function createMockState(config: {
     resources: resourceManager,
     pathfinder,
     getTeamTemplates: () => templates,
-    getResearchedChassis: () => [{ id: 'foot', name: 'Foot', maxWeight: 2, speed: 3, terrainCosts: DEFAULT_TERRAIN_COSTS }],
-    getResearchedWeapons: () => [{ id: 'machineGun', name: 'Machine Gun', weight: 1, attack: 4, range: 1 }],
-    getResearchedSystems: () => [{ id: 'capture', name: 'Capture', weight: 0 }],
+    getResearchedChassis: () => [{ id: 'foot', name: 'Foot', maxWeight: 2, speed: 3, terrainCosts: DEFAULT_TERRAIN_COSTS, baseCost: 500 }],
+    getResearchedWeapons: () => [{ id: 'machineGun', name: 'Machine Gun', weight: 1, attack: 4, range: 1, armorPiercing: false, cost: 500 }],
+    getResearchedSystems: () => [{ id: 'capture', name: 'Capture', weight: 0, cost: 0 }],
     getAvailableTechs: () => [],
   };
 }
