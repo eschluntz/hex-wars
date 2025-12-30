@@ -1,52 +1,48 @@
 // ============================================================================
-// HEX DOMINION - Greedy AI Controller
+// HEX DOMINION - Tactical AI Controller
 // ============================================================================
-// First playable AI with greedy decision-making:
-// - Research: Pick cheapest affordable tech
-// - Production: Order factories by distance to enemy, build random affordable unit
-// - Unit control (per-unit greedy):
-//   1. Capture building (if on one)
-//   2. Move to capture building (if in range)
-//   3. Attack with maximum expected damage
-//   4. Move toward nearest enemy/neutral building
-//   5. Wait
+// Smarter AI designed to beat GreedyAI with these improvements:
+// 1. Economic focus: Aggressively capture buildings
+// 2. Focus fire: Prioritize finishing off damaged units
+// 3. Smart production: Build stronger units when affordable
+// 4. Better targeting: Consider counter-attack damage and unit value
+// 5. Tech prioritization: Research impactful techs, not just cheapest
 
+import { HexUtil } from '../core.js';
+import { type Unit } from '../unit.js';
 import { Combat } from '../combat.js';
 import { type AIController } from './controller.js';
 import { type AIAction } from './actions.js';
 import { type AIGameState } from './game-state.js';
-import { type Unit } from '../unit.js';
 import {
   getBlockedPositions,
   getOccupiedPositions,
   getEnemyPositions,
   minDistanceToPositions,
-  minPathDistanceToPositions,
   isInRangeFrom,
-  pickRandomTemplate,
 } from './base-utils.js';
 import { planDesignPhase } from './design-utils.js';
 
-export class GreedyAI implements AIController {
-  readonly id = 'greedy';
-  readonly name = 'Greedy AI';
+export class TacticalAI implements AIController {
+  readonly id = 'tactical';
+  readonly name = 'Tactical AI';
 
   planTurn(state: AIGameState, team: string): AIAction[] {
     const actions: AIAction[] = [];
 
-    // Phase 1: Research (pick cheapest affordable tech)
+    // Phase 1: Research (prioritize impactful techs)
     const researchActions = this.planResearch(state, team);
     actions.push(...researchActions);
 
-    // Phase 2: Design (create new unit templates with unlocked components)
+    // Phase 2: Design (similar to greedy for now)
     const designActions = this.planDesign(state, team);
     actions.push(...designActions);
 
-    // Phase 3: Production (build units at factories)
+    // Phase 3: Production (build stronger units)
     const productionActions = this.planProduction(state, team);
     actions.push(...productionActions);
 
-    // Phase 4: Unit control (greedy per-unit decisions)
+    // Phase 4: Unit control (tactical decisions)
     const unitActions = this.planUnitActions(state, team);
     actions.push(...unitActions);
 
@@ -61,22 +57,39 @@ export class GreedyAI implements AIController {
     const techs = state.getAvailableTechs(team);
     const resources = state.resources.getResources(team);
 
-    // Find available techs we can afford, sorted by cost (cheapest first)
-    const affordable = techs
-      .filter(t => t.state === 'available' && t.tech.cost <= resources.science)
-      .sort((a, b) => a.tech.cost - b.tech.cost);
+    // Find available techs we can afford
+    const affordable = techs.filter(t => t.state === 'available' && t.tech.cost <= resources.science);
 
-    // Research the cheapest one
-    if (affordable.length > 0) {
-      actions.push({ type: 'research', techId: affordable[0]!.tech.id });
-    }
+    if (affordable.length === 0) return actions;
 
+    // Prioritize techs by impact:
+    // 1. Chassis (more mobility/weight)
+    // 2. Weapons (more damage)
+    // 3. Systems (utility)
+    const prioritized = affordable.sort((a, b) => {
+      const scoreA = this.getTechScore(a.tech.id);
+      const scoreB = this.getTechScore(b.tech.id);
+      if (scoreA !== scoreB) return scoreB - scoreA; // Higher score first
+      return a.tech.cost - b.tech.cost; // Cheaper first as tiebreaker
+    });
+
+    actions.push({ type: 'research', techId: prioritized[0]!.tech.id });
     return actions;
+  }
+
+  private getTechScore(techId: string): number {
+    // Chassis are high priority (mobility and carry capacity)
+    if (techId.includes('chassis') || techId.includes('treads') || techId.includes('wheels')) return 3;
+    // Weapons are medium-high priority
+    if (techId.includes('weapon') || techId.includes('cannon') || techId.includes('artillery')) return 2;
+    // Systems are medium priority
+    if (techId.includes('system') || techId.includes('armor') || techId.includes('capture')) return 1;
+    return 0;
   }
 
   private planDesign(state: AIGameState, team: string): AIAction[] {
     // Use shared design phase implementation
-    return planDesignPhase(state, team, 'AI');
+    return planDesignPhase(state, team, 'TAC');
   }
 
   private planProduction(state: AIGameState, team: string): AIAction[] {
@@ -85,7 +98,7 @@ export class GreedyAI implements AIController {
     const templates = state.getTeamTemplates(team);
     const factories = state.buildings.filter(b => b.type === 'factory' && b.owner === team);
 
-    // Sort factories by distance to nearest enemy unit/building
+    // Sort factories by distance to nearest enemy
     const enemyPositions = getEnemyPositions(state, team);
     const sortedFactories = factories.sort((a, b) => {
       const distA = minDistanceToPositions(a.q, a.r, enemyPositions);
@@ -100,14 +113,14 @@ export class GreedyAI implements AIController {
       const unitAtFactory = state.units.find(u => u.q === factory.q && u.r === factory.r && u.isAlive());
       if (unitAtFactory) continue;
 
-      // Find affordable templates, sorted by cost (cheapest first for greedy)
+      // Find affordable templates, prioritize stronger units (higher cost often = better)
       const affordableTemplates = templates
         .filter(t => t.cost <= availableFunds)
-        .sort((a, b) => a.cost - b.cost);
+        .sort((a, b) => b.cost - a.cost); // Most expensive first (stronger units)
 
       if (affordableTemplates.length > 0) {
-        // Pick a random affordable template (with bias toward variety)
-        const template = pickRandomTemplate(affordableTemplates);
+        // Always build the strongest (most expensive) affordable unit
+        const template = affordableTemplates[0]!;
         actions.push({
           type: 'build',
           factoryQ: factory.q,
@@ -154,25 +167,52 @@ export class GreedyAI implements AIController {
       occupied
     );
 
-    // Priority 2: Move to capture a building if in range
+    // Priority 2/3: Balance between attacking and capturing
+    // Check both options and choose the best
+    const attackResult = this.findBestAttack(state, team, unit, reachable);
+    let captureTarget: { q: number; r: number } | null = null;
     if (unit.canCapture) {
-      const captureTarget = this.findBestCaptureTarget(state, team, reachable);
-      if (captureTarget) {
-        if (captureTarget.q !== unit.q || captureTarget.r !== unit.r) {
+      captureTarget = this.findBestCaptureTarget(state, team, reachable);
+    }
+
+    // If we have a great attack opportunity (high score), prioritize it over distant captures
+    if (attackResult && captureTarget) {
+      const captureDistance = HexUtil.distance(unit.q, unit.r, captureTarget.q, captureTarget.r);
+      // If capture is more than 2 hexes away and we have a good attack, attack first
+      if (captureDistance > 2) {
+        if (attackResult.moveFirst) {
           actions.push({
             type: 'move',
             unitId: unit.id,
-            targetQ: captureTarget.q,
-            targetR: captureTarget.r
+            targetQ: attackResult.moveQ,
+            targetR: attackResult.moveR
           });
         }
-        actions.push({ type: 'capture', unitId: unit.id });
+        actions.push({
+          type: 'attack',
+          unitId: unit.id,
+          targetQ: attackResult.targetQ,
+          targetR: attackResult.targetR
+        });
         return actions;
       }
     }
 
-    // Priority 3: Attack with maximum expected damage
-    const attackResult = this.findBestAttack(state, team, unit, reachable);
+    // Prioritize close captures
+    if (captureTarget) {
+      if (captureTarget.q !== unit.q || captureTarget.r !== unit.r) {
+        actions.push({
+          type: 'move',
+          unitId: unit.id,
+          targetQ: captureTarget.q,
+          targetR: captureTarget.r
+        });
+      }
+      actions.push({ type: 'capture', unitId: unit.id });
+      return actions;
+    }
+
+    // Attack if no close capture available
     if (attackResult) {
       if (attackResult.moveFirst) {
         actions.push({
@@ -191,7 +231,7 @@ export class GreedyAI implements AIController {
       return actions;
     }
 
-    // Priority 4: Move toward nearest enemy/neutral building
+    // Priority 4: Move toward best target (buildings > enemies)
     const moveTarget = this.findMoveTarget(state, team, unit, reachable);
     if (moveTarget && (moveTarget.q !== unit.q || moveTarget.r !== unit.r)) {
       actions.push({
@@ -214,14 +254,19 @@ export class GreedyAI implements AIController {
   ): { q: number; r: number } | null {
     const buildings = state.buildings.filter(b => b.owner !== team);
     let bestBuilding: { q: number; r: number } | null = null;
-    let bestCost = Infinity;
+    let bestScore = -Infinity;
 
     for (const building of buildings) {
       const key = `${building.q},${building.r}`;
       const reachablePos = reachable.get(key);
-      if (reachablePos && reachablePos.cost < bestCost) {
-        bestCost = reachablePos.cost;
-        bestBuilding = { q: building.q, r: building.r };
+      if (reachablePos) {
+        // Prioritize by: 1) building type value, 2) closer is better
+        const typeValue = building.type === 'factory' ? 3 : building.type === 'city' ? 2 : 1;
+        const score = typeValue * 1000 - reachablePos.cost;
+        if (score > bestScore) {
+          bestScore = score;
+          bestBuilding = { q: building.q, r: building.r };
+        }
       }
     }
 
@@ -236,14 +281,14 @@ export class GreedyAI implements AIController {
   ): { moveFirst: boolean; moveQ: number; moveR: number; targetQ: number; targetR: number } | null {
     const enemies = state.units.filter(u => u.team !== team && u.isAlive());
     let bestResult: { moveFirst: boolean; moveQ: number; moveR: number; targetQ: number; targetR: number } | null = null;
-    let bestDamage = 0;
+    let bestScore = -Infinity;
 
     // Check attacks from current position
     for (const enemy of enemies) {
       if (isInRangeFrom(unit, enemy, unit.q, unit.r)) {
-        const damage = Combat.calculateExpectedDamage(unit, enemy);
-        if (damage > bestDamage) {
-          bestDamage = damage;
+        const score = this.calculateAttackScore(unit, enemy, unit.q, unit.r);
+        if (score > bestScore) {
+          bestScore = score;
           bestResult = {
             moveFirst: false,
             moveQ: unit.q,
@@ -259,9 +304,9 @@ export class GreedyAI implements AIController {
     for (const [_key, pos] of reachable) {
       for (const enemy of enemies) {
         if (isInRangeFrom(unit, enemy, pos.q, pos.r)) {
-          const damage = Combat.calculateExpectedDamage(unit, enemy);
-          if (damage > bestDamage) {
-            bestDamage = damage;
+          const score = this.calculateAttackScore(unit, enemy, pos.q, pos.r);
+          if (score > bestScore) {
+            bestScore = score;
             bestResult = {
               moveFirst: pos.q !== unit.q || pos.r !== unit.r,
               moveQ: pos.q,
@@ -277,47 +322,80 @@ export class GreedyAI implements AIController {
     return bestResult;
   }
 
+  private calculateAttackScore(attacker: Unit, defender: Unit, fromQ: number, fromR: number): number {
+    const damage = Combat.calculateExpectedDamage(attacker, defender);
+
+    // Calculate counter-attack damage if defender survives
+    let counterDamage = 0;
+    if (defender.health > damage && isInRangeFrom(defender, attacker, fromQ, fromR)) {
+      counterDamage = Combat.calculateExpectedDamage(defender, attacker);
+    }
+
+    // Score formula:
+    // 1. High priority: Finish off weak units (damage >= health gives bonus)
+    // 2. Damage dealt is good
+    // 3. Counter-attack damage is bad (but not too bad - be aggressive)
+    // 4. Damaging already-damaged units is better (finish them off)
+
+    let score = damage * 10; // Base score from damage
+
+    if (damage >= defender.health) {
+      score += 150; // Big bonus for killing (increased from 100)
+    }
+
+    score -= counterDamage * 3; // Reduced penalty for counter-attack (was 5, now 3)
+
+    // Bigger bonus for attacking already-damaged units (finish them off)
+    if (defender.health < 10) {
+      score += (10 - defender.health) * 8; // Increased from 5 to 8
+    }
+
+    return score;
+  }
+
   private findMoveTarget(
     state: AIGameState,
     team: string,
     unit: Unit,
     reachable: Map<string, { q: number; r: number; cost: number }>
   ): { q: number; r: number } | null {
-    // Find all target positions
-    const targets: Array<{ q: number; r: number }> = [];
+    const targets: Array<{ q: number; r: number; priority: number }> = [];
 
-    // Enemy units - all units should pursue enemies
-    for (const enemy of state.units.filter(u => u.team !== team && u.isAlive())) {
-      targets.push({ q: enemy.q, r: enemy.r });
-    }
-
-    // Only units that can capture should move toward buildings
+    // High priority: Capturable buildings (if unit can capture)
     if (unit.canCapture) {
       for (const building of state.buildings.filter(b => b.owner !== team)) {
-        targets.push({ q: building.q, r: building.r });
+        // Much higher priority for buildings - economy is key!
+        const priority = building.type === 'factory' ? 200 : building.type === 'city' ? 180 : 150;
+        targets.push({ q: building.q, r: building.r, priority });
+      }
+    }
+
+    // Lower priority: Enemy units (only if we have no buildings to capture)
+    if (targets.length === 0 || !unit.canCapture) {
+      for (const enemy of state.units.filter(u => u.team !== team && u.isAlive())) {
+        targets.push({ q: enemy.q, r: enemy.r, priority: 50 });
       }
     }
 
     if (targets.length === 0) return null;
 
-    // Find the reachable position that minimizes pathfinding distance to nearest target
-    // This accounts for terrain and impassable tiles, unlike hex distance
+    // Find the reachable position that minimizes distance to highest priority targets
     let bestPos: { q: number; r: number } | null = null;
-    let bestDistance = Infinity;
-
-    // Get blocked positions for pathfinding (enemies can't be pathed through)
-    const blocked = getBlockedPositions(state, team);
+    let bestScore = -Infinity;
 
     for (const [_key, pos] of reachable) {
-      const distToNearestTarget = minPathDistanceToPositions(
-        state.pathfinder,
-        pos.q, pos.r,
-        targets,
-        unit.terrainCosts,
-        blocked
-      );
-      if (distToNearestTarget < bestDistance) {
-        bestDistance = distToNearestTarget;
+      // Calculate weighted score based on distance to targets
+      let score = 0;
+      for (const target of targets) {
+        const dist = HexUtil.distance(pos.q, pos.r, target.q, target.r);
+        // Closer is better, weighted by priority
+        // Use squared priority for buildings to make them even more attractive
+        const weight = target.priority > 100 ? target.priority * target.priority : target.priority;
+        score += weight / (dist + 1);
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
         bestPos = { q: pos.q, r: pos.r };
       }
     }
