@@ -15,6 +15,7 @@ export interface InputCallbacks {
   onHexClick: (hex: AxialCoord) => void;
   onCancel: () => void;
   onEndTurn: () => void;
+  onCycleNext: () => void;  // Spacebar - cycle to next unit/factory
   onMenuNavigate: (direction: 'up' | 'down') => void;
   onMenuSelect: (index: number) => void;  // -1 for current highlight
   onMenuMouseMove: (x: number, y: number) => void;
@@ -22,6 +23,7 @@ export interface InputCallbacks {
   // State queries
   getPhase: () => 'main_menu' | 'playing' | 'game_over';
   getMenuContext: () => 'none' | 'action' | 'production';
+  getSelectionState: () => 'idle' | 'selected' | 'other';
   isDragging: () => boolean;
 }
 
@@ -130,6 +132,20 @@ export class InputHandler {
       return;
     }
 
+    // Ignore spacebar when typing in an input field
+    const activeElement = document.activeElement;
+    const isTyping = activeElement instanceof HTMLInputElement ||
+                     activeElement instanceof HTMLTextAreaElement;
+
+    const selectionState = this.callbacks.getSelectionState();
+    if (e.code === 'Space' && !isTyping && (selectionState === 'idle' || selectionState === 'selected')) {
+      e.preventDefault();
+      if (!e.repeat) {  // Ignore auto-repeat
+        this.callbacks.onCycleNext();
+      }
+      return;
+    }
+
 
     // Menu navigation (when in action, production, or lab menu)
     const menuContext = this.callbacks.getMenuContext();
@@ -153,7 +169,13 @@ export class InputHandler {
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       this.callbacks.onMenuNavigate('down');
-    } else if (e.key === 'Enter') {
+    } else if (e.code === 'Space') {
+      // Ignore spacebar when typing in an input field
+      const activeElement = document.activeElement;
+      const isTyping = activeElement instanceof HTMLInputElement ||
+                       activeElement instanceof HTMLTextAreaElement;
+      if (isTyping) return;
+
       e.preventDefault();
       this.callbacks.onMenuSelect(-1); // -1 = use current highlight
     }

@@ -654,18 +654,18 @@ export class Renderer {
   }
 
   private drawActionMenu(menu: ActionMenu, zoom: number): void {
-    const items: PopupMenuItem[] = [
-      { label: 'Wait', action: 'wait' },
-      { label: 'Cancel', action: 'cancel' },
-    ];
+    const items: PopupMenuItem[] = [];
+
+    if (menu.canCapture) {
+      items.push({ label: 'Capture', action: 'capture', color: '#4caf50' });
+    }
 
     if (menu.canAttack) {
       items.push({ label: 'Attack', action: 'attack', color: '#ff9800' });
     }
 
-    if (menu.canCapture) {
-      items.push({ label: 'Capture', action: 'capture', color: '#4caf50' });
-    }
+    items.push({ label: 'Wait', action: 'wait' });
+    items.push({ label: 'Cancel', action: 'cancel' });
 
     this.drawPopupMenu({
       items,
@@ -807,17 +807,20 @@ export class Renderer {
     // Action menu hint
     if (this.actionMenu) {
       lines.push('');
-      let hint = '1=Wait 2=Cancel';
-      let num = 3;
-      if (this.actionMenu.canAttack) {
-        hint += ` ${num}=Attack`;
+      const hints: string[] = [];
+      let num = 1;
+      if (this.actionMenu.canCapture) {
+        hints.push(`${num}=Capture`);
         num++;
       }
-      if (this.actionMenu.canCapture) {
-        hint += ` ${num}=Capture`;
+      if (this.actionMenu.canAttack) {
+        hints.push(`${num}=Attack`);
+        num++;
       }
-      hint += ' | Arrows+Enter';
-      lines.push(hint);
+      hints.push(`${num}=Wait`);
+      num++;
+      hints.push(`${num}=Cancel`);
+      lines.push(hints.join(' ') + ' | Arrows+Space');
     }
 
     // Attack mode hint

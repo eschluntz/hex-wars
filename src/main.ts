@@ -72,6 +72,7 @@ class Game {
   private units: Unit[] = [];
   private state: GameState = { type: 'idle' };
   private lastPreviewHex: AxialCoord | null = null;
+  private hasShownLabThisCycle: boolean = false;
   private currentTeam: string = TEAMS.PLAYER;
   private turnNumber: number = 1;
   private nextUnitId: number = 1;
@@ -131,6 +132,12 @@ class Game {
           this.endTurn();
         }
       },
+      onCycleNext: () => {
+        // Only during human player's turn
+        if (!this.isCurrentPlayerAI()) {
+          this.cycleToNextActive();
+        }
+      },
       onMenuNavigate: (direction) => {
         const buttonCount = this.renderer.getMenuButtonCount();
         if (buttonCount === 0) return;
@@ -158,6 +165,11 @@ class Game {
         if (this.state.type === 'moved') return 'action';
         if (this.state.type === 'factory') return 'production';
         return 'none';
+      },
+      getSelectionState: () => {
+        if (this.state.type === 'idle') return 'idle';
+        if (this.state.type === 'selected') return 'selected';
+        return 'other';
       },
       isDragging: () => this.viewport.isDragging
     });
@@ -473,6 +485,22 @@ class Game {
         if (!unit) return;
 
         if (unit.canCapture) {
+          const building = this.map.getBuilding(unit.q, unit.r);
+          if (building && building.owner !== unit.team) {
+            // Determine toast message before capture
+            const willCapture = building.captureResistance <= unit.health;
+            const buildingName = building.type.charAt(0).toUpperCase() + building.type.slice(1);
+            const toastText = willCapture
+              ? `${buildingName} Captured!`
+              : `-${unit.health} resistance`;
+
+            await this.animationController.play({
+              type: 'combat',  // reuse combat type for capture toasts
+              hexQ: unit.q,
+              hexR: unit.r,
+              toastText
+            });
+          }
           this.executeCapture(unit, 'AI ');
         }
         unit.hasActed = true;
@@ -693,6 +721,9 @@ class Game {
   }
 
   private async startTurn(): Promise<void> {
+    // Reset lab shown flag for new turn
+    this.hasShownLabThisCycle = false;
+
     const teamName = this.currentTeam === TEAMS.PLAYER ? 'Player' : 'Enemy';
     await this.animationController.playTurnAnnouncement(teamName);
 
@@ -769,6 +800,66 @@ class Game {
     return this.units.filter(u => u.team === this.currentTeam && u.isAlive()).length;
   }
 
+  private cycleToNextActive(): void {
+    // If a unit is selected, move to current tile (show action menu)
+    if (this.state.type === 'selected') {
+      const unit = this.state.unit;
+      this.setState({ type: 'moved', unit, fromQ: unit.q, fromR: unit.r });
+      return;
+    }
+
+    // Check if any techs are affordable and we haven't shown the lab yet this cycle
+    if (!this.hasShownLabThisCycle) {
+      const teamResources = this.resources.getResources(this.currentTeam);
+      const techNodes = getTechTreeState(this.currentTeam, teamResources.science);
+      const hasAffordableTech = techNodes.some(n => n.state === 'available');
+
+      if (hasAffordableTech) {
+        // Find a lab owned by current team
+        const labs = this.map.getAllBuildings().filter(
+          b => b.type === 'lab' && b.owner === this.currentTeam
+        );
+
+        if (labs.length > 0) {
+          const lab = labs[0]!;
+          this.viewport.panTo(lab.q, lab.r);
+          this.hasShownLabThisCycle = true;
+          setTimeout(() => this.openLabModal(this.currentTeam), 200);
+          return;
+        }
+      }
+    }
+
+    // Find next active unit (hasn't acted yet)
+    const activeUnits = this.units.filter(
+      u => u.team === this.currentTeam && u.isAlive() && !u.hasActed
+    );
+
+    if (activeUnits.length > 0) {
+      const unit = activeUnits[0]!;
+      this.viewport.panTo(unit.q, unit.r);
+      this.setState({ type: 'selected', unit });
+      return;
+    }
+
+    // No active units - find available factory (no unit blocking it)
+    const factories = this.map.getAllBuildings().filter(
+      b => b.type === 'factory' && b.owner === this.currentTeam
+    );
+
+    for (const factory of factories) {
+      const unitOnFactory = this.getUnitAt(factory.q, factory.r);
+      if (!unitOnFactory) {
+        this.viewport.panTo(factory.q, factory.r);
+        this.setState({ type: 'factory', factory });
+        return;
+      }
+    }
+
+    // No active units or available factories - end turn
+    this.endTurn();
+  }
+
   private executeMenuAction(action: string): void {
     if (this.state.type !== 'moved') return;
 
@@ -783,6 +874,17 @@ class Game {
     } else if (action === 'attack') {
       this.setState({ type: 'attacking', unit, fromQ: this.state.fromQ, fromR: this.state.fromR });
     } else if (action === 'capture') {
+      // Show capture toast
+      const building = this.map.getBuilding(unit.q, unit.r);
+      if (building && building.owner !== unit.team) {
+        const willCapture = building.captureResistance <= unit.health;
+        const buildingName = building.type.charAt(0).toUpperCase() + building.type.slice(1);
+        const toastText = willCapture
+          ? `${buildingName} Captured!`
+          : `-${unit.health} resistance`;
+        this.showToast(unit.q, unit.r, toastText);
+      }
+
       this.executeCapture(unit);
       unit.hasActed = true;
       this.setState({ type: 'idle' });
@@ -1018,13 +1120,15 @@ class Game {
   }
 
   private showCombatToast(hexQ: number, hexR: number, attackerDamage: number, defenderDamage: number): void {
-    const toastText = `+${attackerDamage} dmg / -${defenderDamage} hlth`;
+    this.showToast(hexQ, hexR, `+${attackerDamage} dmg / -${defenderDamage} hlth`);
+  }
 
+  private showToast(hexQ: number, hexR: number, text: string): void {
     // Set toast directly on renderer with progress animation
     this.renderer.activeToast = {
       q: hexQ,
       r: hexR,
-      text: toastText,
+      text,
       progress: 0
     };
 

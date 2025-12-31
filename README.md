@@ -327,6 +327,12 @@ this.drawPopupMenu({
 - Vertical display with dependency highlighting on hover
 
 
+## Assets
+Potential tile sets:
+- https://ratbyteboss.itch.io/hex-tile-assets 
+- https://dgbaumgart.itch.io/hex-and-tile-terrain-sample-set 
+
+
 ## Next Steps
 
 ### Completed
@@ -357,7 +363,8 @@ this.drawPopupMenu({
 - [x] Multi-turn building capture (resistance system)
 
 ### Upcoming
-- [ ] see AI moves
+- [x] see AI moves
+- [x] hotkeys to speed up game
 - [ ] Upgrade Map visuals
   - [ ] prettier tiles
   - [ ] better icons for units

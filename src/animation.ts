@@ -39,8 +39,8 @@ export class AnimationController {
       return;
     }
 
-    // Snap camera to hex
-    this.viewport.centerOn(animation.hexQ, animation.hexR);
+    // Smoothly pan camera to hex
+    this.viewport.panTo(animation.hexQ, animation.hexR);
 
     if (animation.type === 'move' && animation.path) {
       // Set animation path for move animations
@@ -50,6 +50,20 @@ export class AnimationController {
       };
       this.renderer.animationPath = pathPreview;
       this.renderer.activeToast = null;
+
+      // First phase: show path from start position
+      await this.waitForDuration(ANIMATION_DURATION / 2);
+      if (this.isSpacebarHeld()) {
+        this.clearAnimation();
+        return;
+      }
+
+      // Second phase: pan to destination
+      const dest = animation.path[animation.path.length - 1]!;
+      this.viewport.panTo(dest.q, dest.r);
+      await this.waitForDuration(ANIMATION_DURATION / 2);
+
+      this.clearAnimation();
     } else if (animation.toastText) {
       // Set toast for other animation types
       this.renderer.animationPath = null;
@@ -59,30 +73,49 @@ export class AnimationController {
         text: animation.toastText,
         progress: 0
       };
+
+      // Animate toast over duration
+      await this.animateToast(ANIMATION_DURATION);
+      this.clearAnimation();
     }
+  }
 
-    // Animate over duration
-    const startTime = performance.now();
-
-    await new Promise<void>(resolve => {
-      const animate = () => {
-        // Check for skip during animation
+  private waitForDuration(duration: number): Promise<void> {
+    return new Promise(resolve => {
+      const startTime = performance.now();
+      const check = () => {
         if (this.isSpacebarHeld()) {
-          this.clearAnimation();
+          resolve();
+          return;
+        }
+        const elapsed = performance.now() - startTime;
+        if (elapsed >= duration) {
+          resolve();
+        } else {
+          requestAnimationFrame(check);
+        }
+      };
+      requestAnimationFrame(check);
+    });
+  }
+
+  private animateToast(duration: number): Promise<void> {
+    return new Promise(resolve => {
+      const startTime = performance.now();
+      const animate = () => {
+        if (this.isSpacebarHeld()) {
           resolve();
           return;
         }
 
         const elapsed = performance.now() - startTime;
-        const progress = Math.min(elapsed / ANIMATION_DURATION, 1);
+        const progress = Math.min(elapsed / duration, 1);
 
-        // Update toast progress for fade in/out effect
         if (this.renderer.activeToast) {
           this.renderer.activeToast.progress = progress;
         }
 
         if (progress >= 1) {
-          this.clearAnimation();
           resolve();
         } else {
           requestAnimationFrame(animate);
@@ -98,10 +131,7 @@ export class AnimationController {
   }
 
   async playTurnAnnouncement(teamName: string): Promise<void> {
-    // Skip if spacebar held
-    if (this.isSpacebarHeld()) {
-      return;
-    }
+    const FAST_DURATION = 100;
 
     this.renderer.turnAnnouncement = {
       text: `${teamName}'s Turn`,
@@ -112,15 +142,10 @@ export class AnimationController {
 
     await new Promise<void>(resolve => {
       const animate = () => {
-        // Check for skip during animation
-        if (this.isSpacebarHeld()) {
-          this.renderer.turnAnnouncement = null;
-          resolve();
-          return;
-        }
-
         const elapsed = performance.now() - startTime;
-        const progress = Math.min(elapsed / ANIMATION_DURATION, 1);
+        // Use fast duration if spacebar held at any point
+        const duration = this.isSpacebarHeld() ? FAST_DURATION : ANIMATION_DURATION;
+        const progress = Math.min(elapsed / duration, 1);
 
         if (this.renderer.turnAnnouncement) {
           this.renderer.turnAnnouncement.progress = progress;
