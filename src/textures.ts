@@ -15,8 +15,11 @@ const ALL_TEXTURES = [
   'hexOceanCalm00.png',
   'hexDirt00.png',
   'hexDirtVillage00.png',
-  'hexHillsMine01.png',
   'village_roofs.png',
+  'wip/good_factory.png',
+  'wip/good_factory_roofs.png',
+  'wip/good_lab.png',
+  'wip/good_lab_roofs2.png',
 ];
 
 // Building type textures (overrides tile texture when present)
@@ -31,7 +34,8 @@ interface BuildingTextureConfig {
 
 const BUILDING_TEXTURES: Record<string, BuildingTextureConfig> = {
   city: { base: 'hexDirtVillage00.png', tintOverlay: 'village_roofs.png', desaturation: 0.6 },
-  factory: { base: 'hexHillsMine01.png', desaturation: 0 },
+  factory: { base: 'wip/good_factory.png', tintOverlay: 'wip/good_factory_roofs.png', desaturation: 0.6 },
+  lab: { base: 'wip/good_lab.png', tintOverlay: 'wip/good_lab_roofs2.png', desaturation: 0.6 },
 };
 
 // Texture variants with weights: [filename, weight]
