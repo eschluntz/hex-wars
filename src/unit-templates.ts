@@ -107,6 +107,9 @@ export function getTemplateStats(template: UnitTemplate): {
   canBuild: boolean;
   armored: boolean;
   armorPiercing: boolean;
+  chassisId: string;
+  weaponId: string | undefined;
+  systemIds: string[];
 } {
   return {
     speed: template.speed,
@@ -117,6 +120,9 @@ export function getTemplateStats(template: UnitTemplate): {
     canBuild: template.canBuild,
     armored: template.armored,
     armorPiercing: template.armorPiercing,
+    chassisId: template.chassisId,
+    weaponId: template.weaponId ?? undefined,
+    systemIds: template.systemIds,
   };
 }
 

@@ -11,7 +11,7 @@ import { type Building, CAPTURE_RESISTANCE } from './building.js';
 import { type UnitTemplate } from './unit-templates.js';
 import { type TeamResources } from './resources.js';
 import { drawHex as drawHexBase, drawBuildingIcon } from './rendering-utils.js';
-import { getTexture, getBuildingTexture, areTexturesLoaded, TEXTURE_WIDTH, TEXTURE_HEIGHT, TEXTURE_HEX_CENTER_Y } from './textures.js';
+import { getTexture, getBuildingTexture, getUnitTexture, areTexturesLoaded, TEXTURE_WIDTH, TEXTURE_HEIGHT, TEXTURE_HEX_CENTER_Y } from './textures.js';
 
 export interface PathPreview {
   path: AxialCoord[];
@@ -88,6 +88,7 @@ export class Renderer {
   activeUnits: number = 0;
   totalUnits: number = 0;
   resources: TeamResources = { funds: 0, science: 0 };
+  teamsFacingLeft: Set<string> = new Set();  // Teams whose units face left
 
   constructor(canvas: HTMLCanvasElement, map: GameMap, viewport: Viewport) {
     this.canvas = canvas;
@@ -237,30 +238,70 @@ export class Renderer {
       ctx.stroke();
     }
 
-    // Draw unit body
-    ctx.beginPath();
-    ctx.arc(cx, cy, size, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 2 * zoom;
-    ctx.stroke();
+    // Try to draw unit texture if available (pass hasActed for darkened version)
+    const unitTexture = getUnitTexture(unit.chassisId, unit.weaponId, unit.systemIds, unit.team, hasActed);
+    const spriteSize = size * 2.5;
+    const usedSprite = !!unitTexture;
 
-    // Draw unit ID
-    if (zoom > 0.5) {
-      ctx.fillStyle = '#000000';
-      ctx.font = `bold ${12 * zoom}px Arial`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(unit.id[0]!.toUpperCase(), cx, cy);
+    if (unitTexture) {
+      // Scale the 16x16 sprite to fit the unit size (about 2.5x)
+      const drawX = cx - spriteSize / 2;
+      const drawY = cy - spriteSize / 2;
+      const faceLeft = this.teamsFacingLeft.has(unit.team);
+
+      ctx.imageSmoothingEnabled = false; // Keep pixel art crisp
+
+      // Flip horizontally if team faces left
+      if (faceLeft) {
+        ctx.save();
+        ctx.translate(cx, 0);
+        ctx.scale(-1, 1);
+        ctx.translate(-cx, 0);
+      }
+
+      ctx.drawImage(unitTexture, drawX, drawY, spriteSize, spriteSize);
+
+      if (faceLeft) {
+        ctx.restore();
+      }
+
+      ctx.imageSmoothingEnabled = true;
+    } else {
+      // Fall back to circle
+      ctx.beginPath();
+      ctx.arc(cx, cy, size, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 2 * zoom;
+      ctx.stroke();
+
+      // Draw unit ID
+      if (zoom > 0.5) {
+        ctx.fillStyle = '#000000';
+        ctx.font = `bold ${12 * zoom}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(unit.id[0]!.toUpperCase(), cx, cy);
+      }
+
+      // Draw "acted" overlay for circle units
+      if (hasActed) {
+        ctx.globalAlpha = 0.4;
+        ctx.beginPath();
+        ctx.arc(cx, cy, size, 0, Math.PI * 2);
+        ctx.fillStyle = '#000000';
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
+      }
     }
 
     // Draw health bar
     if (zoom > 0.3) {
-      const barWidth = size * 1.6;
+      const barWidth = usedSprite ? spriteSize : size * 1.6;
       const barHeight = 4 * zoom;
       const barX = cx - barWidth / 2;
-      const barY = cy + size + 4 * zoom;
+      const barY = cy + (usedSprite ? spriteSize / 2 : size) + 4 * zoom;
       const healthRatio = unit.health / 10;
 
       // Background
@@ -276,16 +317,6 @@ export class Renderer {
       ctx.strokeStyle = '#000000';
       ctx.lineWidth = 1;
       ctx.strokeRect(barX, barY, barWidth, barHeight);
-    }
-
-    // Draw "acted" overlay
-    if (hasActed) {
-      ctx.globalAlpha = 0.4;
-      ctx.beginPath();
-      ctx.arc(cx, cy, size, 0, Math.PI * 2);
-      ctx.fillStyle = '#000000';
-      ctx.fill();
-      ctx.globalAlpha = 1.0;
     }
   }
 

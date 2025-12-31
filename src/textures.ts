@@ -38,6 +38,71 @@ const BUILDING_TEXTURES: Record<string, BuildingTextureConfig> = {
   lab: { base: 'wip/good_lab.png', tintOverlay: 'wip/good_lab_roofs2.png', desaturation: 0.6 },
 };
 
+// All unit sprite files (path relative to unit_assets/)
+const UNIT_SPRITE_FILES = [
+  'GEInfantry.webp',
+  'GEMech.webp',
+  'GERecon.webp',
+  'GEArtillery.webp',
+  'GETank.webp',
+  'GEMd._Tank.webp',
+  'GEAnti-Air.webp',
+  'GEMissile.webp',
+  'GERocket.webp',
+];
+
+// Preloaded unit images by filename
+const unitTextures: Map<string, HTMLImageElement> = new Map();
+
+// Cache for tinted unit textures (keyed by "spriteKey_team")
+const tintedUnitCache: Map<string, HTMLCanvasElement> = new Map();
+
+// Cache for darkened (acted) unit textures (keyed by "spriteKey_team_dark")
+const darkenedUnitCache: Map<string, HTMLCanvasElement> = new Map();
+
+// Determine which sprite to use based on unit loadout
+function getUnitSpriteFile(
+  chassisId: string | undefined,
+  weaponId: string | undefined,
+  systemIds: string[]
+): string | undefined {
+  const hasArmor = systemIds.includes('armor');
+
+  // Artillery takes priority
+  if (weaponId === 'artillery') {
+    return 'GEArtillery.webp';
+  }
+
+  // Treads chassis
+  if (chassisId === 'treads') {
+    if (weaponId === 'cannon') {
+      return hasArmor ? 'GEMd._Tank.webp' : 'GETank.webp';
+    }
+    if (weaponId === 'machineGun' || weaponId === 'heavyMG') {
+      return 'GEAnti-Air.webp';
+    }
+  }
+
+  // Wheels chassis
+  if (chassisId === 'wheels') {
+    if (weaponId === 'machineGun' || weaponId === 'heavyMG') {
+      return 'GERecon.webp';
+    }
+  }
+
+  // Foot chassis
+  if (chassisId === 'foot') {
+    if (weaponId === 'heavyMG') {
+      return 'GEMech.webp';
+    }
+    if (weaponId === 'machineGun') {
+      return 'GEInfantry.webp';
+    }
+  }
+
+  return undefined; // Fall back to circle
+}
+
 // Texture variants with weights: [filename, weight]
 // Higher weight = more likely to be chosen
 type TextureVariant = { file: string; weight: number };
@@ -77,7 +142,8 @@ let loadPromise: Promise<void> | null = null;
 export function loadTextures(): Promise<void> {
   if (loadPromise) return loadPromise;
 
-  const promises = ALL_TEXTURES.map(filename => {
+  // Load hex/building textures
+  const hexPromises = ALL_TEXTURES.map(filename => {
     return new Promise<void>((resolve, reject) => {
       const img = new Image();
       img.onload = () => {
@@ -89,8 +155,21 @@ export function loadTextures(): Promise<void> {
     });
   });
 
-  loadPromise = Promise.all(promises).then(() => {
-    console.log(`Loaded ${textures.size} hex textures`);
+  // Load unit sprites
+  const unitPromises = UNIT_SPRITE_FILES.map(filename => {
+    return new Promise<void>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        unitTextures.set(filename, img);
+        resolve();
+      };
+      img.onerror = () => reject(new Error(`Failed to load unit texture: ${filename}`));
+      img.src = `unit_assets/${filename}`;
+    });
+  });
+
+  loadPromise = Promise.all([...hexPromises, ...unitPromises]).then(() => {
+    console.log(`Loaded ${textures.size} hex textures, ${unitTextures.size} unit sprites`);
   });
 
   return loadPromise;
@@ -130,43 +209,55 @@ export function getTexture(type: TileType, q?: number, r?: number): HTMLImageEle
 }
 
 export function areTexturesLoaded(): boolean {
-  return textures.size === ALL_TEXTURES.length;
+  return textures.size === ALL_TEXTURES.length &&
+         unitTextures.size === UNIT_SPRITE_FILES.length;
 }
 
 // Cache for tinted building textures (keyed by "buildingType_team")
 const tintedBuildingCache: Map<string, HTMLCanvasElement> = new Map();
 
-// Tint an overlay image (desaturate then apply team color)
-function tintOverlay(
-  overlay: HTMLImageElement,
-  tintColor: string,
-  desaturation: number
+// ============================================================================
+// SHARED TINTING UTILITIES
+// ============================================================================
+
+/**
+ * Apply desaturation and/or color tint to an image.
+ * @param source - Source image to tint
+ * @param options.desaturation - 0-1, how much to desaturate (0 = none, 1 = full grayscale)
+ * @param options.tintColor - Color to apply via overlay blend (optional)
+ * @returns Canvas with the tinted image
+ */
+function applyTint(
+  source: HTMLImageElement | HTMLCanvasElement,
+  options: { desaturation?: number; tintColor?: string }
 ): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
-  canvas.width = overlay.width;
-  canvas.height = overlay.height;
+  canvas.width = source.width;
+  canvas.height = source.height;
   const ctx = canvas.getContext('2d')!;
 
-  // Draw overlay
-  ctx.drawImage(overlay, 0, 0);
+  // Draw source
+  ctx.drawImage(source, 0, 0);
 
   // Partial desaturation
-  if (desaturation > 0) {
+  if (options.desaturation && options.desaturation > 0) {
     ctx.globalCompositeOperation = 'saturation';
-    ctx.globalAlpha = desaturation;
+    ctx.globalAlpha = options.desaturation;
     ctx.fillStyle = '#808080';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.globalAlpha = 1;
   }
 
   // Apply tint using 'overlay' blend
-  ctx.globalCompositeOperation = 'overlay';
-  ctx.fillStyle = tintColor;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (options.tintColor) {
+    ctx.globalCompositeOperation = 'overlay';
+    ctx.fillStyle = options.tintColor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
 
   // Restore original alpha channel
   ctx.globalCompositeOperation = 'destination-in';
-  ctx.drawImage(overlay, 0, 0);
+  ctx.drawImage(source, 0, 0);
 
   return canvas;
 }
@@ -188,7 +279,7 @@ function createBuildingTexture(
 
   // Draw tinted overlay on top if present
   if (overlay && tintColor) {
-    const tintedOverlay = tintOverlay(overlay, tintColor, desaturation);
+    const tintedOverlay = applyTint(overlay, { desaturation, tintColor });
     ctx.drawImage(tintedOverlay, 0, 0);
   }
 
@@ -210,24 +301,11 @@ function createNeutralBuildingTexture(
   ctx.drawImage(base, 0, 0);
 
   // Draw desaturated overlay on top if present
-  if (overlay && desaturation > 0) {
-    const desatCanvas = document.createElement('canvas');
-    desatCanvas.width = overlay.width;
-    desatCanvas.height = overlay.height;
-    const desatCtx = desatCanvas.getContext('2d')!;
-
-    desatCtx.drawImage(overlay, 0, 0);
-    desatCtx.globalCompositeOperation = 'saturation';
-    desatCtx.globalAlpha = desaturation;
-    desatCtx.fillStyle = '#808080';
-    desatCtx.fillRect(0, 0, overlay.width, overlay.height);
-    desatCtx.globalAlpha = 1;
-    desatCtx.globalCompositeOperation = 'destination-in';
-    desatCtx.drawImage(overlay, 0, 0);
-
-    ctx.drawImage(desatCanvas, 0, 0);
-  } else if (overlay) {
-    ctx.drawImage(overlay, 0, 0);
+  if (overlay) {
+    const desatOverlay = desaturation > 0
+      ? applyTint(overlay, { desaturation })
+      : overlay;
+    ctx.drawImage(desatOverlay, 0, 0);
   }
 
   return canvas;
@@ -283,3 +361,74 @@ export const TEXTURE_HEIGHT = 384;
 // For a 256-wide pointy-top hex: size = 256/sqrt(3) ≈ 148, height = 2*148 ≈ 296
 // The hex base is at the bottom of the image, so center is at 384 - 148 = 236
 export const TEXTURE_HEX_CENTER_Y = 236;
+
+// Create a tinted unit texture (full desaturation + team color)
+function createTintedUnitTexture(
+  original: HTMLImageElement,
+  tintColor: string
+): HTMLCanvasElement {
+  return applyTint(original, { desaturation: 1, tintColor });
+}
+
+// Create a darkened version of a texture (for acted units)
+function createDarkenedTexture(
+  source: HTMLImageElement | HTMLCanvasElement,
+  width: number,
+  height: number
+): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.drawImage(source, 0, 0, width, height);
+  ctx.globalCompositeOperation = 'source-atop';
+  ctx.globalAlpha = 0.4;
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, width, height);
+
+  return canvas;
+}
+
+// Get unit texture based on loadout and team
+// Set darkened=true for acted units
+export function getUnitTexture(
+  chassisId: string | undefined,
+  weaponId: string | undefined,
+  systemIds: string[],
+  team: string,
+  darkened: boolean = false
+): HTMLImageElement | HTMLCanvasElement | undefined {
+  const spriteFile = getUnitSpriteFile(chassisId, weaponId, systemIds);
+  if (!spriteFile) return undefined;
+
+  const original = unitTextures.get(spriteFile);
+  if (!original) return undefined;
+
+  // Get or create tinted version
+  const tintCacheKey = `${spriteFile}_${team}`;
+  let tinted = tintedUnitCache.get(tintCacheKey);
+
+  if (!tinted) {
+    const teamColor = TEAM_COLORS[team]?.primary;
+    if (teamColor) {
+      tinted = createTintedUnitTexture(original, teamColor);
+      tintedUnitCache.set(tintCacheKey, tinted);
+    }
+  }
+
+  const baseTexture = tinted ?? original;
+
+  // Return darkened version if requested
+  if (darkened) {
+    const darkCacheKey = `${spriteFile}_${team}_dark`;
+    let dark = darkenedUnitCache.get(darkCacheKey);
+    if (!dark) {
+      dark = createDarkenedTexture(baseTexture, original.width, original.height);
+      darkenedUnitCache.set(darkCacheKey, dark);
+    }
+    return dark;
+  }
+
+  return baseTexture;
+}

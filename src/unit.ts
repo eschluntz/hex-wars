@@ -15,6 +15,9 @@ export interface UnitStats {
   canBuild: boolean;
   armored: boolean;
   armorPiercing: boolean;
+  chassisId?: string;
+  weaponId?: string;
+  systemIds?: string[];
 }
 
 const DEFAULT_STATS: UnitStats = {
@@ -27,6 +30,9 @@ const DEFAULT_STATS: UnitStats = {
   canBuild: false,
   armored: false,
   armorPiercing: false,
+  chassisId: undefined,
+  weaponId: undefined,
+  systemIds: [],
 };
 
 export class Unit {
@@ -44,6 +50,9 @@ export class Unit {
   canBuild: boolean;
   armored: boolean;
   armorPiercing: boolean;
+  chassisId: string | undefined;
+  weaponId: string | undefined;
+  systemIds: string[];
   hasActed: boolean = false;
 
   constructor(id: string, team: string, q: number, r: number, stats: Partial<UnitStats> = {}) {
@@ -61,6 +70,9 @@ export class Unit {
     this.canBuild = stats.canBuild ?? DEFAULT_STATS.canBuild;
     this.armored = stats.armored ?? DEFAULT_STATS.armored;
     this.armorPiercing = stats.armorPiercing ?? DEFAULT_STATS.armorPiercing;
+    this.chassisId = stats.chassisId ?? DEFAULT_STATS.chassisId;
+    this.weaponId = stats.weaponId ?? DEFAULT_STATS.weaponId;
+    this.systemIds = stats.systemIds ?? DEFAULT_STATS.systemIds ?? [];
   }
 
   isAlive(): boolean {

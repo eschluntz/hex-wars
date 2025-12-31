@@ -249,6 +249,9 @@ class Game {
     }
     // Normal map: no starting units, just owned buildings from map generation
 
+    // Determine team facing direction based on building positions
+    this.computeTeamFacing();
+
     // Collect initial income for player (first turn)
     this.collectIncome(TEAMS.PLAYER);
 
@@ -1224,6 +1227,35 @@ class Game {
   }
 
   // --- Game loop ---
+
+  private computeTeamFacing(): void {
+    // Calculate average X position of each team's buildings
+    const teamAvgX: Record<string, number> = {};
+
+    for (const teamId of [TEAMS.PLAYER, TEAMS.ENEMY]) {
+      const buildings = this.map.getBuildingsByOwner(teamId);
+      if (buildings.length === 0) continue;
+
+      let totalX = 0;
+      for (const b of buildings) {
+        const pos = HexUtil.axialToPixel(b.q, b.r, CONFIG.hexSize);
+        totalX += pos.x;
+      }
+      teamAvgX[teamId] = totalX / buildings.length;
+    }
+
+    // Team further right faces left
+    this.renderer.teamsFacingLeft.clear();
+    const teams = Object.keys(teamAvgX);
+    if (teams.length >= 2) {
+      const maxX = Math.max(...Object.values(teamAvgX));
+      for (const [team, avgX] of Object.entries(teamAvgX)) {
+        if (avgX === maxX) {
+          this.renderer.teamsFacingLeft.add(team);
+        }
+      }
+    }
+  }
 
   private centerViewport(): void {
     const cfg = MAP_CONFIGS[this.currentMapType];

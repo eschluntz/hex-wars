@@ -365,15 +365,23 @@ Potential tile sets:
 ### Upcoming
 - [x] see AI moves
 - [x] hotkeys to speed up game
-- [ ] Upgrade Map visuals
-  - [ ] prettier tiles
-  - [ ] better icons for units
-  - [ ] draw connected roads
+- [x] Upgrade Map visuals
+  - [x] prettier tiles
+  - [x] better icons for units
+- [ ] UX improvements
+  - [ ] space auto-selects attack target when only 1
+  - [ ] order units by furthest from base
+- [ ] Come up with strategy for icons and sprites for arbitrary units
+  - [ ]
 - [ ] Balance / playtesting
   - [ ] More chassis types (hover, etc.)
   - [ ] More weapon types (missiles, lasers, etc.)
   - [ ] More system modules (stealth, repair, sensors)
   - [ ] more building types? Resources?
+- [ ] saving and loading games
+- [ ] AI improvements
+  - [ ] build more capturing units
+  - [ ] stay off of your own factories, and try to sit on enemy factories
 - [ ] Satisfying battle animations
 
 
