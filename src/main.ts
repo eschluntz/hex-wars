@@ -41,6 +41,7 @@ import { type Player, type PlayerConfig } from './player.js';
 import { type AIAction } from './ai/actions.js';
 import { type AIGameState } from './ai/game-state.js';
 import { createAI } from './ai/registry.js';
+import { loadTextures } from './textures.js';
 
 const TEAMS = {
   PLAYER: 'player',
@@ -90,6 +91,9 @@ class Game {
       onRerollSeed: () => rerollNormalSeed(),
     });
     this.labModal = new LabModal();
+
+    // Start loading textures (async, will render fallback until loaded)
+    loadTextures();
 
     // In-game reroll button
     const rerollBtn = document.getElementById('btn-reroll-ingame');

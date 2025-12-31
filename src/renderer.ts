@@ -2,7 +2,7 @@
 // HEX DOMINION - Renderer
 // ============================================================================
 
-import { HexUtil, TILE_COLORS, TILE_ICONS, TEAM_COLORS, type AxialCoord, type Tile } from './core.js';
+import { HexUtil, TILE_ICONS, TEAM_COLORS, type AxialCoord, type Tile } from './core.js';
 import { CONFIG } from './config.js';
 import { GameMap } from './game-map.js';
 import { Viewport } from './viewport.js';
@@ -11,6 +11,7 @@ import { type Building, CAPTURE_RESISTANCE } from './building.js';
 import { type UnitTemplate } from './unit-templates.js';
 import { type TeamResources } from './resources.js';
 import { drawHex as drawHexBase, drawBuildingIcon } from './rendering-utils.js';
+import { getTexture, getBuildingTexture, areTexturesLoaded, TEXTURE_WIDTH, TEXTURE_HEIGHT, TEXTURE_HEX_CENTER_Y } from './textures.js';
 
 export interface PathPreview {
   path: AxialCoord[];
@@ -292,22 +293,67 @@ export class Renderer {
     const ctx = this.ctx;
     const size = CONFIG.hexSize * zoom;
 
-    // Check for building to determine hex fill color
+    // Check for building to determine if we need team color overlay
     const building = this.map.getBuilding(tile.q, tile.r);
-    let fillColorOverride: string | undefined;
-    if (building) {
-      fillColorOverride = (TEAM_COLORS[building.owner ?? 'neutral'] ?? TEAM_COLORS.neutral)!.primary;
-    }
 
-    // Use shared rendering utility for base hex drawing
-    drawHexBase(ctx as any, cx, cy, tile, size, { zoom, isHovered, fillColorOverride });
+    // Try to draw texture - use building texture if available (with team tinting), otherwise tile texture
+    const buildingTex = building ? getBuildingTexture(building.type, building.owner) : undefined;
+    const texture = buildingTex ?? getTexture(tile.type, tile.q, tile.r);
+    if (texture && areTexturesLoaded()) {
+      // Calculate scale: texture width (256) should match hex width (hexSize * sqrt(3))
+      const hexWidth = size * Math.sqrt(3);
+      const scale = hexWidth / TEXTURE_WIDTH;
+      const drawWidth = TEXTURE_WIDTH * scale;
+      const baseHeight = TEXTURE_HEIGHT * scale;
+      const drawHeight = baseHeight * 1.13; // Stretch vertically by 13%
 
-    // Draw building icon or terrain icon
-    if (building) {
-      const hasUnit = this.units.some(u => u.q === tile.q && u.r === tile.r);
-      this.drawBuilding(cx, cy, building, zoom, hasUnit);
+      // The hex center in the texture is at TEXTURE_HEX_CENTER_Y from top
+      // Position image so bottom stays fixed, stretch extends upward
+      const drawX = cx - drawWidth / 2;
+      const drawY = cy - (TEXTURE_HEX_CENTER_Y * scale) - (drawHeight - baseHeight);
+
+      ctx.drawImage(texture, drawX, drawY, drawWidth, drawHeight);
+
+      // Draw team color overlay for buildings without custom textures (factory, lab)
+      if (building && !buildingTex) {
+        const teamColor = (TEAM_COLORS[building.owner ?? 'neutral'] ?? TEAM_COLORS.neutral)!.primary;
+        ctx.globalAlpha = 0.4;
+        const corners = HexUtil.getHexCorners(cx, cy, size);
+        ctx.beginPath();
+        ctx.moveTo(corners[0]!.x, corners[0]!.y);
+        for (let i = 1; i < 6; i++) {
+          ctx.lineTo(corners[i]!.x, corners[i]!.y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = teamColor;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
+      // Draw hover highlight
+      if (isHovered) {
+        const corners = HexUtil.getHexCorners(cx, cy, size);
+        ctx.beginPath();
+        ctx.moveTo(corners[0]!.x, corners[0]!.y);
+        for (let i = 1; i < 6; i++) {
+          ctx.lineTo(corners[i]!.x, corners[i]!.y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = Math.max(1, 3 * zoom);
+        ctx.stroke();
+      }
     } else {
-      // Only draw terrain icon if no building
+      // Fallback to solid colors if textures not loaded
+      let fillColorOverride: string | undefined;
+      if (building) {
+        fillColorOverride = (TEAM_COLORS[building.owner ?? 'neutral'] ?? TEAM_COLORS.neutral)!.primary;
+      }
+      drawHexBase(ctx as any, cx, cy, tile, size, { zoom, isHovered, fillColorOverride });
+
+      // Draw terrain icon
       const icon = TILE_ICONS[tile.type];
       if (icon && zoom > 0.4) {
         ctx.font = `${size * 0.5}px Arial`;
@@ -315,6 +361,12 @@ export class Renderer {
         ctx.textBaseline = 'middle';
         ctx.fillText(icon, cx, cy);
       }
+    }
+
+    // Draw building icon (only if no custom building texture)
+    if (building && !buildingTex) {
+      const hasUnit = this.units.some(u => u.q === tile.q && u.r === tile.r);
+      this.drawBuilding(cx, cy, building, zoom, hasUnit);
     }
   }
 
@@ -433,23 +485,33 @@ export class Renderer {
     ctx.fillStyle = CONFIG.backgroundColor;
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-    const padding = CONFIG.hexSize * 2;
+    const padding = CONFIG.hexSize * 4; // Increased for tall textures
     const topLeft = this.viewport.screenToWorld(-padding, -padding);
     const bottomRight = this.viewport.screenToWorld(
       this.canvas.width + padding,
       this.canvas.height + padding
     );
 
+    // Collect visible tiles and sort by r (top to bottom) for proper overlap
+    const visibleTiles: Tile[] = [];
     for (const tile of this.map.getAllTiles()) {
       const world = HexUtil.axialToPixel(tile.q, tile.r, CONFIG.hexSize);
 
-      if (world.x < topLeft.x - CONFIG.hexSize * 2 ||
-          world.x > bottomRight.x + CONFIG.hexSize * 2 ||
-          world.y < topLeft.y - CONFIG.hexSize * 2 ||
-          world.y > bottomRight.y + CONFIG.hexSize * 2) {
+      if (world.x < topLeft.x - CONFIG.hexSize * 4 ||
+          world.x > bottomRight.x + CONFIG.hexSize * 4 ||
+          world.y < topLeft.y - CONFIG.hexSize * 4 ||
+          world.y > bottomRight.y + CONFIG.hexSize * 4) {
         continue;
       }
 
+      visibleTiles.push(tile);
+    }
+
+    // Sort by r ascending (top first), then by q for consistent ordering
+    visibleTiles.sort((a, b) => a.r !== b.r ? a.r - b.r : a.q - b.q);
+
+    for (const tile of visibleTiles) {
+      const world = HexUtil.axialToPixel(tile.q, tile.r, CONFIG.hexSize);
       const screen = this.viewport.worldToScreen(world.x, world.y);
       const isHovered = this.hoveredHex !== null &&
                         this.hoveredHex.q === tile.q &&
