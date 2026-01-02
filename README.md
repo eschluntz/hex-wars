@@ -374,9 +374,9 @@ Potential tile sets:
 - [ ] feature parity with advance wars
   - [x] all players have a capital city. if captured, the player insta-loses the game
   - [x] order units by furthest from capital city when cycling units
-  - [ ] support min range as well as max-range
-  - [ ] support some units cannot move and shoot the same turn (artillery)
-  - [ ] when hovering over a unit, highlight it's damagable range (reachable tiles + range)
+  - [x] support min range as well as max-range
+  - [x] support some units cannot move and shoot the same turn (artillery)
+  - [x] when hovering over a unit, highlight it's damagable range (reachable tiles + range), and when a unit is attacking, but you've not yet selected the attack target, highlight the attack range from the current location.
 - [ ] Come up with strategy for icons and sprites for arbitrary units
 - [ ] Balance / playtesting
   - [ ] More chassis types (hover, etc.)

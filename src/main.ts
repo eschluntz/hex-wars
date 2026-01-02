@@ -73,6 +73,7 @@ class Game {
   private units: Unit[] = [];
   private state: GameState = { type: 'idle' };
   private lastPreviewHex: AxialCoord | null = null;
+  private lastHoveredUnitId: string | null = null;
   private hasShownLabThisCycle: boolean = false;
   private currentTeam: string = TEAMS.PLAYER;
   private turnNumber: number = 1;
@@ -657,9 +658,13 @@ class Game {
         building !== undefined &&
         building.owner !== newState.unit.team;
 
+      // Check if unit can attack (respecting canMoveAndAttack restriction)
+      const didMove = newState.fromQ !== newState.unit.q || newState.fromR !== newState.unit.r;
+      const canAttackNow = newState.unit.canMoveAndAttack || !didMove;
+
       this.renderer.actionMenu = {
         unit: newState.unit,
-        canAttack: targets.length > 0,
+        canAttack: canAttackNow && targets.length > 0,
         canCapture
       };
       this.renderer.attackTargets = null;
@@ -1247,6 +1252,122 @@ class Game {
     };
   }
 
+  // --- Attack range overlay ---
+
+  private updateAttackRangeOverlay(): void {
+    // Case 1: We're in attacking state - show range from current position
+    if (this.state.type === 'attacking') {
+      const unit = this.state.unit;
+      const overlay = this.computeAttackRangeFromPosition(unit, unit.q, unit.r);
+      this.renderer.attackRangeOverlay = overlay;
+      return;
+    }
+
+    // Case 2: Hovering over a unit - show their damageable range
+    const hoveredHex = this.renderer.hoveredHex;
+    if (!hoveredHex) {
+      this.renderer.attackRangeOverlay = null;
+      this.lastHoveredUnitId = null;
+      return;
+    }
+
+    const hoveredUnit = this.units.find(u =>
+      u.q === hoveredHex.q && u.r === hoveredHex.r && u.isAlive()
+    );
+
+    if (!hoveredUnit) {
+      this.renderer.attackRangeOverlay = null;
+      this.lastHoveredUnitId = null;
+      return;
+    }
+
+    // Skip recomputation if same unit as last frame
+    if (this.lastHoveredUnitId === hoveredUnit.id) {
+      return;
+    }
+    this.lastHoveredUnitId = hoveredUnit.id;
+
+    // Compute the full damageable range (reachable tiles + attack range from each)
+    const overlay = this.computeFullDamageableRange(hoveredUnit);
+    this.renderer.attackRangeOverlay = overlay;
+  }
+
+  private computeAttackRangeFromPosition(unit: Unit, fromQ: number, fromR: number): {
+    attackableTiles: Set<string>;
+    minRangeTiles: Set<string>;
+  } {
+    const attackableTiles = new Set<string>();
+    const minRangeTiles = new Set<string>();
+
+    // Get all tiles within max range
+    for (const tile of this.map.getAllTiles()) {
+      const distance = HexUtil.distance(fromQ, fromR, tile.q, tile.r);
+
+      if (distance <= unit.range) {
+        if (distance >= unit.minRange && distance > 0) {
+          attackableTiles.add(`${tile.q},${tile.r}`);
+        } else if (distance > 0 && distance < unit.minRange) {
+          minRangeTiles.add(`${tile.q},${tile.r}`);
+        }
+      }
+    }
+
+    return { attackableTiles, minRangeTiles };
+  }
+
+  private computeFullDamageableRange(unit: Unit): {
+    attackableTiles: Set<string>;
+    minRangeTiles: Set<string>;
+  } {
+    const attackableTiles = new Set<string>();
+    const minRangeTiles = new Set<string>();
+
+    // Get reachable positions for this unit
+    const blocked = this.getBlockedPositions(unit.team);
+    const occupied = this.getOccupiedPositions(unit);
+    const reachable = this.pathfinder.getReachablePositions(
+      unit.q, unit.r,
+      unit.speed,
+      unit.terrainCosts,
+      blocked,
+      occupied
+    );
+
+    // Include current position
+    reachable.set(`${unit.q},${unit.r}`, { q: unit.q, r: unit.r, cost: 0 });
+
+    // For each reachable position (if unit can move and attack) or just current position
+    const positionsToCheck = unit.canMoveAndAttack
+      ? Array.from(reachable.values())
+      : [{ q: unit.q, r: unit.r, cost: 0 }];
+
+    for (const pos of positionsToCheck) {
+      // Get all tiles within attack range from this position
+      for (const tile of this.map.getAllTiles()) {
+        const distance = HexUtil.distance(pos.q, pos.r, tile.q, tile.r);
+
+        if (distance <= unit.range && distance > 0) {
+          if (distance >= unit.minRange) {
+            attackableTiles.add(`${tile.q},${tile.r}`);
+          }
+        }
+      }
+    }
+
+    // Compute minRange tiles from current position only (for visual feedback)
+    for (const tile of this.map.getAllTiles()) {
+      const distance = HexUtil.distance(unit.q, unit.r, tile.q, tile.r);
+      if (distance > 0 && distance < unit.minRange) {
+        // Only mark as minRange if it's not already in attackable (from another position)
+        if (!attackableTiles.has(`${tile.q},${tile.r}`)) {
+          minRangeTiles.add(`${tile.q},${tile.r}`);
+        }
+      }
+    }
+
+    return { attackableTiles, minRangeTiles };
+  }
+
   // --- Game loop ---
 
   private computeTeamFacing(): void {
@@ -1298,6 +1419,7 @@ class Game {
       this.htmlMenuController.hide();
       this.viewport.update();
       this.updatePathPreview();
+      this.updateAttackRangeOverlay();
       this.renderer.units = this.units.filter(u => u.isAlive());
       this.renderer.currentTeam = this.currentTeam;
       this.renderer.turnNumber = this.turnNumber;

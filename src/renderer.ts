@@ -34,6 +34,11 @@ export interface ProductionMenu {
   templates: UnitTemplate[];
 }
 
+export interface AttackRangeOverlay {
+  attackableTiles: Set<string>;  // Tiles that can be attacked (from any reachable position)
+  minRangeTiles?: Set<string>;   // Tiles within minRange (can't be attacked) - shown differently
+}
+
 
 interface MenuButton {
   label: string;
@@ -79,6 +84,7 @@ export class Renderer {
   actionMenu: ActionMenu | null = null;
   attackTargets: AttackTargets | null = null;
   productionMenu: ProductionMenu | null = null;
+  attackRangeOverlay: AttackRangeOverlay | null = null;
   menuHighlightIndex: number = 0;
   currentTeam: string = '';
   turnNumber: number = 1;
@@ -194,6 +200,36 @@ export class Renderer {
       ctx.lineWidth = 2 * zoom;
       ctx.stroke();
     }
+  }
+
+  private drawAttackRangeOverlay(overlay: AttackRangeOverlay, zoom: number): void {
+    const ctx = this.ctx;
+    const size = CONFIG.hexSize * zoom;
+
+    // Draw attackable tiles (orange overlay)
+    for (const key of overlay.attackableTiles) {
+      const [qStr, rStr] = key.split(',');
+      const q = parseInt(qStr!, 10);
+      const r = parseInt(rStr!, 10);
+
+      const world = HexUtil.axialToPixel(q, r, CONFIG.hexSize);
+      const screen = this.viewport.worldToScreen(world.x, world.y);
+
+      // Draw hex overlay
+      const corners = HexUtil.getHexCorners(screen.x, screen.y, size);
+      ctx.beginPath();
+      ctx.moveTo(corners[0]!.x, corners[0]!.y);
+      for (let i = 1; i < 6; i++) {
+        ctx.lineTo(corners[i]!.x, corners[i]!.y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(255, 152, 0, 0.15)';  // Orange for attackable
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 152, 0, 0.4)';
+      ctx.lineWidth = Math.max(1, 2 * zoom);
+      ctx.stroke();
+    }
+    // Note: minRangeTiles are intentionally not drawn - the gap in highlighting shows the dead zone
   }
 
   private drawUnit(cx: number, cy: number, unit: Unit, zoom: number): void {
@@ -549,6 +585,11 @@ export class Renderer {
                         this.hoveredHex.r === tile.r;
 
       this.drawHex(screen.x, screen.y, tile, isHovered, zoom);
+    }
+
+    // Draw attack range overlay (before paths and units)
+    if (this.attackRangeOverlay) {
+      this.drawAttackRangeOverlay(this.attackRangeOverlay, zoom);
     }
 
     // Draw path preview (player input)

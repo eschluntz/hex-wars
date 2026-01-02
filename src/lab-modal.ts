@@ -618,15 +618,19 @@ export class LabModal {
     if (preview.canBuild) abilities.push('Build');
     if (preview.armored) abilities.push('Armored');
     if (preview.armorPiercing) abilities.push('AP');
+    if (!preview.canMoveAndAttack) abilities.push('Stationary');
 
     const abilitiesText = abilities.length ? abilities.join(' ') : '-';
     const errorText = (!preview.valid && preview.error) ? `${preview.error}` : '';
+
+    // Show range as "2-3" when minRange > 0, otherwise just "3"
+    const rangeStr = preview.minRange > 0 ? `${preview.minRange}-${preview.range}` : `${preview.range}`;
 
     container.innerHTML = `
       <div class="stat"><span class="stat-label">Cost</span><span class="stat-value cost">$${preview.cost}</span></div>
       <div class="stat"><span class="stat-label">Speed</span><span class="stat-value">${preview.speed}</span></div>
       <div class="stat"><span class="stat-label">Attack</span><span class="stat-value">${preview.attack}</span></div>
-      <div class="stat"><span class="stat-label">Range</span><span class="stat-value">${preview.range}</span></div>
+      <div class="stat"><span class="stat-label">Range</span><span class="stat-value">${rangeStr}</span></div>
       <div class="stat"><span class="stat-label">Weight</span><span class="stat-value ${preview.totalWeight > preview.maxWeight ? 'error' : ''}">${preview.totalWeight}/${preview.maxWeight}</span></div>
       <div class="stat abilities">${abilitiesText}</div>
       <div class="stat error-msg">${errorText}</div>

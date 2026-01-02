@@ -30,6 +30,8 @@ export interface UnitTemplate {
   speed: number;
   attack: number;
   range: number;
+  minRange: number;
+  canMoveAndAttack: boolean;
   terrainCosts: TerrainCosts;
   armored: boolean;
   armorPiercing: boolean;
@@ -72,6 +74,8 @@ export function createTemplate(
     speed: chassis.speed,
     attack: weapon?.attack ?? 0,
     range: weapon?.range ?? 0,
+    minRange: weapon?.minRange ?? 0,
+    canMoveAndAttack: weapon?.canMoveAndAttack ?? true,
     terrainCosts: chassis.terrainCosts,
     armored,
     armorPiercing: weapon?.armorPiercing ?? false,
@@ -102,6 +106,8 @@ export function getTemplateStats(template: UnitTemplate): {
   speed: number;
   attack: number;
   range: number;
+  minRange: number;
+  canMoveAndAttack: boolean;
   terrainCosts: import('./core.js').TerrainCosts;
   canCapture: boolean;
   canBuild: boolean;
@@ -115,6 +121,8 @@ export function getTemplateStats(template: UnitTemplate): {
     speed: template.speed,
     attack: template.attack,
     range: template.range,
+    minRange: template.minRange,
+    canMoveAndAttack: template.canMoveAndAttack,
     terrainCosts: template.terrainCosts,
     canCapture: template.canCapture,
     canBuild: template.canBuild,

@@ -16,6 +16,7 @@ function createUnit(
   stats: {
     attack?: number;
     range?: number;
+    minRange?: number;
     health?: number;
     armored?: boolean;
     armorPiercing?: boolean;
@@ -24,6 +25,7 @@ function createUnit(
   const unit = new Unit(id, team, q, r, {
     attack: stats.attack ?? 5,
     range: stats.range ?? 1,
+    minRange: stats.minRange ?? 0,
     armored: stats.armored ?? false,
     armorPiercing: stats.armorPiercing ?? false,
   });
@@ -150,6 +152,30 @@ runner.describe('Combat', () => {
       const target = createUnit('t', 'enemy', 5, 5);
       assert(Combat.isInRange(attacker, target));
     });
+
+    runner.it('should return false when target is closer than minRange', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { range: 3, minRange: 2 });
+      const target = createUnit('t', 'enemy', 1, 0); // distance 1
+      assert(!Combat.isInRange(attacker, target));
+    });
+
+    runner.it('should return true when target is at minRange', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { range: 3, minRange: 2 });
+      const target = createUnit('t', 'enemy', 2, 0); // distance 2
+      assert(Combat.isInRange(attacker, target));
+    });
+
+    runner.it('should return true when target is between minRange and range', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { range: 4, minRange: 2 });
+      const target = createUnit('t', 'enemy', 3, 0); // distance 3
+      assert(Combat.isInRange(attacker, target));
+    });
+
+    runner.it('should handle minRange 0 (no minimum)', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { range: 3, minRange: 0 });
+      const samePos = createUnit('t', 'enemy', 0, 0); // distance 0
+      assert(Combat.isInRange(attacker, samePos));
+    });
   });
 
   runner.describe('getTargetsInRange', () => {
@@ -178,6 +204,20 @@ runner.describe('Combat', () => {
       const enemies = [createUnit('e1', 'enemy', 5, 5), createUnit('e2', 'enemy', 10, 10)];
       const targets = Combat.getTargetsInRange(attacker, enemies);
       assertEqual(targets.length, 0);
+    });
+
+    runner.it('should exclude targets closer than minRange', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { range: 3, minRange: 2 });
+      const enemies = [
+        createUnit('e1', 'enemy', 1, 0), // distance 1 - too close
+        createUnit('e2', 'enemy', 2, 0), // distance 2 - in range
+        createUnit('e3', 'enemy', 3, 0), // distance 3 - in range
+        createUnit('e4', 'enemy', 4, 0), // distance 4 - too far
+      ];
+      const targets = Combat.getTargetsInRange(attacker, enemies);
+      assertEqual(targets.length, 2);
+      assertEqual(targets[0]!.id, 'e2');
+      assertEqual(targets[1]!.id, 'e3');
     });
   });
 

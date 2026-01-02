@@ -97,10 +97,11 @@ export function minPathDistanceToPositions(
 
 /**
  * Check if target is in range from a specific position.
+ * Respects both minimum and maximum range.
  */
 export function isInRangeFrom(unit: Unit, target: Unit, fromQ: number, fromR: number): boolean {
   const distance = HexUtil.distance(fromQ, fromR, target.q, target.r);
-  return distance <= unit.range;
+  return distance >= unit.minRange && distance <= unit.range;
 }
 
 /**

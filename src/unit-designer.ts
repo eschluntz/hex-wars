@@ -263,6 +263,8 @@ export interface DesignPreview {
   speed: number;
   attack: number;
   range: number;
+  minRange: number;
+  canMoveAndAttack: boolean;
   armored: boolean;
   armorPiercing: boolean;
   canCapture: boolean;
@@ -295,6 +297,8 @@ export function getDesignPreview(design: DesignState): DesignPreview | null {
     speed: chassis.speed,
     attack: weapon?.attack ?? 0,
     range: weapon?.range ?? 0,
+    minRange: weapon?.minRange ?? 0,
+    canMoveAndAttack: weapon?.canMoveAndAttack ?? true,
     armored,
     armorPiercing: weapon?.armorPiercing ?? false,
     canCapture,
@@ -344,18 +348,23 @@ export function getChassisDetails(id: string): ComponentDetails {
 
 export function getWeaponDetails(id: string): ComponentDetails {
   const weapon = getWeapon(id);
+  // Show range as "2-3" when minRange > 0, otherwise just "3"
+  const rangeStr = weapon.minRange ? `${weapon.minRange}-${weapon.range}` : `${weapon.range}`;
   const details: ComponentDetails = {
     name: weapon.name,
     stats: [
       `Attack ${weapon.attack}`,
-      `Range ${weapon.range}`,
+      `Range ${rangeStr}`,
       `Weight ${weapon.weight}`,
     ],
     cost: weapon.cost,
   };
 
-  if (weapon.armorPiercing) {
-    details.abilities = ['Armor Piercing'];
+  const abilities: string[] = [];
+  if (weapon.armorPiercing) abilities.push('Armor Piercing');
+  if (weapon.canMoveAndAttack === false) abilities.push('Cannot move and attack');
+  if (abilities.length > 0) {
+    details.abilities = abilities;
   }
 
   if (weapon.requiresChassis) {

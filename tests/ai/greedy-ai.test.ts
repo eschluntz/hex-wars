@@ -25,6 +25,8 @@ function createUnit(
     speed?: number;
     attack?: number;
     range?: number;
+    minRange?: number;
+    canMoveAndAttack?: boolean;
     health?: number;
     canCapture?: boolean;
     canBuild?: boolean;
@@ -37,6 +39,8 @@ function createUnit(
     speed: options.speed ?? 4,
     attack: options.attack ?? 5,
     range: options.range ?? 1,
+    minRange: options.minRange ?? 0,
+    canMoveAndAttack: options.canMoveAndAttack ?? true,
     terrainCosts: DEFAULT_TERRAIN_COSTS,
     canCapture: options.canCapture ?? true,
     canBuild: options.canBuild ?? false,
@@ -130,9 +134,9 @@ runner.describe('GreedyAI', () => {
       // Create state with existing templates for all unlocked chassis (no new designs needed)
       const existingTemplates = [{
         id: 'soldier', name: 'Soldier', chassisId: 'foot', weaponId: 'machineGun',
-        systemIds: ['capture'], cost: 1000, speed: 3, attack: 4, range: 1,
-        terrainCosts: DEFAULT_TERRAIN_COSTS, armored: false, armorPiercing: false,
-        canCapture: true, canBuild: false,
+        systemIds: ['capture'], cost: 1000, speed: 3, attack: 4, range: 1, minRange: 0,
+        canMoveAndAttack: true, terrainCosts: DEFAULT_TERRAIN_COSTS, armored: false,
+        armorPiercing: false, canCapture: true, canBuild: false,
       }];
       const state = createMockState({ units: [], buildings: [], templates: existingTemplates });
       const actions = ai.planTurn(state, 'enemy');
@@ -274,6 +278,8 @@ runner.describe('GreedyAI', () => {
         speed: 4,
         attack: 4,
         range: 1,
+        minRange: 0,
+        canMoveAndAttack: true,
         terrainCosts: DEFAULT_TERRAIN_COSTS,
         armored: false,
         armorPiercing: false,
@@ -312,6 +318,8 @@ runner.describe('GreedyAI', () => {
         speed: 4,
         attack: 4,
         range: 1,
+        minRange: 0,
+        canMoveAndAttack: true,
         terrainCosts: DEFAULT_TERRAIN_COSTS,
         armored: false,
         armorPiercing: false,
@@ -345,6 +353,8 @@ runner.describe('GreedyAI', () => {
         speed: 4,
         attack: 4,
         range: 1,
+        minRange: 0,
+        canMoveAndAttack: true,
         terrainCosts: DEFAULT_TERRAIN_COSTS,
         armored: false,
         armorPiercing: false,
@@ -404,6 +414,115 @@ runner.describe('GreedyAI', () => {
 
       const waitAction = actions.find(a => a.type === 'wait');
       assert(waitAction !== undefined, 'Should have wait action');
+    });
+  });
+
+  runner.describe('canMoveAndAttack restriction', () => {
+    runner.it('should attack from current position when canMoveAndAttack is false', () => {
+      const ai = new GreedyAI();
+      const aiUnit = createUnit('ai', 'enemy', 5, 5, {
+        attack: 5, range: 3, canMoveAndAttack: false
+      });
+      const playerUnit = createUnit('player', 'player', 7, 5); // distance 2, in range
+
+      const state = createMockState({
+        units: [aiUnit, playerUnit],
+        resources: { funds: 0, science: 0 },
+      });
+
+      const actions = ai.planTurn(state, 'enemy');
+
+      // Should attack without moving
+      const attackAction = actions.find(a => a.type === 'attack');
+      const moveAction = actions.find(a => a.type === 'move' && (a as { unitId: string }).unitId === 'ai');
+
+      assert(attackAction !== undefined, 'Should have attack action');
+      assert(moveAction === undefined, 'Should NOT have move action before attack');
+    });
+
+    runner.it('should not attack after moving when canMoveAndAttack is false', () => {
+      const ai = new GreedyAI();
+      const aiUnit = createUnit('ai', 'enemy', 5, 5, {
+        attack: 5, range: 3, canMoveAndAttack: false
+      });
+      // Player unit at distance 6 - needs to move to attack
+      const playerUnit = createUnit('player', 'player', 11, 5);
+
+      const state = createMockState({
+        units: [aiUnit, playerUnit],
+        resources: { funds: 0, science: 0 },
+      });
+
+      const actions = ai.planTurn(state, 'enemy');
+
+      // Should NOT have attack action since it would require moving first
+      const attackAction = actions.find(a => a.type === 'attack' && (a as { unitId: string }).unitId === 'ai');
+      assert(attackAction === undefined, 'Should NOT attack when it requires moving');
+    });
+
+    runner.it('should allow move-then-attack when canMoveAndAttack is true', () => {
+      const ai = new GreedyAI();
+      const aiUnit = createUnit('ai', 'enemy', 5, 5, {
+        attack: 5, range: 1, speed: 4, canMoveAndAttack: true
+      });
+      // Player unit at distance 3 - needs to move to be adjacent
+      const playerUnit = createUnit('player', 'player', 8, 5);
+
+      const state = createMockState({
+        units: [aiUnit, playerUnit],
+        resources: { funds: 0, science: 0 },
+      });
+
+      const actions = ai.planTurn(state, 'enemy');
+
+      // Should have move then attack
+      const moveIdx = actions.findIndex(a => a.type === 'move' && (a as { unitId: string }).unitId === 'ai');
+      const attackIdx = actions.findIndex(a => a.type === 'attack' && (a as { unitId: string }).unitId === 'ai');
+
+      assert(moveIdx !== -1, 'Should have move action');
+      assert(attackIdx !== -1, 'Should have attack action');
+      assert(moveIdx < attackIdx, 'Move should come before attack');
+    });
+  });
+
+  runner.describe('minRange restriction', () => {
+    runner.it('should not attack targets closer than minRange when cannot move', () => {
+      const ai = new GreedyAI();
+      // Unit with minRange that cannot move and attack - must attack from current position
+      const aiUnit = createUnit('ai', 'enemy', 5, 5, {
+        attack: 5, range: 3, minRange: 2, canMoveAndAttack: false, canCapture: false
+      });
+      const playerUnit = createUnit('player', 'player', 6, 5, { canCapture: false }); // distance 1 - too close
+
+      const state = createMockState({
+        units: [aiUnit, playerUnit],
+        resources: { funds: 0, science: 0 },
+      });
+
+      const actions = ai.planTurn(state, 'enemy');
+
+      // When the target is at distance 1 but minRange is 2, and unit can't move-and-attack,
+      // there should be no attack action
+      const attackAction = actions.find(a => a.type === 'attack' && (a as { unitId: string }).unitId === 'ai');
+      assert(attackAction === undefined, 'Should NOT attack target that is too close');
+    });
+
+    runner.it('should attack targets at or beyond minRange', () => {
+      const ai = new GreedyAI();
+      const aiUnit = createUnit('ai', 'enemy', 5, 5, {
+        attack: 5, range: 3, minRange: 2
+      });
+      const playerUnit = createUnit('player', 'player', 7, 5); // distance 2 - at minRange
+
+      const state = createMockState({
+        units: [aiUnit, playerUnit],
+        resources: { funds: 0, science: 0 },
+      });
+
+      const actions = ai.planTurn(state, 'enemy');
+
+      const attackAction = actions.find(a => a.type === 'attack' && (a as { unitId: string }).unitId === 'ai');
+      assert(attackAction !== undefined, 'Should attack target at minRange');
     });
   });
 });

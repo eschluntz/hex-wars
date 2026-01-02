@@ -270,20 +270,22 @@ export class GreedyAI implements AIController {
       }
     }
 
-    // Check attacks from reachable positions
-    for (const [_key, pos] of reachable) {
-      for (const enemy of enemies) {
-        if (isInRangeFrom(unit, enemy, pos.q, pos.r)) {
-          const damage = Combat.calculateExpectedDamage(unit, enemy);
-          if (damage > bestDamage) {
-            bestDamage = damage;
-            bestResult = {
-              moveFirst: pos.q !== unit.q || pos.r !== unit.r,
-              moveQ: pos.q,
-              moveR: pos.r,
-              targetQ: enemy.q,
-              targetR: enemy.r
-            };
+    // Check attacks from reachable positions (only if unit can move and attack)
+    if (unit.canMoveAndAttack) {
+      for (const [_key, pos] of reachable) {
+        for (const enemy of enemies) {
+          if (isInRangeFrom(unit, enemy, pos.q, pos.r)) {
+            const damage = Combat.calculateExpectedDamage(unit, enemy);
+            if (damage > bestDamage) {
+              bestDamage = damage;
+              bestResult = {
+                moveFirst: pos.q !== unit.q || pos.r !== unit.r,
+                moveQ: pos.q,
+                moveR: pos.r,
+                targetQ: enemy.q,
+                targetR: enemy.r
+              };
+            }
           }
         }
       }

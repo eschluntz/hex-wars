@@ -145,7 +145,7 @@ export class TestGame {
     return unit;
   }
 
-  addBuilding(q: number, r: number, type: 'city' | 'factory' | 'lab', owner: string | null): void {
+  addBuilding(q: number, r: number, type: 'city' | 'factory' | 'lab' | 'capital', owner: string | null): void {
     this.map.addBuilding(createBuilding(q, r, type, owner));
   }
 

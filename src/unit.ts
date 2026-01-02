@@ -9,6 +9,8 @@ export interface UnitStats {
   speed: number;
   attack: number;
   range: number;
+  minRange: number;
+  canMoveAndAttack: boolean;
   terrainCosts: TerrainCosts;
   color: string;
   canCapture: boolean;
@@ -24,6 +26,8 @@ const DEFAULT_STATS: UnitStats = {
   speed: 4,
   attack: 5,
   range: 1,
+  minRange: 0,
+  canMoveAndAttack: true,
   terrainCosts: DEFAULT_TERRAIN_COSTS,
   color: '#ffffff',
   canCapture: false,
@@ -43,6 +47,8 @@ export class Unit {
   speed: number;
   attack: number;
   range: number;
+  minRange: number;
+  canMoveAndAttack: boolean;
   health: number;
   terrainCosts: TerrainCosts;
   color: string;
@@ -63,6 +69,8 @@ export class Unit {
     this.speed = stats.speed ?? DEFAULT_STATS.speed;
     this.attack = stats.attack ?? DEFAULT_STATS.attack;
     this.range = stats.range ?? DEFAULT_STATS.range;
+    this.minRange = stats.minRange ?? DEFAULT_STATS.minRange;
+    this.canMoveAndAttack = stats.canMoveAndAttack ?? DEFAULT_STATS.canMoveAndAttack;
     this.health = 10;
     this.terrainCosts = stats.terrainCosts ?? DEFAULT_STATS.terrainCosts;
     this.color = stats.color ?? DEFAULT_STATS.color;

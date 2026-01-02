@@ -65,10 +65,11 @@ export class Combat {
 
   /**
    * Check if target is within attacker's range (hex distance)
+   * Respects both minimum and maximum range.
    */
   static isInRange(attacker: Unit, target: Unit): boolean {
     const distance = HexUtil.distance(attacker.q, attacker.r, target.q, target.r);
-    return distance <= attacker.range;
+    return distance >= attacker.minRange && distance <= attacker.range;
   }
 
   /**

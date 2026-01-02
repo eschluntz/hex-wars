@@ -155,6 +155,8 @@ export interface WeaponComponent {
   attack: number;
   armorPiercing: boolean;
   range: number;
+  minRange?: number;           // Minimum range (defaults to 0)
+  canMoveAndAttack?: boolean;  // Can attack after moving (defaults to true)
   weight: number;
   cost: number;
   requiresChassis?: string[];  // Only these chassis can use this weapon
@@ -194,6 +196,8 @@ export const WEAPONS: Record<string, WeaponComponent> = {
     attack: 5,
     armorPiercing: true,
     range: 3,
+    minRange: 2,
+    canMoveAndAttack: false,
     weight: 5,
     cost: 2000,
   },
@@ -214,6 +218,8 @@ export const WEAPONS: Record<string, WeaponComponent> = {
     attack: 8,
     armorPiercing: true,
     range: 4,
+    minRange: 2,
+    canMoveAndAttack: false,
     weight: 4,
     cost: 3000,
   },
@@ -264,6 +270,8 @@ export const WEAPONS: Record<string, WeaponComponent> = {
     attack: 12,
     armorPiercing: true,
     range: 4,
+    minRange: 2,
+    canMoveAndAttack: false,
     weight: 8,
     cost: 4000,
   },
