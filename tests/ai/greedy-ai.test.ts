@@ -192,6 +192,29 @@ runner.describe('GreedyAI', () => {
       const captureAction = actions.find(a => a.type === 'capture');
       assertEqual(captureAction, undefined);
     });
+
+    runner.it('should prioritize capturing capital over city', () => {
+      const ai = new GreedyAI();
+      // Unit can reach both buildings in one turn
+      const unit = createUnit('soldier1', 'enemy', 5, 5, { canCapture: true, speed: 4 });
+      const city = createBuilding(6, 5, 'city', 'player');     // 1 hex away
+      const capital = createBuilding(7, 5, 'capital', 'player'); // 2 hexes away
+
+      const state = createMockState({
+        units: [unit],
+        buildings: [city, capital],
+      });
+
+      const actions = ai.planTurn(state, 'enemy');
+
+      // Should move toward capital (further but higher priority)
+      const moveAction = actions.find(a => a.type === 'move');
+      assert(moveAction !== undefined, 'Should have move action');
+      if (moveAction?.type === 'move') {
+        assertEqual(moveAction.targetQ, 7);
+        assertEqual(moveAction.targetR, 5);
+      }
+    });
   });
 
   runner.describe('attack priority', () => {

@@ -222,16 +222,21 @@ export class GreedyAI implements AIController {
   ): { q: number; r: number } | null {
     const buildings = state.buildings.filter(b => b.owner !== team);
     let bestBuilding: { q: number; r: number } | null = null;
-    let bestCost = Infinity;
+    let bestScore = -Infinity;
 
     for (const building of buildings) {
       const key = `${building.q},${building.r}`;
       // Skip buildings already claimed by another unit
       if (claimedPositions.has(key)) continue;
       const reachablePos = reachable.get(key);
-      if (reachablePos && reachablePos.cost < bestCost) {
-        bestCost = reachablePos.cost;
-        bestBuilding = { q: building.q, r: building.r };
+      if (reachablePos) {
+        // Prioritize capitals heavily (instant win)
+        const priority = building.type === 'capital' ? 1000 : 0;
+        const score = priority - reachablePos.cost;
+        if (score > bestScore) {
+          bestScore = score;
+          bestBuilding = { q: building.q, r: building.r };
+        }
       }
     }
 

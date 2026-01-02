@@ -20,6 +20,8 @@ const ALL_TEXTURES = [
   'wip/good_factory_roofs.png',
   'wip/good_lab.png',
   'wip/good_lab_roofs2.png',
+  'hexDirtCastle00.png',
+  'castle_roofs.png',
 ];
 
 // Building type textures (overrides tile texture when present)
@@ -36,6 +38,7 @@ const BUILDING_TEXTURES: Record<string, BuildingTextureConfig> = {
   city: { base: 'hexDirtVillage00.png', tintOverlay: 'village_roofs.png', desaturation: 0.6 },
   factory: { base: 'wip/good_factory.png', tintOverlay: 'wip/good_factory_roofs.png', desaturation: 0.6 },
   lab: { base: 'wip/good_lab.png', tintOverlay: 'wip/good_lab_roofs2.png', desaturation: 0.6 },
+  capital: { base: 'hexDirtCastle00.png', tintOverlay: 'castle_roofs.png', desaturation: 0.6 },
 };
 
 // All unit sprite files (path relative to unit_assets/)

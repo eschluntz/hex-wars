@@ -361,18 +361,23 @@ Potential tile sets:
 - [x] View enemy lab (click to see their tech tree and designs, read-only)
 - [x] Improving road generation
 - [x] Multi-turn building capture (resistance system)
-
-### Upcoming
 - [x] see AI moves
 - [x] hotkeys to speed up game
 - [x] Upgrade Map visuals
   - [x] prettier tiles
   - [x] better icons for units
-- [ ] UX improvements
-  - [ ] space auto-selects attack target when only 1
-  - [ ] order units by furthest from base
+- [x] UX improvements
+  - [x] space auto-selects attack target when only 1 option
+  - [x] at beginning of user turn, pan the map back to the first unit (equivalent to hitting spacebar)
+
+### Upcoming
+- [ ] feature parity with advance wars
+  - [x] all players have a capital city. if captured, the player insta-loses the game
+  - [x] order units by furthest from capital city when cycling units
+  - [ ] support min range as well as max-range
+  - [ ] support some units cannot move and shoot the same turn (artillery)
+  - [ ] when hovering over a unit, highlight it's damagable range (reachable tiles + range)
 - [ ] Come up with strategy for icons and sprites for arbitrary units
-  - [ ]
 - [ ] Balance / playtesting
   - [ ] More chassis types (hover, etc.)
   - [ ] More weapon types (missiles, lasers, etc.)

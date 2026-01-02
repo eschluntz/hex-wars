@@ -336,7 +336,8 @@ export class GameMap {
   }
 
   private assignHomeClusterBuildings(cluster: { centerQ: number; centerR: number; buildings: Array<{ q: number; r: number }> }, owner: string): void {
-    // Find buildings in this cluster and assign 2 cities + 1 factory to owner
+    // Find buildings in this cluster and assign 1 capital + 1 city + 1 factory to owner
+    let capitalAssigned = false;
     let citiesAssigned = 0;
     let factoriesAssigned = 0;
 
@@ -344,7 +345,12 @@ export class GameMap {
       const building = this.buildings.get(getBuildingKey(pos.q, pos.r));
       if (!building) continue;
 
-      if (building.type === 'city' && citiesAssigned < 2) {
+      // Convert first city to capital
+      if (building.type === 'city' && !capitalAssigned) {
+        building.type = 'capital';
+        building.owner = owner;
+        capitalAssigned = true;
+      } else if (building.type === 'city' && citiesAssigned < 1) {
         building.owner = owner;
         citiesAssigned++;
       } else if (building.type === 'factory' && factoriesAssigned < 1) {
@@ -354,21 +360,32 @@ export class GameMap {
     }
 
     // If we didn't find enough cities/factories, assign any remaining slots to whatever we have
-    if (citiesAssigned < 2 || factoriesAssigned < 1) {
+    if (!capitalAssigned || citiesAssigned < 1 || factoriesAssigned < 1) {
       for (const pos of cluster.buildings) {
         const building = this.buildings.get(getBuildingKey(pos.q, pos.r));
         if (!building || building.owner === owner) continue;
 
-        // Fill remaining slots with any building type
-        const needsMore = (citiesAssigned + factoriesAssigned) < 3;
-        if (needsMore) {
+        // Fill capital slot first (convert any building to capital)
+        if (!capitalAssigned) {
+          building.type = 'capital';
           building.owner = owner;
-          if (building.type === 'city') citiesAssigned++;
-          else if (building.type === 'factory') factoriesAssigned++;
-          else citiesAssigned++; // Count labs toward the 3 total
+          capitalAssigned = true;
+        } else {
+          // Fill remaining slots with any building type
+          const needsMore = (citiesAssigned + factoriesAssigned) < 2;
+          if (needsMore) {
+            building.owner = owner;
+            if (building.type === 'city') citiesAssigned++;
+            else if (building.type === 'factory') factoriesAssigned++;
+            else citiesAssigned++; // Count labs toward the total
+          }
         }
       }
     }
+  }
+
+  getCapital(owner: string): Building | undefined {
+    return this.getAllBuildings().find(b => b.type === 'capital' && b.owner === owner);
   }
 
   private generateClusterRoads(clusters: Array<{ centerQ: number; centerR: number; buildings: Array<{ q: number; r: number }> }>): void {

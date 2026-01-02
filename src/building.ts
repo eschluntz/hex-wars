@@ -2,7 +2,7 @@
 // HEX DOMINION - Building Module
 // ============================================================================
 
-export type BuildingType = 'city' | 'factory' | 'lab';
+export type BuildingType = 'city' | 'factory' | 'lab' | 'capital';
 
 export const CAPTURE_RESISTANCE = 20;
 
@@ -18,13 +18,15 @@ export interface Building {
 export const BUILDING_INCOME: Record<BuildingType, { funds: number; science: number }> = {
   city: { funds: 1000, science: 0 },
   factory: { funds: 0, science: 0 },
-  lab: { funds: 0, science: 1 }
+  lab: { funds: 0, science: 1 },
+  capital: { funds: 2000, science: 0 }
 };
 
 export const BUILDING_ICONS: Record<BuildingType, string> = {
   city: '🏙️',
   factory: '🏭',
-  lab: '🔬'
+  lab: '🔬',
+  capital: '🏰'
 };
 
 export function createBuilding(q: number, r: number, type: BuildingType, owner: string | null = null): Building {

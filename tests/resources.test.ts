@@ -239,6 +239,19 @@ runner.describe('ResourceManager', () => {
       assertEqual(income.science, 1);
     });
 
+    runner.it('should collect double income from capitals', () => {
+      const manager = new ResourceManager(['player']);
+      const buildings: Building[] = [
+        createBuilding(0, 0, 'capital', 'player'),
+        createBuilding(1, 0, 'city', 'player'),
+      ];
+
+      const income = manager.collectIncome('player', buildings);
+
+      assertEqual(income.funds, 3000); // capital (2000) + city (1000)
+      assertEqual(income.science, 0);
+    });
+
   });
 
 });

@@ -217,11 +217,7 @@ export function isNameTaken(team: string, name: string, excludeId?: string): boo
   if (excludeId && id === excludeId) {
     return false;
   }
-  const exists = teamTemplates[team]?.[id] !== undefined;
-  if (exists) {
-    console.log(`isNameTaken: "${name}" (id: ${id}) exists for team "${team}". Templates:`, Object.keys(teamTemplates[team] ?? {}));
-  }
-  return exists;
+  return teamTemplates[team]?.[id] !== undefined;
 }
 
 // ============================================================================

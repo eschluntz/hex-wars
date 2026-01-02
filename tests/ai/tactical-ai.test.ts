@@ -88,6 +88,27 @@ runner.describe('Tactical AI Unit Tests', () => {
         }
       }
     });
+
+    runner.it('should prioritize capital over other buildings', () => {
+      const game = new TestGame(['tactical'], 10, 10);
+
+      // Add both a city and capital - capital is further away
+      game.addBuilding(6, 5, 'city', 'enemy');
+      game.addBuilding(8, 5, 'capital', 'enemy');
+      const unit = game.addUnit('tactical', 4, 5, 'soldier');
+
+      const ai = new TacticalAI();
+      const aiState = game.createAIState();
+      const actions = ai.planTurn(aiState, 'tactical');
+
+      // Should move toward capital (further but higher priority)
+      const moveAction = actions.find(a => a.type === 'move');
+      assert(moveAction !== undefined, 'Should plan a move action');
+      if (moveAction && moveAction.type === 'move') {
+        // Should be moving toward capital at (8,5) not city at (6,5)
+        assert(moveAction.targetQ > 5, 'Should move toward capital');
+      }
+    });
   });
 
   runner.describe('Combat Integration', () => {

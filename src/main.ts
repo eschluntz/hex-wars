@@ -302,12 +302,12 @@ class Game {
     // At row 5 (centerR), valid q range is roughly -2 to 9 for width=12
 
     // Player side (left) - q around 1-2
-    this.map.addBuilding(createBuilding(1, centerR, 'city', TEAMS.PLAYER));
+    this.map.addBuilding(createBuilding(1, centerR, 'capital', TEAMS.PLAYER));
     this.map.addBuilding(createBuilding(1, centerR + 1, 'factory', TEAMS.PLAYER));
     this.map.addBuilding(createBuilding(1, centerR - 1, 'lab', TEAMS.PLAYER));
 
     // Enemy side (right) - q around 7-8
-    this.map.addBuilding(createBuilding(8, centerR, 'city', TEAMS.ENEMY));
+    this.map.addBuilding(createBuilding(8, centerR, 'capital', TEAMS.ENEMY));
     this.map.addBuilding(createBuilding(8, centerR + 1, 'factory', TEAMS.ENEMY));
     this.map.addBuilding(createBuilding(8, centerR - 1, 'lab', TEAMS.ENEMY));
 
@@ -734,9 +734,11 @@ class Game {
     const teamName = this.currentTeam === TEAMS.PLAYER ? 'Player' : 'Enemy';
     await this.animationController.playTurnAnnouncement(teamName);
 
-    // If the current player is AI, trigger their turn
     if (this.isCurrentPlayerAI()) {
       this.executeAITurn();
+    } else {
+      // Player turn: automatically cycle to first unit
+      this.cycleToNextActive();
     }
   }
 
@@ -756,13 +758,10 @@ class Game {
   }
 
   private checkGameOver(): string | null {
-    // A team loses if they have no buildings AND no units
     for (const team of [TEAMS.PLAYER, TEAMS.ENEMY]) {
-      const hasBuildings = this.map.getBuildingsByOwner(team).length > 0;
-      const hasUnits = this.units.some(u => u.team === team && u.isAlive());
-
-      if (!hasBuildings && !hasUnits) {
-        return team; // This team lost
+      // Check if capital was captured (team no longer owns a capital)
+      if (!this.map.getCapital(team)) {
+        return team; // Lost - capital captured
       }
     }
     return null;
@@ -843,6 +842,16 @@ class Game {
     );
 
     if (activeUnits.length > 0) {
+      // Sort by distance from own capital (furthest first)
+      const capital = this.map.getCapital(this.currentTeam);
+      if (capital) {
+        activeUnits.sort((a, b) => {
+          const distA = HexUtil.distance(a.q, a.r, capital.q, capital.r);
+          const distB = HexUtil.distance(b.q, b.r, capital.q, capital.r);
+          return distB - distA; // Furthest first
+        });
+      }
+
       const unit = activeUnits[0]!;
       this.viewport.panTo(unit.q, unit.r);
       this.setState({ type: 'selected', unit });
@@ -879,7 +888,19 @@ class Game {
       unit.r = this.state.fromR;
       this.setState({ type: 'selected', unit });
     } else if (action === 'attack') {
-      this.setState({ type: 'attacking', unit, fromQ: this.state.fromQ, fromR: this.state.fromR });
+      const enemies = this.getEnemiesOf(unit);
+      const targets = Combat.getTargetsInRange(unit, enemies);
+
+      if (targets.length === 1) {
+        // Auto-attack the only target
+        this.executeAttack(unit, targets[0]!);
+        unit.hasActed = true;
+        this.setState({ type: 'idle' });
+        this.checkAndTriggerGameOver();
+      } else {
+        // Multiple targets - enter targeting mode as before
+        this.setState({ type: 'attacking', unit, fromQ: this.state.fromQ, fromR: this.state.fromR });
+      }
     } else if (action === 'capture') {
       // Show capture toast
       const building = this.map.getBuilding(unit.q, unit.r);

@@ -270,7 +270,9 @@ export class TacticalAI implements AIController {
       const reachablePos = reachable.get(key);
       if (reachablePos) {
         // Prioritize by: 1) building type value, 2) closer is better
-        const typeValue = building.type === 'factory' ? 3 : building.type === 'city' ? 2 : 1;
+        const typeValue = building.type === 'capital' ? 10 :
+                          building.type === 'factory' ? 3 :
+                          building.type === 'city' ? 2 : 1;
         const score = typeValue * 1000 - reachablePos.cost;
         if (score > bestScore) {
           bestScore = score;
@@ -374,8 +376,10 @@ export class TacticalAI implements AIController {
     // High priority: Capturable buildings (if unit can capture)
     if (unit.canCapture) {
       for (const building of state.buildings.filter(b => b.owner !== team)) {
-        // Much higher priority for buildings - economy is key!
-        const priority = building.type === 'factory' ? 200 : building.type === 'city' ? 180 : 150;
+        // Much higher priority for buildings - economy is key! Capital = instant win
+        const priority = building.type === 'capital' ? 500 :
+                         building.type === 'factory' ? 200 :
+                         building.type === 'city' ? 180 : 150;
         targets.push({ q: building.q, r: building.r, priority });
       }
     }

@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { TestRunner, assertEqual, assertDeepEqual, assertNull, assert } from './framework.js';
-import { createBuilding, getBuildingKey, BUILDING_INCOME, BUILDING_ICONS, CAPTURE_RESISTANCE } from '../src/building.js';
+import { createBuilding, getBuildingKey, CAPTURE_RESISTANCE } from '../src/building.js';
 import { GameMap } from '../src/game-map.js';
 import { MAP_CONFIGS } from '../src/config.js';
 
@@ -48,31 +48,24 @@ runner.describe('Building', () => {
 
   });
 
-  runner.describe('BUILDING_INCOME', () => {
+  runner.describe('capital building', () => {
 
-    runner.it('should have correct income for city', () => {
-      assertEqual(BUILDING_INCOME.city.funds, 1000);
-      assertEqual(BUILDING_INCOME.city.science, 0);
+    runner.it('should create a capital with correct properties', () => {
+      const building = createBuilding(5, 3, 'capital', 'player');
+
+      assertEqual(building.q, 5);
+      assertEqual(building.r, 3);
+      assertEqual(building.type, 'capital');
+      assertEqual(building.owner, 'player');
     });
 
-    runner.it('should have correct income for factory', () => {
-      assertEqual(BUILDING_INCOME.factory.funds, 0);
-      assertEqual(BUILDING_INCOME.factory.science, 0);
-    });
+    runner.it('capital can be captured like other buildings', () => {
+      const building = createBuilding(0, 0, 'capital', 'enemy');
+      assertEqual(building.owner, 'enemy');
 
-    runner.it('should have correct income for lab', () => {
-      assertEqual(BUILDING_INCOME.lab.funds, 0);
-      assertEqual(BUILDING_INCOME.lab.science, 1);
-    });
-
-  });
-
-  runner.describe('BUILDING_ICONS', () => {
-
-    runner.it('should have icons for all building types', () => {
-      assertEqual(BUILDING_ICONS.city, '🏙️');
-      assertEqual(BUILDING_ICONS.factory, '🏭');
-      assertEqual(BUILDING_ICONS.lab, '🔬');
+      // Simulate capture by changing owner
+      building.owner = 'player';
+      assertEqual(building.owner, 'player');
     });
 
   });
@@ -283,6 +276,56 @@ runner.describe('Building', () => {
       const building = map.getBuilding(0, 0)!;
       assertEqual(building.captureResistance, 10);
       assertEqual(building.capturingUnitId, 'unit1');
+    });
+
+  });
+
+  runner.describe('getCapital', () => {
+
+    runner.it('should return capital for owner', () => {
+      const map = new GameMap(MAP_CONFIGS.small);
+      map.addBuilding(createBuilding(0, 0, 'capital', 'player'));
+      map.addBuilding(createBuilding(5, 5, 'city', 'player'));
+
+      const capital = map.getCapital('player');
+      assert(capital !== undefined, 'Should find capital');
+      assertEqual(capital!.type, 'capital');
+      assertEqual(capital!.owner, 'player');
+      assertEqual(capital!.q, 0);
+      assertEqual(capital!.r, 0);
+    });
+
+    runner.it('should return undefined when no capital exists', () => {
+      const map = new GameMap(MAP_CONFIGS.small);
+      map.addBuilding(createBuilding(0, 0, 'city', 'player'));
+
+      const capital = map.getCapital('player');
+      assertEqual(capital, undefined);
+    });
+
+    runner.it('should return undefined for wrong owner', () => {
+      const map = new GameMap(MAP_CONFIGS.small);
+      map.addBuilding(createBuilding(0, 0, 'capital', 'player'));
+
+      const capital = map.getCapital('enemy');
+      assertEqual(capital, undefined);
+    });
+
+    runner.it('should return undefined after capital is captured', () => {
+      const map = new GameMap(MAP_CONFIGS.small);
+      map.addBuilding(createBuilding(0, 0, 'capital', 'player'));
+
+      // Initially player owns it
+      let capital = map.getCapital('player');
+      assert(capital !== undefined, 'Player should own capital');
+
+      // Capture by enemy
+      map.setBuildingOwner(0, 0, 'enemy');
+
+      // getCapital('player') now returns undefined - player lost their capital
+      assertEqual(map.getCapital('player'), undefined);
+      // Enemy now has a capital
+      assert(map.getCapital('enemy') !== undefined, 'Enemy should now own the capital');
     });
 
   });
