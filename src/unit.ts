@@ -5,6 +5,9 @@
 import { DEFAULT_TERRAIN_COSTS, type AxialCoord, type TerrainCosts } from './core.js';
 import { type GameMap } from './pathfinder.js';
 
+// Coordinate value for units inside a carrier (obviously invalid map position)
+export const CARRIED_COORD = -9999;
+
 export interface UnitStats {
   speed: number;
   attack: number;
@@ -20,6 +23,8 @@ export interface UnitStats {
   chassisId?: string;
   weaponId?: string;
   systemIds?: string[];
+  transportCapacity?: number;
+  transportFilter?: string[];
 }
 
 const DEFAULT_STATS: UnitStats = {
@@ -37,6 +42,8 @@ const DEFAULT_STATS: UnitStats = {
   chassisId: undefined,
   weaponId: undefined,
   systemIds: [],
+  transportCapacity: 0,
+  transportFilter: [],
 };
 
 export class Unit {
@@ -60,6 +67,11 @@ export class Unit {
   weaponId: string | undefined;
   systemIds: string[];
   hasActed: boolean = false;
+  // Transport properties
+  cargo: Unit[] = [];
+  transportCapacity: number = 0;
+  transportFilter: string[] = [];
+  carriedBy: Unit | null = null;
 
   constructor(id: string, team: string, q: number, r: number, stats: Partial<UnitStats> = {}) {
     this.id = id;
@@ -81,6 +93,8 @@ export class Unit {
     this.chassisId = stats.chassisId ?? DEFAULT_STATS.chassisId;
     this.weaponId = stats.weaponId ?? DEFAULT_STATS.weaponId;
     this.systemIds = stats.systemIds ?? DEFAULT_STATS.systemIds ?? [];
+    this.transportCapacity = stats.transportCapacity ?? DEFAULT_STATS.transportCapacity ?? 0;
+    this.transportFilter = stats.transportFilter ?? DEFAULT_STATS.transportFilter ?? [];
   }
 
   isAlive(): boolean {
@@ -102,5 +116,46 @@ export class Unit {
       }
     }
     return reachable;
+  }
+
+  // Transport methods
+  canTransport(): boolean {
+    return this.transportCapacity > 0;
+  }
+
+  hasCargoSpace(): boolean {
+    return this.cargo.length < this.transportCapacity;
+  }
+
+  canLoadUnit(unit: Unit): boolean {
+    // Must be same team
+    if (unit.team !== this.team) return false;
+    // Must have space
+    if (!this.hasCargoSpace()) return false;
+    // Cannot load transports (no nested transports)
+    if (unit.canTransport()) return false;
+    // Cannot load if already being carried
+    if (unit.carriedBy !== null) return false;
+    // Check chassis filter (empty filter = any allowed)
+    if (this.transportFilter.length > 0 && unit.chassisId) {
+      if (!this.transportFilter.includes(unit.chassisId)) return false;
+    }
+    return true;
+  }
+
+  loadUnit(unit: Unit): void {
+    this.cargo.push(unit);
+    unit.carriedBy = this;
+    unit.q = CARRIED_COORD;
+    unit.r = CARRIED_COORD;
+  }
+
+  unloadUnit(unit: Unit, q: number, r: number): void {
+    const idx = this.cargo.indexOf(unit);
+    this.cargo.splice(idx, 1);
+    unit.carriedBy = null;
+    unit.q = q;
+    unit.r = r;
+    unit.hasActed = true;
   }
 }

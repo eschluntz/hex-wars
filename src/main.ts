@@ -54,6 +54,7 @@ type GameState =
   | { type: 'selected'; unit: Unit }
   | { type: 'moved'; unit: Unit; fromQ: number; fromR: number }
   | { type: 'attacking'; unit: Unit; fromQ: number; fromR: number }
+  | { type: 'unloading'; unit: Unit; fromQ: number; fromR: number }
   | { type: 'factory'; factory: Building };
 
 class Game {
@@ -326,7 +327,40 @@ class Game {
       color: TEAM_COLORS[TEAMS.ENEMY]!.unitColor,
     }));
 
-    console.log('Small map setup: 1 city, 1 factory, 1 infantry per team');
+    // Add transport units for player testing
+    // Troop carrier (wheels + troopBay) - carries 1 foot unit
+    const reconTemplate = getTemplate('recon');
+    const reconStats = getTemplateStats(reconTemplate);
+    this.units.push(new Unit(`troop_carrier_${this.nextUnitId++}`, TEAMS.PLAYER, 2, centerR + 1, {
+      ...reconStats,
+      chassisId: 'wheels',
+      weaponId: undefined,
+      systemIds: ['troopBay'],
+      attack: 0,
+      range: 0,
+      transportCapacity: 1,
+      transportFilter: ['foot'],
+      color: TEAM_COLORS[TEAMS.PLAYER]!.unitColor,
+    }));
+
+    // Cargo carrier (cargoBay on treads) - carries 2 units of any type
+    const tankTemplate = getTemplate('tank');
+    const tankStats = getTemplateStats(tankTemplate);
+    this.units.push(new Unit(`cargo_carrier_${this.nextUnitId++}`, TEAMS.PLAYER, 2, centerR - 1, {
+      ...tankStats,
+      chassisId: 'treads',
+      weaponId: undefined,
+      systemIds: ['cargoBay'],
+      attack: 0,
+      range: 0,
+      transportCapacity: 2,
+      transportFilter: [],
+      armored: false,
+      armorPiercing: false,
+      color: TEAM_COLORS[TEAMS.PLAYER]!.unitColor,
+    }));
+
+    console.log('Small map setup: 1 city, 1 factory, 1 infantry + 2 transports for player');
   }
 
   private collectIncome(team: string): void {
@@ -344,7 +378,7 @@ class Game {
   private getBlockedPositions(forTeam: string): Set<string> {
     const blocked = new Set<string>();
     for (const unit of this.units) {
-      if (unit.team !== forTeam && unit.isAlive()) {
+      if (unit.team !== forTeam && unit.isAlive() && unit.carriedBy === null) {
         blocked.add(`${unit.q},${unit.r}`);
       }
     }
@@ -354,7 +388,7 @@ class Game {
   private getOccupiedPositions(excludeUnit: Unit): Set<string> {
     const occupied = new Set<string>();
     for (const unit of this.units) {
-      if (unit !== excludeUnit && unit.isAlive()) {
+      if (unit !== excludeUnit && unit.isAlive() && unit.carriedBy === null) {
         occupied.add(`${unit.q},${unit.r}`);
       }
     }
@@ -362,15 +396,44 @@ class Game {
   }
 
   private getUnitAt(q: number, r: number): Unit | undefined {
-    return this.units.find(u => u.q === q && u.r === r && u.isAlive());
+    return this.units.find(u => u.q === q && u.r === r && u.isAlive() && u.carriedBy === null);
   }
 
   private getEnemiesOf(unit: Unit): Unit[] {
-    return this.units.filter(u => u.team !== unit.team && u.isAlive());
+    return this.units.filter(u => u.team !== unit.team && u.isAlive() && u.carriedBy === null);
   }
 
   private getUnitById(id: string): Unit | undefined {
     return this.units.find(u => u.id === id && u.isAlive());
+  }
+
+  private getPathCost(path: AxialCoord[], terrainCosts: import('./core.js').TerrainCosts): number {
+    let cost = 0;
+    for (let i = 1; i < path.length; i++) {
+      const pos = path[i]!;
+      const tile = this.map.getTile(pos.q, pos.r)!;
+      cost += terrainCosts[tile.type];
+    }
+    return cost;
+  }
+
+  private getValidUnloadHexes(carrier: Unit): Set<string> {
+    const validHexes = new Set<string>();
+    const neighbors = HexUtil.getNeighbors(carrier.q, carrier.r);
+
+    for (const neighbor of neighbors) {
+      // Check if tile exists and is passable
+      const tile = this.map.getTile(neighbor.q, neighbor.r);
+      if (!tile) continue;
+
+      // Check if hex is unoccupied
+      const unitAtHex = this.getUnitAt(neighbor.q, neighbor.r);
+      if (unitAtHex) continue;
+
+      validHexes.add(`${neighbor.q},${neighbor.r}`);
+    }
+
+    return validHexes;
   }
 
   // --- AI Support ---
@@ -640,11 +703,13 @@ class Game {
       this.renderer.pathPreview = null;
       this.renderer.actionMenu = null;
       this.renderer.attackTargets = null;
+      this.renderer.unloadTargets = null;
       this.renderer.productionMenu = null;
     } else if (newState.type === 'selected') {
       this.renderer.selectedUnit = newState.unit;
       this.renderer.actionMenu = null;
       this.renderer.attackTargets = null;
+      this.renderer.unloadTargets = null;
       this.renderer.productionMenu = null;
     } else if (newState.type === 'moved') {
       this.renderer.selectedUnit = newState.unit;
@@ -662,12 +727,17 @@ class Game {
       const didMove = newState.fromQ !== newState.unit.q || newState.fromR !== newState.unit.r;
       const canAttackNow = newState.unit.canMoveAndAttack || !didMove;
 
+      // Check if unit has cargo to unload
+      const canUnload = newState.unit.cargo.length > 0;
+
       this.renderer.actionMenu = {
         unit: newState.unit,
         canAttack: canAttackNow && targets.length > 0,
-        canCapture
+        canCapture,
+        canUnload
       };
       this.renderer.attackTargets = null;
+      this.renderer.unloadTargets = null;
       this.renderer.productionMenu = null;
       this.renderer.menuHighlightIndex = 0;
     } else if (newState.type === 'attacking') {
@@ -679,12 +749,26 @@ class Game {
         unit: newState.unit,
         validTargets: new Set(targets.map(t => `${t.q},${t.r}`))
       };
+      this.renderer.unloadTargets = null;
+      this.renderer.productionMenu = null;
+    } else if (newState.type === 'unloading') {
+      this.renderer.selectedUnit = newState.unit;
+      this.renderer.actionMenu = null;
+      this.renderer.attackTargets = null;
+      // Calculate valid unload hexes (adjacent empty hexes)
+      const validHexes = this.getValidUnloadHexes(newState.unit);
+      this.renderer.unloadTargets = {
+        carrier: newState.unit,
+        validTiles: validHexes,
+        cargoToUnload: newState.unit.cargo[0]!  // Next unit to unload
+      };
       this.renderer.productionMenu = null;
     } else if (newState.type === 'factory') {
       this.renderer.selectedUnit = null;
       this.renderer.pathPreview = null;
       this.renderer.actionMenu = null;
       this.renderer.attackTargets = null;
+      this.renderer.unloadTargets = null;
       this.renderer.productionMenu = {
         factory: newState.factory,
         templates: getTeamTemplates(this.currentTeam)
@@ -804,11 +888,11 @@ class Game {
   }
 
   private getActiveUnitsCount(): number {
-    return this.units.filter(u => u.team === this.currentTeam && u.isAlive() && !u.hasActed).length;
+    return this.units.filter(u => u.team === this.currentTeam && u.isAlive() && !u.hasActed && u.carriedBy === null).length;
   }
 
   private getTotalUnitsCount(): number {
-    return this.units.filter(u => u.team === this.currentTeam && u.isAlive()).length;
+    return this.units.filter(u => u.team === this.currentTeam && u.isAlive() && u.carriedBy === null).length;
   }
 
   private cycleToNextActive(): void {
@@ -841,9 +925,9 @@ class Game {
       }
     }
 
-    // Find next active unit (hasn't acted yet)
+    // Find next active unit (hasn't acted yet, not cargo)
     const activeUnits = this.units.filter(
-      u => u.team === this.currentTeam && u.isAlive() && !u.hasActed
+      u => u.team === this.currentTeam && u.isAlive() && !u.hasActed && u.carriedBy === null
     );
 
     if (activeUnits.length > 0) {
@@ -924,6 +1008,9 @@ class Game {
 
       // Check for game over after capture (enemy may have lost last city)
       this.checkAndTriggerGameOver();
+    } else if (action === 'unload') {
+      // Enter unloading state
+      this.setState({ type: 'unloading', unit, fromQ: this.state.fromQ, fromR: this.state.fromR });
     }
   }
 
@@ -967,6 +1054,9 @@ class Game {
         if (clickedUnit === unit) {
           // Clicked same unit - enter moved state without moving
           this.setState({ type: 'moved', unit, fromQ: unit.q, fromR: unit.r });
+        } else if (clickedUnit && clickedUnit.team === this.currentTeam && clickedUnit.canLoadUnit(unit)) {
+          // Clicked a carrier that can load this unit - try to load
+          this.tryMove(unit, hex);
         } else if (clickedUnit && clickedUnit.team === this.currentTeam && !clickedUnit.hasActed) {
           // Clicked another friendly unmoved unit - select it instead
           this.setState({ type: 'selected', unit: clickedUnit });
@@ -999,6 +1089,29 @@ class Game {
 
           // Check for game over after combat
           this.checkAndTriggerGameOver();
+        }
+        break;
+      }
+
+      case 'unloading': {
+        const carrier = this.state.unit;
+        const targetKey = `${hex.q},${hex.r}`;
+        const validTiles = this.renderer.unloadTargets?.validTiles;
+
+        if (validTiles?.has(targetKey) && carrier.cargo.length > 0) {
+          const cargoUnit = carrier.cargo[0]!;
+          carrier.unloadUnit(cargoUnit, hex.q, hex.r);
+          // Carrier commits to this position once any unload happens
+          carrier.hasActed = true;
+          console.log(`Unloaded ${cargoUnit.id} from ${carrier.id} at (${hex.q}, ${hex.r})`);
+
+          // If more cargo, stay in unloading state (refresh valid tiles)
+          if (carrier.cargo.length > 0) {
+            this.setState({ type: 'unloading', unit: carrier, fromQ: this.state.fromQ, fromR: this.state.fromR });
+          } else {
+            // No more cargo - done
+            this.setState({ type: 'idle' });
+          }
         }
         break;
       }
@@ -1094,6 +1207,15 @@ class Game {
         // Go back to moved state
         this.setState({ type: 'moved', unit: this.state.unit, fromQ: this.state.fromQ, fromR: this.state.fromR });
         break;
+      case 'unloading':
+        // If carrier already unloaded something, it's committed - go to idle
+        if (this.state.unit.hasActed) {
+          this.setState({ type: 'idle' });
+        } else {
+          // No unloads yet - go back to moved state
+          this.setState({ type: 'moved', unit: this.state.unit, fromQ: this.state.fromQ, fromR: this.state.fromR });
+        }
+        break;
       case 'factory':
         this.setState({ type: 'idle' });
         break;
@@ -1117,6 +1239,21 @@ class Game {
     );
 
     if (result) {
+      // Check if destination is a friendly carrier that can load us (check FIRST)
+      const unitAtDest = this.getUnitAt(destination.q, destination.r);
+      if (unitAtDest && unitAtDest.team === unit.team && unitAtDest.canLoadUnit(unit)) {
+        // Allow loading if within movement range
+        if (this.getPathCost(result.path, unit.terrainCosts) <= unit.speed) {
+          // Load the unit onto the carrier
+          unitAtDest.loadUnit(unit);
+          unit.hasActed = true;
+          console.log(`${unit.id} loaded onto ${unitAtDest.id}`);
+          this.setState({ type: 'idle' });
+          return;
+        }
+      }
+
+      // Normal movement
       const reachableIdx = unit.getReachableIndex(result.path, this.map, occupied);
       if (reachableIdx > 0) {
         const dest = result.path[reachableIdx]!;
@@ -1130,6 +1267,22 @@ class Game {
     console.log('No valid path to destination');
   }
 
+  private handleUnitDeath(deadUnit: Unit, killerTeam: string): void {
+    // Record kill
+    this.gameStats.recordUnitKilled(killerTeam, deadUnit.team);
+    this.map.resetCaptureByUnit(deadUnit.id);
+
+    // Destroy all cargo (each counts as a kill)
+    for (const cargoUnit of deadUnit.cargo) {
+      cargoUnit.health = 0;
+      cargoUnit.carriedBy = null;
+      console.log(`  ${cargoUnit.id} destroyed with carrier!`);
+      this.gameStats.recordUnitKilled(killerTeam, cargoUnit.team);
+      this.map.resetCaptureByUnit(cargoUnit.id);
+    }
+    deadUnit.cargo = [];
+  }
+
   private executeAttack(attacker: Unit, defender: Unit): void {
     const result = Combat.execute(attacker, defender);
 
@@ -1140,14 +1293,12 @@ class Game {
     console.log(`  ${attacker.id} deals ${result.attackerDamage} damage`);
     if (result.defenderDied) {
       console.log(`  ${defender.id} destroyed!`);
-      this.gameStats.recordUnitKilled(attacker.team, defender.team);
-      this.map.resetCaptureByUnit(defender.id);
+      this.handleUnitDeath(defender, attacker.team);
     } else if (result.defenderDamage > 0) {
       console.log(`  ${defender.id} counter-attacks for ${result.defenderDamage} damage`);
       if (result.attackerDied) {
         console.log(`  ${attacker.id} destroyed!`);
-        this.gameStats.recordUnitKilled(defender.team, attacker.team);
-        this.map.resetCaptureByUnit(attacker.id);
+        this.handleUnitDeath(attacker, defender.team);
       }
     }
   }
@@ -1246,9 +1397,20 @@ class Game {
     }
 
     const occupied = this.getOccupiedPositions(unit);
+    let reachableIndex = unit.getReachableIndex(result.path, this.map, occupied);
+
+    // Check if destination is a carrier that can load this unit
+    const destUnit = this.getUnitAt(hoveredHex.q, hoveredHex.r);
+    if (destUnit && destUnit.canLoadUnit(unit)) {
+      // If within movement range, show full path as reachable
+      if (this.getPathCost(result.path, unit.terrainCosts) <= unit.speed) {
+        reachableIndex = result.path.length - 1;
+      }
+    }
+
     this.renderer.pathPreview = {
       path: result.path,
-      reachableIndex: unit.getReachableIndex(result.path, this.map, occupied)
+      reachableIndex
     };
   }
 
@@ -1272,7 +1434,7 @@ class Game {
     }
 
     const hoveredUnit = this.units.find(u =>
-      u.q === hoveredHex.q && u.r === hoveredHex.r && u.isAlive()
+      u.q === hoveredHex.q && u.r === hoveredHex.r && u.isAlive() && u.carriedBy === null
     );
 
     if (!hoveredUnit) {
@@ -1420,7 +1582,7 @@ class Game {
       this.viewport.update();
       this.updatePathPreview();
       this.updateAttackRangeOverlay();
-      this.renderer.units = this.units.filter(u => u.isAlive());
+      this.renderer.units = this.units.filter(u => u.isAlive() && u.carriedBy === null);
       this.renderer.currentTeam = this.currentTeam;
       this.renderer.turnNumber = this.turnNumber;
       this.renderer.activeUnits = this.getActiveUnitsCount();

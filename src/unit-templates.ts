@@ -37,6 +37,8 @@ export interface UnitTemplate {
   armorPiercing: boolean;
   canCapture: boolean;
   canBuild: boolean;
+  transportCapacity: number;
+  transportFilter: string[];
 }
 
 // ============================================================================
@@ -64,6 +66,19 @@ export function createTemplate(
   const canBuild = systems.some(s => s.grantsBuild === true);
   const armored = systems.some(s => s.grantsArmor === true);
 
+  // Derive transport capacity from systems (sum of all transport systems)
+  let transportCapacity = 0;
+  let transportFilter: string[] = [];
+  for (const sys of systems) {
+    if (sys.grantsTransport && sys.transportCapacity) {
+      transportCapacity += sys.transportCapacity;
+      // Use the most restrictive filter (first one found with non-empty filter)
+      if (transportFilter.length === 0 && sys.transportFilter && sys.transportFilter.length > 0) {
+        transportFilter = [...sys.transportFilter];
+      }
+    }
+  }
+
   return {
     id,
     name,
@@ -81,6 +96,8 @@ export function createTemplate(
     armorPiercing: weapon?.armorPiercing ?? false,
     canCapture,
     canBuild,
+    transportCapacity,
+    transportFilter,
   };
 }
 
@@ -116,6 +133,8 @@ export function getTemplateStats(template: UnitTemplate): {
   chassisId: string;
   weaponId: string | undefined;
   systemIds: string[];
+  transportCapacity: number;
+  transportFilter: string[];
 } {
   return {
     speed: template.speed,
@@ -131,6 +150,8 @@ export function getTemplateStats(template: UnitTemplate): {
     chassisId: template.chassisId,
     weaponId: template.weaponId ?? undefined,
     systemIds: template.systemIds,
+    transportCapacity: template.transportCapacity,
+    transportFilter: template.transportFilter,
   };
 }
 

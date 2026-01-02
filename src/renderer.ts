@@ -22,11 +22,18 @@ export interface ActionMenu {
   unit: Unit;
   canAttack: boolean;
   canCapture: boolean;
+  canUnload?: boolean;
 }
 
 export interface AttackTargets {
   unit: Unit;
   validTargets: Set<string>;
+}
+
+export interface UnloadTargets {
+  carrier: Unit;
+  validTiles: Set<string>;
+  cargoToUnload: Unit;
 }
 
 export interface ProductionMenu {
@@ -83,6 +90,7 @@ export class Renderer {
   pathPreview: PathPreview | null = null;
   actionMenu: ActionMenu | null = null;
   attackTargets: AttackTargets | null = null;
+  unloadTargets: UnloadTargets | null = null;
   productionMenu: ProductionMenu | null = null;
   attackRangeOverlay: AttackRangeOverlay | null = null;
   menuHighlightIndex: number = 0;
@@ -230,6 +238,35 @@ export class Renderer {
       ctx.stroke();
     }
     // Note: minRangeTiles are intentionally not drawn - the gap in highlighting shows the dead zone
+  }
+
+  private drawUnloadOverlay(targets: UnloadTargets, zoom: number): void {
+    const ctx = this.ctx;
+    const size = CONFIG.hexSize * zoom;
+
+    // Draw valid unload tiles (blue overlay)
+    for (const key of targets.validTiles) {
+      const [qStr, rStr] = key.split(',');
+      const q = parseInt(qStr!, 10);
+      const r = parseInt(rStr!, 10);
+
+      const world = HexUtil.axialToPixel(q, r, CONFIG.hexSize);
+      const screen = this.viewport.worldToScreen(world.x, world.y);
+
+      // Draw hex overlay
+      const corners = HexUtil.getHexCorners(screen.x, screen.y, size);
+      ctx.beginPath();
+      ctx.moveTo(corners[0]!.x, corners[0]!.y);
+      for (let i = 1; i < 6; i++) {
+        ctx.lineTo(corners[i]!.x, corners[i]!.y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(33, 150, 243, 0.25)';  // Blue for unload targets
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(33, 150, 243, 0.6)';
+      ctx.lineWidth = Math.max(1, 2 * zoom);
+      ctx.stroke();
+    }
   }
 
   private drawUnit(cx: number, cy: number, unit: Unit, zoom: number): void {
@@ -592,6 +629,11 @@ export class Renderer {
       this.drawAttackRangeOverlay(this.attackRangeOverlay, zoom);
     }
 
+    // Draw unload target overlay
+    if (this.unloadTargets) {
+      this.drawUnloadOverlay(this.unloadTargets, zoom);
+    }
+
     // Draw path preview (player input)
     if (this.pathPreview && this.pathPreview.path.length > 1) {
       this.drawPathPreview(this.pathPreview, zoom);
@@ -798,6 +840,10 @@ export class Renderer {
       items.push({ label: 'Attack', action: 'attack', color: '#ff9800' });
     }
 
+    if (menu.canUnload) {
+      items.push({ label: 'Unload', action: 'unload', color: '#2196f3' });
+    }
+
     items.push({ label: 'Wait', action: 'wait' });
     items.push({ label: 'Cancel', action: 'cancel' });
 
@@ -876,9 +922,29 @@ export class Renderer {
     if (u.canCapture) {
       traits.push('<span style="color: #81c784">CAN CAPTURE</span>');
     }
+    if (u.transportCapacity > 0) {
+      traits.push(`<span style="color: #2196f3">TRANSPORT (${u.transportCapacity})</span>`);
+    }
 
     if (traits.length > 0) {
       lines.push(`Traits: ${traits.join(' | ')}`);
+    }
+
+    // Show transport info
+    if (u.transportCapacity > 0) {
+      // Show cargo if unit has any
+      if (u.cargo.length > 0) {
+        const cargoNames = u.cargo.map(c => c.id).join(', ');
+        lines.push(`<span style="color: #2196f3">Cargo: ${u.cargo.length}/${u.transportCapacity} (${cargoNames})</span>`);
+      } else {
+        lines.push(`<span style="color: #2196f3">Cargo: empty (${u.transportCapacity} slots)</span>`);
+      }
+      // Show compatible chassis types
+      if (u.transportFilter.length > 0) {
+        lines.push(`<span style="color: #81c784">Accepts: ${u.transportFilter.join(', ')}</span>`);
+      } else {
+        lines.push(`<span style="color: #81c784">Accepts: any chassis</span>`);
+      }
     }
 
     // Terrain costs
@@ -951,6 +1017,10 @@ export class Renderer {
         hints.push(`${num}=Attack`);
         num++;
       }
+      if (this.actionMenu.canUnload) {
+        hints.push(`${num}=Unload`);
+        num++;
+      }
       hints.push(`${num}=Wait`);
       num++;
       hints.push(`${num}=Cancel`);
@@ -961,6 +1031,12 @@ export class Renderer {
     if (this.attackTargets) {
       lines.push('');
       lines.push('Select target (ESC to cancel)');
+    }
+
+    // Unload mode hint
+    if (this.unloadTargets) {
+      lines.push('');
+      lines.push(`Select hex to unload ${this.unloadTargets.cargoToUnload.id} (ESC to cancel)`);
     }
 
     // Production menu hint

@@ -377,6 +377,8 @@ Potential tile sets:
   - [x] support min range as well as max-range
   - [x] support some units cannot move and shoot the same turn (artillery)
   - [x] when hovering over a unit, highlight it's damagable range (reachable tiles + range), and when a unit is attacking, but you've not yet selected the attack target, highlight the attack range from the current location.
+  - [ ] transport units
+
 - [ ] Come up with strategy for icons and sprites for arbitrary units
 - [ ] Balance / playtesting
   - [ ] More chassis types (hover, etc.)
@@ -391,7 +393,7 @@ Potential tile sets:
 
 
 ### Potential future additions?
-- [ ] transport units
+
 - [ ] fog of war?
 - [ ] Building construction (using units with Build ability)
   - [ ] either light buildings like roads, foxholes, walls, or

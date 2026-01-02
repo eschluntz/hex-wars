@@ -137,6 +137,7 @@ runner.describe('GreedyAI', () => {
         systemIds: ['capture'], cost: 1000, speed: 3, attack: 4, range: 1, minRange: 0,
         canMoveAndAttack: true, terrainCosts: DEFAULT_TERRAIN_COSTS, armored: false,
         armorPiercing: false, canCapture: true, canBuild: false,
+        transportCapacity: 0, transportFilter: [],
       }];
       const state = createMockState({ units: [], buildings: [], templates: existingTemplates });
       const actions = ai.planTurn(state, 'enemy');
@@ -285,6 +286,8 @@ runner.describe('GreedyAI', () => {
         armorPiercing: false,
         canCapture: true,
         canBuild: false,
+        transportCapacity: 0,
+        transportFilter: [],
       };
 
       const state = createMockState({
@@ -325,6 +328,8 @@ runner.describe('GreedyAI', () => {
         armorPiercing: false,
         canCapture: true,
         canBuild: false,
+        transportCapacity: 0,
+        transportFilter: [],
       };
 
       const state = createMockState({
@@ -360,6 +365,8 @@ runner.describe('GreedyAI', () => {
         armorPiercing: false,
         canCapture: true,
         canBuild: false,
+        transportCapacity: 0,
+        transportFilter: [],
       };
 
       const state = createMockState({

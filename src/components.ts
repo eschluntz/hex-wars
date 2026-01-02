@@ -310,6 +310,9 @@ export interface SystemComponent {
   grantsCloak?: boolean;           // Full invisibility
   grantsNanoRepair?: boolean;      // Self-healing
   grantsPsychic?: boolean;         // Mind control abilities
+  grantsTransport?: boolean;       // Unit can carry other units
+  transportCapacity?: number;      // Number of units that can be carried
+  transportFilter?: string[];      // Allowed cargo chassis types (empty = any)
 }
 
 export const SYSTEMS: Record<string, SystemComponent> = {
@@ -423,6 +426,26 @@ export const SYSTEMS: Record<string, SystemComponent> = {
     weight: 3,
     cost: 4000,
     grantsPsychic: true,
+  },
+  // Transport systems
+  troopBay: {
+    id: 'troopBay',
+    name: 'Troop Bay',
+    weight: 2,
+    cost: 300,
+    grantsTransport: true,
+    transportCapacity: 1,
+    transportFilter: ['foot'],  // Only foot soldiers
+  },
+  cargoBay: {
+    id: 'cargoBay',
+    name: 'Cargo Bay',
+    weight: 4,
+    cost: 800,
+    requiresChassis: ['treads', 'hover'],
+    grantsTransport: true,
+    transportCapacity: 2,
+    transportFilter: [],  // Empty = any chassis allowed
   },
 };
 
