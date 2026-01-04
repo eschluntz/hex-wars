@@ -24,11 +24,10 @@ import { MenuRenderer, HTMLMenuController, type GamePhase, type GameOverData } f
 import { InputHandler } from './input.js';
 import { AnimationController } from './animation.js';
 import { type Player, type PlayerConfig } from './player.js';
-import { type AIAction } from './ai/actions.js';
-import { type AIGameState } from './ai/game-state.js';
 import { createAI } from './ai/registry.js';
 import { loadTextures } from './textures.js';
-import { CombatAnimator, COUNTER_ATTACK_HEALTH_DELAY, COMBAT_ANIMATION_DURATION } from './combat-animator.js';
+import { CombatAnimator, COUNTER_ATTACK_HEALTH_DELAY } from './combat-animator.js';
+import { AITurnExecutor, type AIGameOperations } from './ai-turn-executor.js';
 
 const TEAMS = {
   PLAYER: 'player',
@@ -58,6 +57,7 @@ class Game {
   private inputHandler!: InputHandler;
   private animationController!: AnimationController;
   private combatAnimator!: CombatAnimator;
+  private aiTurnExecutor!: AITurnExecutor;
   private units: Unit[] = [];
   private state: GameState = { type: 'idle' };
   private lastPreviewHex: AxialCoord | null = null;
@@ -208,6 +208,12 @@ class Game {
     );
     this.combatAnimator = new CombatAnimator();
     this.renderer.setCombatAnimator(this.combatAnimator);
+    this.aiTurnExecutor = new AITurnExecutor(
+      this.animationController,
+      this.pathfinder,
+      this.map,
+      this.resources
+    );
 
     // Reset game state
     this.units = [];
@@ -383,6 +389,39 @@ class Game {
     this.gameStats.recordIncome(team, income.funds, 0);
   }
 
+  private async healUnitsOnBuildings(team: string): Promise<void> {
+    for (const unit of this.units) {
+      if (unit.team !== team || !unit.isAlive() || unit.carriedBy !== null) continue;
+      if (unit.health >= 10) continue;  // Already full health
+
+      const building = this.map.getBuilding(unit.q, unit.r);
+      if (building && building.owner === team) {
+        const oldHealth = unit.health;
+        unit.health = Math.min(10, unit.health + 2);
+        const healAmount = unit.health - oldHealth;
+
+        // Pan camera to the healing unit
+        this.viewport.panTo(unit.q, unit.r);
+
+        // Trigger heal animation with green floating number
+        const duration = this.combatAnimator.triggerHeal(
+          unit.id,
+          unit.q,
+          unit.r,
+          healAmount,
+          oldHealth,
+          unit.health,
+          CONFIG.hexSize
+        );
+
+        console.log(`${unit.id} healed +${healAmount} HP on ${building.type}`);
+
+        // Wait for animation to complete
+        await new Promise(resolve => setTimeout(resolve, duration));
+      }
+    }
+  }
+
   // --- Position helpers ---
 
   private getBlockedPositions(forTeam: string): Set<string> {
@@ -454,182 +493,30 @@ class Game {
 
   // --- AI Support ---
 
-  private createAIState(): AIGameState {
+  private getAIOperations(): AIGameOperations {
     return {
-      currentTeam: this.currentTeam,
-      turnNumber: this.turnNumber,
-      units: this.units,
-      map: this.map,
-      buildings: this.map.getAllBuildings(),
-      resources: this.resources,
-      pathfinder: this.pathfinder,
-      getTeamTemplates,
+      getPlayer: (teamId) => this.getPlayer(teamId),
+      getUnitById: (id) => this.getUnitById(id),
+      getUnitAt: (q, r) => this.getUnitAt(q, r),
+      getBlockedPositions: (forTeam) => this.getBlockedPositions(forTeam),
+      isGameOver: () => this.gamePhase !== 'playing',
+      executeCombatWithAnimations: (attacker, defender) => this.executeCombatWithAnimations(attacker, defender),
+      executeCapture: (unit, logPrefix) => this.executeCapture(unit, logPrefix),
+      checkAndTriggerGameOver: () => this.checkAndTriggerGameOver(),
+      endTurn: () => this.endTurn(),
+      addUnit: (unit) => this.units.push(unit),
+      getNextUnitId: () => this.nextUnitId++,
     };
   }
 
   private async executeAITurn(): Promise<void> {
-    const player = this.getPlayer(this.currentTeam);
-    if (!player || player.type !== 'ai' || !player.aiController) {
-      return;
-    }
-
     this.isAITurnInProgress = true;
-    console.log(`AI (${player.name}) is taking its turn...`);
-
-    const aiState = this.createAIState();
-    const actions = player.aiController.planTurn(aiState, this.currentTeam);
-
-    for (const action of actions) {
-      // Check for game over between actions
-      if (this.gamePhase !== 'playing') break;
-
-      await this.executeAIAction(action);
-
-      // Small delay between actions for visual feedback
-      await this.delay(50);
-    }
-
+    await this.aiTurnExecutor.executeTurn(
+      this.currentTeam,
+      this.getAIOperations(),
+      this.units
+    );
     this.isAITurnInProgress = false;
-  }
-
-  private async executeAIAction(action: AIAction): Promise<void> {
-    switch (action.type) {
-      case 'move': {
-        const unit = this.getUnitById(action.unitId);
-        if (!unit || unit.hasActed) return;
-
-        // Compute path for animation
-        const blocked = this.getBlockedPositions(unit.team);
-        const pathResult = this.pathfinder.findPath(
-          unit.q, unit.r,
-          action.targetQ, action.targetR,
-          unit.terrainCosts,
-          blocked
-        );
-
-        if (pathResult) {
-          // Play move animation
-          await this.animationController.play({
-            type: 'move',
-            hexQ: unit.q,
-            hexR: unit.r,
-            path: pathResult.path,
-            unitId: unit.id
-          });
-        }
-
-        // Reset any capture progress when unit moves
-        this.map.resetCaptureByUnit(unit.id);
-
-        unit.q = action.targetQ;
-        unit.r = action.targetR;
-        console.log(`AI moves ${unit.id} to (${action.targetQ}, ${action.targetR})`);
-        break;
-      }
-
-      case 'attack': {
-        const unit = this.getUnitById(action.unitId);
-        const target = this.getUnitAt(action.targetQ, action.targetR);
-        if (!unit || !target) return;
-
-        this.executeCombatWithAnimations(unit, target);
-
-        // Wait for combat animation to complete
-        await this.delay(COMBAT_ANIMATION_DURATION);
-
-        unit.hasActed = true;
-        this.checkAndTriggerGameOver();
-        break;
-      }
-
-      case 'capture': {
-        const unit = this.getUnitById(action.unitId);
-        if (!unit) return;
-
-        if (unit.canCapture) {
-          const building = this.map.getBuilding(unit.q, unit.r);
-          if (building && building.owner !== unit.team) {
-            // Determine toast message before capture
-            const willCapture = building.captureResistance <= unit.health;
-            const buildingName = building.type.charAt(0).toUpperCase() + building.type.slice(1);
-            const toastText = willCapture
-              ? `${buildingName} Captured!`
-              : `-${unit.health} resistance`;
-
-            await this.animationController.play({
-              type: 'combat',  // reuse combat type for capture toasts
-              hexQ: unit.q,
-              hexR: unit.r,
-              toastText
-            });
-          }
-          this.executeCapture(unit, 'AI ');
-        }
-        unit.hasActed = true;
-        this.checkAndTriggerGameOver();
-        break;
-      }
-
-      case 'wait': {
-        const unit = this.getUnitById(action.unitId);
-        if (unit) {
-          unit.hasActed = true;
-        }
-        break;
-      }
-
-      case 'build': {
-        const template = getTeamTemplate(this.currentTeam, action.templateId);
-        if (!template) {
-          console.log(`AI: Unknown template ${action.templateId}`);
-          return;
-        }
-
-        if (!this.resources.canAfford(this.currentTeam, template.cost)) {
-          console.log(`AI: Cannot afford ${template.name}`);
-          return;
-        }
-
-        // Check if factory position is occupied
-        const existingUnit = this.getUnitAt(action.factoryQ, action.factoryR);
-        if (existingUnit) {
-          console.log(`AI: Factory at (${action.factoryQ}, ${action.factoryR}) is occupied`);
-          return;
-        }
-
-        // Play build animation before creating unit
-        await this.animationController.play({
-          type: 'build',
-          hexQ: action.factoryQ,
-          hexR: action.factoryR,
-          toastText: `Built ${template.name}`
-        });
-
-        this.resources.spendFunds(this.currentTeam, template.cost);
-
-        const unit = new Unit(
-          `${template.id}_${this.nextUnitId++}`,
-          this.currentTeam,
-          action.factoryQ,
-          action.factoryR,
-          { ...getTemplateStats(template), color: TEAM_COLORS[this.currentTeam]!.unitColor }
-        );
-        unit.hasActed = true;
-        this.units.push(unit);
-        console.log(`AI built ${template.name} at (${action.factoryQ}, ${action.factoryR})`);
-        break;
-      }
-
-      case 'endTurn': {
-        // This triggers the actual end of turn
-        this.endTurn();
-        break;
-      }
-    }
-  }
-
-  private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   // --- State transitions ---
@@ -758,6 +645,9 @@ class Game {
   }
 
   private async startTurn(): Promise<void> {
+    // Heal units on controlled buildings
+    await this.healUnitsOnBuildings(this.currentTeam);
+
     const teamName = this.currentTeam === TEAMS.PLAYER ? 'Player' : 'Enemy';
     await this.animationController.playTurnAnnouncement(teamName);
 

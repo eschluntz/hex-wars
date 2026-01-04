@@ -152,10 +152,13 @@ npm test           # Run tests (242 tests)
 - [x] Indirect fire units with min range
 - [x] AI opponent (builds, captures, fights)
 - [x] Unit sprites with team coloring
+- [x] Battle animations
+- [x] movement animations
 
 ### Upcoming
-- [ ] Balance / playtesting
+- [x] cities heal
+- [ ] make smaller maps
+- [ ] metagame basics
 - [ ] Saving and loading games
 - [ ] AI improvements (smarter unit composition, factory blocking)
-- [ ] Battle animations
 - [ ] Fog of war (maybe)

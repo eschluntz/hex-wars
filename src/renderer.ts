@@ -820,8 +820,8 @@ export class Renderer {
       ctx.lineWidth = 3;
       ctx.strokeText(fn.text, screen.x, screen.y + fn.offsetY * zoom);
 
-      // Draw text (red for damage)
-      ctx.fillStyle = '#ff4444';
+      // Draw text with color from animation
+      ctx.fillStyle = fn.color;
       ctx.fillText(fn.text, screen.x, screen.y + fn.offsetY * zoom);
     }
     ctx.globalAlpha = 1;

@@ -43,6 +43,7 @@ export interface FloatingNumber {
   text: string;
   startTime: number;
   duration: number;
+  color: string;  // Text color (e.g., '#ff4444' for damage, '#44ff44' for heal)
 }
 
 export interface DeathParticle {
@@ -134,6 +135,7 @@ export class CombatAnimator {
       text: `-${damage}`,
       startTime: start + LUNGE_OUT_DURATION,
       duration: DAMAGE_FLOAT_DURATION,
+      color: '#ff4444',
     });
 
     // Death animation if defender died
@@ -197,6 +199,7 @@ export class CombatAnimator {
       text: `-${damage}`,
       startTime: start + LUNGE_OUT_DURATION,
       duration: DAMAGE_FLOAT_DURATION,
+      color: '#ff4444',
     });
 
     // Death animation if attacker died from counter
@@ -242,6 +245,42 @@ export class CombatAnimator {
       target: newHealth,
       startTime: this.currentTime + actualDelay,
     });
+  }
+
+  /**
+   * Trigger a heal animation with green floating number.
+   * @returns Duration of the heal animation in ms
+   */
+  triggerHeal(
+    unitId: string,
+    q: number,
+    r: number,
+    healAmount: number,
+    oldHealth: number,
+    newHealth: number,
+    hexSize: number
+  ): number {
+    const now = this.currentTime;
+    const world = HexUtil.axialToPixel(q, r, hexSize);
+
+    // Green floating heal number
+    this.floatingNumbers.push({
+      x: world.x,
+      y: world.y,
+      text: `+${healAmount}`,
+      startTime: now,
+      duration: DAMAGE_FLOAT_DURATION,
+      color: '#44ff44',
+    });
+
+    // Update health display
+    this.healthDisplays.set(unitId, {
+      current: oldHealth,
+      target: newHealth,
+      startTime: now,
+    });
+
+    return DAMAGE_FLOAT_DURATION;
   }
 
   /**
@@ -344,9 +383,9 @@ export class CombatAnimator {
   /**
    * Get active floating damage numbers.
    */
-  getFloatingNumbers(): Array<{ x: number; y: number; text: string; alpha: number; offsetY: number }> {
+  getFloatingNumbers(): Array<{ x: number; y: number; text: string; alpha: number; offsetY: number; color: string }> {
     const now = this.currentTime;
-    const result: Array<{ x: number; y: number; text: string; alpha: number; offsetY: number }> = [];
+    const result: Array<{ x: number; y: number; text: string; alpha: number; offsetY: number; color: string }> = [];
 
     for (const fn of this.floatingNumbers) {
       const elapsed = now - fn.startTime;
@@ -364,6 +403,7 @@ export class CombatAnimator {
         text: fn.text,
         alpha,
         offsetY,
+        color: fn.color,
       });
     }
 
