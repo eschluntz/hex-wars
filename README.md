@@ -391,8 +391,6 @@ this.drawPopupMenu({
 - [x] UX improvements
   - [x] space auto-selects attack target when only 1 option
   - [x] at beginning of user turn, pan the map back to the first unit (equivalent to hitting spacebar)
-
-### Upcoming
 - [ ] feature parity with advance wars
   - [x] all players have a capital city. if captured, the player insta-loses the game
   - [x] order units by furthest from capital city when cycling units
@@ -403,7 +401,9 @@ this.drawPopupMenu({
   - [x] weapon compatibility to attack various chassis (i.e. soldier can't shoot airplane)
   - [x] terrain affects defense
 
+### Upcoming
 - [ ] Come up with strategy for icons and sprites for arbitrary units
+- [ ] OR: add icons for all advance wars units
 - [ ] Balance / playtesting
   - [ ] More chassis types (hover, etc.)
   - [ ] More weapon types (missiles, lasers, etc.)
