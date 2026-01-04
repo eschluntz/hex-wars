@@ -77,19 +77,18 @@ class TestMap {
 function createMockState(config: {
   units?: Unit[];
   buildings?: Building[];
-  resources?: { funds: number; science: number };
+  resources?: { funds: number };
   templates?: UnitTemplate[];
   pathfinder?: Pathfinder;
 } = {}): AIGameState {
   const units = config.units ?? [];
   const buildings = config.buildings ?? [];
-  const resources = config.resources ?? { funds: 1000, science: 0 };
+  const resources = config.resources ?? { funds: 1000 };
   const templates = config.templates ?? [];
   const pathfinder = config.pathfinder ?? new Pathfinder(new TestMap() as any);
 
   const resourceManager = new ResourceManager(['enemy', 'player']);
   resourceManager.addFunds('enemy', resources.funds);
-  resourceManager.addScience('enemy', resources.science);
 
   return {
     currentTeam: 'enemy',
@@ -106,10 +105,6 @@ function createMockState(config: {
     resources: resourceManager,
     pathfinder,
     getTeamTemplates: () => templates,
-    getResearchedChassis: () => [{ id: 'foot', name: 'Foot', maxWeight: 2, speed: 3, terrainCosts: DEFAULT_TERRAIN_COSTS, baseCost: 500 }],
-    getResearchedWeapons: () => [{ id: 'machineGun', name: 'Machine Gun', weight: 1, attack: 4, range: 1, armorPiercing: false, cost: 500 }],
-    getResearchedSystems: () => [{ id: 'capture', name: 'Capture', weight: 0, cost: 0 }],
-    getAvailableTechs: () => [],
   };
 }
 
@@ -296,7 +291,7 @@ runner.describe('GreedyAI', () => {
       const state = createMockState({
         buildings: [factory],
         templates: [template],
-        resources: { funds: 1000, science: 0 },
+        resources: { funds: 1000 },
       });
 
       const actions = ai.planTurn(state, 'enemy');
@@ -341,7 +336,7 @@ runner.describe('GreedyAI', () => {
         units: [occupyingUnit],
         buildings: [factory],
         templates: [template],
-        resources: { funds: 1000, science: 0 },
+        resources: { funds: 1000 },
       });
 
       const actions = ai.planTurn(state, 'enemy');
@@ -379,7 +374,7 @@ runner.describe('GreedyAI', () => {
       const state = createMockState({
         buildings: [factory],
         templates: [template],
-        resources: { funds: 100, science: 0 }, // Not enough funds
+        resources: { funds: 100 }, // Not enough funds
       });
 
       const actions = ai.planTurn(state, 'enemy');
@@ -441,7 +436,7 @@ runner.describe('GreedyAI', () => {
 
       const state = createMockState({
         units: [aiUnit, playerUnit],
-        resources: { funds: 0, science: 0 },
+        resources: { funds: 0 },
       });
 
       const actions = ai.planTurn(state, 'enemy');
@@ -464,7 +459,7 @@ runner.describe('GreedyAI', () => {
 
       const state = createMockState({
         units: [aiUnit, playerUnit],
-        resources: { funds: 0, science: 0 },
+        resources: { funds: 0 },
       });
 
       const actions = ai.planTurn(state, 'enemy');
@@ -484,7 +479,7 @@ runner.describe('GreedyAI', () => {
 
       const state = createMockState({
         units: [aiUnit, playerUnit],
-        resources: { funds: 0, science: 0 },
+        resources: { funds: 0 },
       });
 
       const actions = ai.planTurn(state, 'enemy');
@@ -510,7 +505,7 @@ runner.describe('GreedyAI', () => {
 
       const state = createMockState({
         units: [aiUnit, playerUnit],
-        resources: { funds: 0, science: 0 },
+        resources: { funds: 0 },
       });
 
       const actions = ai.planTurn(state, 'enemy');
@@ -530,7 +525,7 @@ runner.describe('GreedyAI', () => {
 
       const state = createMockState({
         units: [aiUnit, playerUnit],
-        resources: { funds: 0, science: 0 },
+        resources: { funds: 0 },
       });
 
       const actions = ai.planTurn(state, 'enemy');

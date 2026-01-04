@@ -259,19 +259,13 @@ export class GameMap {
       for (let i = 0; i < cluster.buildings.length; i++) {
         const pos = cluster.buildings[i]!;
 
-        // Determine building type: mostly cities, some factories, 1 lab per cluster
+        // Determine building type: mostly cities, some factories
         let buildingType: BuildingType;
-        if (i === 0) {
-          // First building in cluster is always a lab
-          buildingType = 'lab';
+        const typeRoll = rng.next();
+        if (typeRoll < 0.7) {
+          buildingType = 'city';
         } else {
-          // Rest are cities and factories
-          const typeRoll = rng.next();
-          if (typeRoll < 0.7) {
-            buildingType = 'city';
-          } else {
-            buildingType = 'factory';
-          }
+          buildingType = 'factory';
         }
 
         // All buildings start neutral - ownership assigned after
@@ -295,15 +289,13 @@ export class GameMap {
       const q = rng.nextInt(-rOffset, width - rOffset - 1);
 
       if (this.isValidBuildingTile(q, r) && !this.isTooCloseToBuilding(q, r, allClusterBuildings, clusterCfg.singletonMinDistance)) {
-        // Random building type: 50% city, 30% factory, 20% lab
+        // Random building type: 60% city, 40% factory
         const typeRoll = rng.next();
         let buildingType: BuildingType;
-        if (typeRoll < 0.5) {
+        if (typeRoll < 0.6) {
           buildingType = 'city';
-        } else if (typeRoll < 0.8) {
-          buildingType = 'factory';
         } else {
-          buildingType = 'lab';
+          buildingType = 'factory';
         }
 
         // All singletons are neutral

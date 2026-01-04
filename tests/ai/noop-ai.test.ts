@@ -40,10 +40,6 @@ function createMockState(): AIGameState {
     resources: resourceManager,
     pathfinder: new Pathfinder(testMap as any),
     getTeamTemplates: () => [],
-    getResearchedChassis: () => [],
-    getResearchedWeapons: () => [],
-    getResearchedSystems: () => [],
-    getAvailableTechs: () => [],
   };
 }
 

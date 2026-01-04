@@ -27,6 +27,7 @@ export interface UnitStats {
   transportCapacity?: number;
   transportFilter?: string[];
   cannotTarget?: string[];
+  templateId?: string;  // Unit type ID for sprite lookup
 }
 
 const DEFAULT_STATS: UnitStats = {
@@ -48,6 +49,7 @@ const DEFAULT_STATS: UnitStats = {
   transportCapacity: 0,
   transportFilter: [],
   cannotTarget: [],
+  templateId: undefined,
 };
 
 export class Unit {
@@ -72,6 +74,7 @@ export class Unit {
   weaponId: string | undefined;
   systemIds: string[];
   cannotTarget: string[];
+  templateId: string | undefined;  // Unit type ID for sprite lookup
   hasActed: boolean = false;
   // Transport properties
   cargo: Unit[] = [];
@@ -103,6 +106,7 @@ export class Unit {
     this.transportCapacity = stats.transportCapacity ?? DEFAULT_STATS.transportCapacity ?? 0;
     this.transportFilter = stats.transportFilter ?? DEFAULT_STATS.transportFilter ?? [];
     this.cannotTarget = stats.cannotTarget ?? DEFAULT_STATS.cannotTarget ?? [];
+    this.templateId = stats.templateId ?? DEFAULT_STATS.templateId;
   }
 
   isAlive(): boolean {

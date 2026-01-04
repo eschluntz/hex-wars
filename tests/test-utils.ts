@@ -4,7 +4,7 @@
 // Common helpers for tests to avoid duplication and ensure tests use real game logic.
 
 import { TEAM_COLORS, TERRAIN_DEFENSE_STARS } from '../src/core.js';
-import { type Building, createBuilding } from '../src/building.js';
+import { type Building, createBuilding, type BuildingType } from '../src/building.js';
 import { Unit } from '../src/unit.js';
 import { Combat } from '../src/combat.js';
 import { Pathfinder } from '../src/pathfinder.js';
@@ -17,15 +17,7 @@ import {
   getTeamTemplates,
   getTeamTemplate,
   getTemplate,
-  registerTemplate,
 } from '../src/unit-templates.js';
-import { initTeamResearch } from '../src/research.js';
-import { getTechTreeState, purchaseTech } from '../src/tech-tree.js';
-import {
-  getResearchedChassis,
-  getResearchedWeapons,
-  getResearchedSystems,
-} from '../src/unit-designer.js';
 
 // ============================================================================
 // Test Map - Simple map for testing (no procedural generation)
@@ -115,7 +107,6 @@ export class TestGame {
 
     for (const team of teams) {
       initTeamTemplates(team);
-      initTeamResearch(team);
     }
   }
 
@@ -123,7 +114,7 @@ export class TestGame {
     return this.teams[this.currentTeamIndex]!;
   }
 
-  addUnit(team: string, q: number, r: number, templateId: string = 'soldier'): Unit {
+  addUnit(team: string, q: number, r: number, templateId: string = 'infantry'): Unit {
     // Try team-specific template first, fall back to default templates
     const template = getTeamTemplate(team, templateId) ?? getTemplate(templateId);
     if (!template) {
@@ -150,7 +141,7 @@ export class TestGame {
     return unit;
   }
 
-  addBuilding(q: number, r: number, type: 'city' | 'factory' | 'lab' | 'capital', owner: string | null): void {
+  addBuilding(q: number, r: number, type: BuildingType, owner: string | null): void {
     this.map.addBuilding(createBuilding(q, r, type, owner));
   }
 
@@ -164,10 +155,6 @@ export class TestGame {
       resources: this.resources,
       pathfinder: this.pathfinder,
       getTeamTemplates,
-      getResearchedChassis,
-      getResearchedWeapons,
-      getResearchedSystems,
-      getAvailableTechs: (team) => getTechTreeState(team, this.resources.getResources(team).science),
     };
   }
 
@@ -219,22 +206,6 @@ export class TestGame {
         break;
       }
 
-      case 'research': {
-        purchaseTech(this.currentTeam, action.techId, this.resources);
-        break;
-      }
-
-      case 'design': {
-        registerTemplate(
-          this.currentTeam,
-          action.name,
-          action.chassisId,
-          action.weaponId,
-          action.systemIds
-        );
-        break;
-      }
-
       case 'endTurn':
         break;
     }
@@ -279,8 +250,8 @@ export interface DuelScenario {
  * Creates a simple 1v1 duel scenario with units adjacent to each other.
  */
 export function createDuelScenario(
-  attackerTemplate: string = 'soldier',
-  defenderTemplate: string = 'soldier'
+  attackerTemplate: string = 'infantry',
+  defenderTemplate: string = 'infantry'
 ): DuelScenario {
   const game = new TestGame(['attacker', 'defender'], 5, 5);
   const attacker = game.addUnit('attacker', 1, 2, attackerTemplate);
@@ -297,26 +268,21 @@ export interface EconomyScenario {
  */
 export function createEconomyScenario(
   teams: [string, string] = ['team1', 'team2'],
-  startingFunds: number = 5000,
-  startingScience: number = 0
+  startingFunds: number = 5000
 ): EconomyScenario {
   const game = new TestGame(teams, 12, 12);
 
   // Team 1 buildings (left side)
   game.addBuilding(2, 5, 'city', teams[0]);
   game.addBuilding(2, 6, 'factory', teams[0]);
-  game.addBuilding(2, 7, 'lab', teams[0]);
 
   // Team 2 buildings (right side)
   game.addBuilding(9, 5, 'city', teams[1]);
   game.addBuilding(9, 6, 'factory', teams[1]);
-  game.addBuilding(9, 7, 'lab', teams[1]);
 
   // Starting resources
   game.resources.addFunds(teams[0], startingFunds);
   game.resources.addFunds(teams[1], startingFunds);
-  game.resources.addScience(teams[0], startingScience);
-  game.resources.addScience(teams[1], startingScience);
 
   return { game };
 }

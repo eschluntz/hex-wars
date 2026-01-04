@@ -9,8 +9,6 @@ import { type Building } from '../building.js';
 import { type Pathfinder } from '../pathfinder.js';
 import { type ResourceManager } from '../resources.js';
 import { type UnitTemplate } from '../unit-templates.js';
-import { type ChassisComponent, type WeaponComponent, type SystemComponent } from '../components.js';
-import { type TechNode, getTechTreeState } from '../tech-tree.js';
 
 // Read-only game state for AI decision making
 export interface AIGameState {
@@ -22,10 +20,6 @@ export interface AIGameState {
   readonly resources: ResourceManager;
   readonly pathfinder: Pathfinder;
 
-  // Helpers that need game context
+  // Get available unit templates for a team
   getTeamTemplates(team: string): UnitTemplate[];
-  getResearchedChassis(team: string): ChassisComponent[];
-  getResearchedWeapons(team: string): WeaponComponent[];
-  getResearchedSystems(team: string): SystemComponent[];
-  getAvailableTechs(team: string): TechNode[];
 }

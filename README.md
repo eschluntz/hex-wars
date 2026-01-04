@@ -1,14 +1,14 @@
 # Hex Dominion
 
-A turn-based hex strategy game inspired by Advance Wars, Factorio, and roguelike elements. The goal is to create something with interesting depth but satisfying and not stressful to play — manageable cognitive load with meaningful decisions.
+A turn-based hex strategy game inspired by Advance Wars. Clean, satisfying tactical gameplay with manageable cognitive load and meaningful decisions.
 
 ## Design Goals
 
 **What we want:**
 - Satisfying tactical/strategic decisions
-- Base building with purpose
+- Clear unit roles and counter-play
 - Smart, adaptive AI opposition
-- Creative expression through unit customization
+- Quick to learn, deep to master
 
 **What we avoid:**
 - APM stress / real-time pressure
@@ -16,289 +16,115 @@ A turn-based hex strategy game inspired by Advance Wars, Factorio, and roguelike
 - Repetitive defense loops
 - Long slogs or stalemates
 
-## Planned Features
+## Unit Roster (Advance Wars style)
 
-### Turn Structure
-1. Collect resources from buildings
-2. Build structures / expand to new hexes
-3. Research tech (spend science)
-4. Design & produce units (spend materials)
-5. Move & fight
+All 15 unit types available at factories:
 
-### Unit Component System
+| Unit | Type | Cost | Move | Attack | Range | Special |
+|------|------|------|------|--------|-------|---------|
+| Infantry | Foot | $1000 | 3 | 4 | 1 | Capture, climbs mountains (cost 2) |
+| Mech | Foot | $3000 | 2 | 6 | 1 | Capture, AP, mountain specialist (cost 1) |
+| Recon | Wheels | $4000 | 8 | 4 | 1 | Fast scout |
+| Tank | Treads | $7000 | 6 | 7 | 1 | AP, Armored |
+| Md. Tank | Treads | $16000 | 5 | 8 | 1 | AP, Armored |
+| Mega Tank | Treads | $28000 | 4 | 10 | 1 | AP, Armored |
+| Artillery | Treads | $6000 | 5 | 5 | 2-3 | Indirect, no move+attack |
+| Rockets | Wheels | $15000 | 5 | 8 | 3-5 | Indirect, no move+attack |
+| Anti-Air | Treads | $8000 | 6 | 6 | 1 | Targets all (anti-air) |
+| Missiles | Wheels | $12000 | 4 | 9 | 3-5 | Anti-air only, indirect |
+| APC | Treads | $5000 | 6 | 0 | 0 | Transport (1 foot unit) |
+| Fighter | Air | $20000 | 9 | 8 | 1 | Air-to-air only |
+| Bomber | Air | $22000 | 7 | 10 | 1 | Ground only |
+| B-Copter | Air | $9000 | 6 | 6 | 1 | All targets |
+| T-Copter | Air | $5000 | 6 | 0 | 0 | Transport (1 foot unit) |
 
-Units are built from modular components rather than predefined classes. Each template combines a chassis, an optional weapon, and optional system modules. Total component weight must not exceed chassis capacity. Unit cost = sum of all component costs.
+### Terrain Movement Costs
 
-**Chassis** (determines mobility):
-| Chassis  | Speed | Max Weight | Cost  | Terrain |
-|----------|-------|------------|-------|---------|
-| Foot     | 3     | 2          | $500  | All passable terrain costs 1 |
-| Wheels   | 6     | 3          | $800  | Roads 0.5, Woods 2 |
-| Treads   | 4     | 10         | $1500 | Roads 0.5, Woods 2 |
-| Airplane | 6     | 4          | $2500 | All terrain costs 1 (flying) |
+| Terrain | Infantry | Mech | Treads | Wheels | Air |
+|---------|----------|------|--------|--------|-----|
+| Plains | 1 | 1 | 1 | 2 | 1 |
+| Woods | 1 | 1 | 2 | 3 | 1 |
+| Mountain | 2 | 1 | — | — | 1 |
+| Road | 1 | 1 | 1 | 1 | 1 |
+| Water | — | — | — | — | 1 |
 
-**Weapons** (determines offense):
-| Weapon      | Attack | Range | Armor Piercing | Weight | Cost  | Targeting |
-|-------------|--------|-------|----------------|--------|-------|-----------|
-| Machine Gun | 4      | 1     | No             | 1      | $500  | Ground only |
-| Heavy MG    | 6      | 1     | No             | 2      | $800  | All (anti-air) |
-| Cannon      | 7      | 1     | Yes            | 4      | $1500 | Ground only |
-| Artillery   | 5      | 3     | Yes            | 5      | $2000 | Ground only |
+### Combat System
 
-**System Modules** (special abilities):
-| System | Weight | Cost | Chassis Restriction | Effect |
-|--------|--------|------|---------------------|--------|
-| Capture Kit | 1 | $0 | Foot only | Can capture buildings |
-| Construction Kit | 1 | $500 | Any | Can build structures |
-| Armor Plating | 2 | $1000 | Wheels or Treads | Takes 1/5 damage from non-AP |
-| Troop Bay | 2 | $300 | Any | Carry 1 foot unit |
-| Cargo Bay | 4 | $800 | Treads or Hover | Carry 2 units of any type |
-
-**Starting Templates**:
-- **Soldier** ($1000): Foot + MG + Capture — can capture buildings
-- **Tank** ($4000): Treads + Cannon + Armor — armored with armor-piercing
-- **Recon** ($1300): Wheels + MG — fast scout
-
-**Example Custom Units**:
-- **Combat Engineer**: Foot + MG + Build + Capture ($1500) — fights, builds, captures
-- **Armored Recon**: Wheels + MG + Armor ($2300) — fast and protected
-- **Heavy Artillery**: Treads + Artillery + Armor ($4500) — long range, armored
+- **Base damage**: `attack × (health/10) + random(-1, 0, +1)`
+- **Armor**: Non-AP damage against armored units is divided by 5
+- **Counter-attacks**: Defender strikes back if alive and in range
+- **Terrain defense**: Each defense star = 10% damage reduction (scaled by HP)
 
 ## What's Implemented
 
 ### Map System
 - Hex grid with axial coordinates (pointy-top)
-- Procedural generation using layered 2D Perlin noise (altitude + vegetation)
-- Terrain: grass, woods, mountain, water, road, building
-- Roads as contiguous paths, buildings clustered near roads
+- Procedural generation using layered 2D Perlin noise
+- Terrain: grass, woods, mountain, water, road
+- Building clusters connected by roads
 
-### Viewport
-- WASD + mouse drag panning
-- Mouse wheel zoom (25% - 300%)
-- Hex hover detection
-
-### Movement System
-- A* pathfinding with terrain costs
-- Per-unit terrain cost profiles (e.g., hover units cross water, climbers traverse mountains)
-- Path preview while hovering (green = reachable, red = beyond movement range)
-- Units cannot pass through enemies or stop on occupied tiles
-
-| Terrain | Foot | Wheels/Treads |
-|---------|------|---------------|
-| Road | 1.0 | 0.5 |
-| Grass / Building | 1.0 | 1.0 |
-| Woods | 1.0 | 2.0 |
-| Water / Mountain | ∞ | ∞ |
-
-### Unit System
-- Units have: chassis type, speed, attack, range, health (max 10), terrain costs, armored, armorPiercing
-- Hover over units to see full stats including chassis type
-- Click to select, click destination to move
-- Path preview shows exact movement with arrow indicator
-- Health bars displayed below units
-
-### Combat System (Advance Wars style)
-- Base damage formula: `attack × (health/10) + random(-1, 0, +1)`
-- **Armor system**: Non-AP damage against armored units is divided by 5 (floored)
-- **Weapon targeting**: Some weapons can only target certain chassis types (e.g., MG can't hit airplanes)
-- Counter-attacks: defender strikes back if alive, in range, AND can target attacker's chassis
-- Range-based targeting (melee units can't counter ranged attacks from distance)
-- Tactical example: Soldiers (4 ATK, no AP) deal 0 damage to Tanks (armored)
-
-### Transport Units
-Units with Troop Bay or Cargo Bay can carry other units:
-
-**Loading:**
-- Select a unit, then click on a friendly transport that can carry it
-- Path shows green if loading is possible
-- Unit is loaded and turn ends for that unit
-
-**Unloading:**
-- Move transport, then select "Unload" from action menu
-- Click adjacent empty hexes to place cargo units
-- Unloaded units have already acted for the turn
-
-**Restrictions:**
-- Troop Bay only accepts foot units; Cargo Bay accepts any chassis
-- Transports cannot carry other transports (no nesting)
-- Cargo units are hidden from the map while carried
-
-**Combat:**
-- If a transport is destroyed, all cargo units are also destroyed
-- Each cargo death counts as a kill for the attacker
-
-### Turn System
-- Two teams: Player vs AI (or hotseat mode)
-- Each unit can move and optionally attack once per turn
-- Units that have acted are greyed out
-- Tab key ends turn and switches to other team
-- Turn counter tracks game progress
-- Resources collected at start of each turn
-
-### AI Opponent System
-Pluggable AI system with multiple strategies:
-
-**Available AIs:**
-- **NoOpAI**: Testing baseline — just ends turn
-- **GreedyAI**: Playable AI with greedy decision-making
-
-**GreedyAI Behavior (per turn):**
-1. **Research**: Pick cheapest affordable tech
-2. **Design**: Create new unit templates using unlocked components
-3. **Production**: Build units at factories (prioritizing those closer to enemy)
-4. **Unit Control** (per-unit priority):
-   - Capture building if standing on one
-   - Move to capture building if reachable
-   - Attack target with maximum expected damage
-   - Move toward nearest enemy unit or building
-   - Wait if nothing else to do
-
-**AI Architecture:**
-- `AIController` interface for pluggable strategies
-- `GameStateView` provides read-only game state for AI decisions
-- Uses real game systems (Combat, Pathfinder, etc.) — no duplicate logic
-- Actions executed through same code path as player actions
-
-### Building System
-Three building types with distinct roles:
+### Buildings
 - **Cities** (🏙️): Generate $1000 funds per turn
 - **Factories** (🏭): Produce new units
-- **Labs** (🔬): Generate 1 science per turn
+- **Capital** (🏰): Generate $2000 funds; lose it = instant defeat
 
-Buildings have ownership displayed via colored backgrounds:
-- Green = Player-owned
-- Red = Enemy-owned
-- Gray = Neutral (can be captured later)
-
-### Resource System
-- **Funds ($)**: Collected from cities, spent to build units
-- **Science**: Collected from labs, spent to research new components
-- Resources displayed in info panel
-- Each team starts with $5000
-
-### Unit Production
-- Click on an owned factory (when no unit is on it) to open the production menu
-- Three default unit templates available (built from components):
-  - **Soldier** ($1000): Foot + MG + Capture — Speed 3, Attack 4, can capture buildings
-  - **Tank** ($4000): Treads + Cannon + Armor — Speed 4, Attack 7, armored + AP
-  - **Recon** ($1300): Wheels + MG — Speed 6, Attack 4, fast scout
-- Newly built units appear on the factory, deactivated for the current turn
-- Use number keys or arrow keys + Enter to select
-
-### Unit Designer (Lab)
-- Click on an owned lab to open the Unit Designer
-- **Design new units** by combining chassis, weapons, and system modules
-- Real-time validation shows weight limits and component compatibility
-- **Edit existing templates** by clicking on them in the list
-- Hover over components to see detailed stats in the tooltip area
-- Unavailable/unresearched components are grayed out with explanatory messages
-- Each team has their own template library
+### Win Condition
+Capture the enemy's capital to win instantly.
 
 ### Building Capture
-- Units with `canCapture` ability (Soldier) can capture neutral or enemy buildings
-- Move the unit onto a building, then select "Capture" from the action menu
-- **Multi-turn capture**: Buildings have 20 resistance; each capture action subtracts the unit's current HP
-  - Full health unit (10 HP) captures in 2 turns
-  - Damaged units take longer to capture
-- **Resistance resets** if the capturing unit moves away or dies
-- **Contested capture**: If a different unit starts capturing, resistance resets to 20
-- Visual indicator: A vertical bar on the left side of the building shows capture progress
-- Buildings are visible underneath units (ring + small icon in corner)
+- Units with capture ability (Infantry, Mech) can capture buildings
+- Buildings have 20 resistance; each capture subtracts unit's HP
+- Full health unit captures in 2 turns
+- Resistance resets if capturing unit leaves or dies
 
-### Win/Lose Conditions
-- A team loses when they have **no buildings AND no units**
-- Game ends immediately when a team is eliminated
-- Victory screen shows the winner and detailed statistics
+### Transport Units
+- APC and T-Copter carry 1 foot unit
+- Select transport, move, then "Unload" to adjacent passable tile
+- Cargo destroyed if transport is destroyed
 
-### Main Menu & Game Over
-- **Main Menu**: Click "New Game" or press Enter/Space to start
-- **Game Over Screen**: Shows winner, turn count, and performance graphs
-- **Statistics Tracked**:
-  - Units over time (per team)
-  - Buildings owned
-  - Funds accumulated
-  - Units killed (cumulative)
-  - Buildings captured (cumulative)
-  - Science collected
+### AI Opponent
+**GreedyAI** with priority-based decisions:
+1. Build units at factories (prioritize closer to enemy)
+2. Capture buildings if possible
+3. Attack with maximum expected damage
+4. Move toward nearest enemy/building
 
-### UI & Controls
-- **Click** unit to select
-- **Click** tile to move (shows action menu after)
-- **Action menu**: Wait (1), Cancel (2), Attack (3) - keyboard or click
-- **Arrow keys + Enter** to navigate menu
-- **Escape** to cancel/go back
-- **Right-click** to deselect
+### Controls
+- **Click** to select unit, click destination to move
+- **Action menu**: Wait, Cancel, Attack, Capture, Unload
 - **Tab** to end turn
-- Info panel shows: turn, team, active units, selected unit stats, terrain costs
-
-### Default Map Parameters
-- Water ≤ -0.16, Mountain ≥ 0.26
-- 8 roads, length 10-40
-- Map size: 50 × 40 hexes
+- **Space** to cycle to next active unit
+- **Escape** to cancel
+- **Arrow keys + Enter** for menu navigation
 
 ## Project Structure
 
 ```
 hex-dominion/
 ├── src/
-│   ├── core.ts          # Types, HexUtil, tile constants, TerrainCosts, TeamColors
-│   ├── components.ts    # Chassis, weapon, system component definitions
-│   ├── pathfinder.ts    # A* pathfinding + reachability (Dijkstra)
-│   ├── unit.ts          # Unit state, stats, movement
-│   ├── combat.ts        # Combat calculations with armor/AP
-│   ├── building.ts      # Building types, icons, income
-│   ├── resources.ts     # Team resource tracking
-│   ├── research.ts      # Component unlock tracking (per-team)
-│   ├── tech-data.ts     # Tech tree definitions (costs, prereqs, unlocks)
-│   ├── tech-tree.ts     # Tech tree logic (purchase, layout, availability)
-│   ├── unit-templates.ts # Unit templates built from components
-│   ├── unit-designer.ts # Design state, validation, component availability
-│   ├── lab-modal.ts     # HTML/DOM-based unit designer UI
-│   ├── player.ts        # Player/AI abstraction
+│   ├── core.ts           # Types, hex utilities, terrain
+│   ├── unit-templates.ts # Static unit type definitions
+│   ├── unit.ts           # Unit state and movement
+│   ├── combat.ts         # Combat calculations
+│   ├── building.ts       # Building types and capture
+│   ├── resources.ts      # Funds tracking
+│   ├── pathfinder.ts     # A* pathfinding
+│   ├── game-map.ts       # Map generation
 │   ├── ai/
-│   │   ├── actions.ts   # AIAction types (move, attack, build, etc.)
-│   │   ├── controller.ts # AIController interface
-│   │   ├── game-state.ts # GameStateView (read-only state for AI)
-│   │   ├── base-utils.ts # Shared AI utilities
-│   │   ├── design-utils.ts # Shared design phase logic
-│   │   ├── greedy-ai.ts # GreedyAI implementation
-│   │   ├── noop-ai.ts   # NoOpAI (testing baseline)
-│   │   └── registry.ts  # AI type lookup by name
-│   ├── noise.ts         # Perlin noise, seeded RNG
-│   ├── config.ts        # Game configuration
-│   ├── game-map.ts      # Map and building generation
-│   ├── viewport.ts      # Camera and input
-│   ├── input.ts         # Keyboard and mouse input handling
-│   ├── renderer.ts      # Canvas drawing, popup menus, info panel
-│   ├── stats.ts         # Game statistics tracking
-│   ├── menu.ts          # Main menu and game over screen
-│   └── main.ts          # Game state machine, turn management, AI execution
-├── tests/
-│   ├── framework.ts     # Test runner
-│   ├── helpers.ts       # createTestMap() utility
-│   ├── test-utils.ts    # TestGame, scenario helpers, shared utilities
-│   ├── fixtures/        # Test fixtures (isolated from game data)
-│   ├── ai/
-│   │   ├── greedy-ai.test.ts   # GreedyAI behavior tests
-│   │   ├── conformance.test.ts # AI conformance tests
-│   │   ├── noop-ai.test.ts     # NoOpAI tests
-│   │   └── smoke.test.ts       # AI integration/smoke tests
-│   ├── pathfinding.test.ts
-│   ├── unit.test.ts
-│   ├── combat.test.ts   # Combat system tests (incl. armor/AP)
-│   ├── components.test.ts # Component system tests
-│   ├── building.test.ts # Building + capture resistance tests
-│   ├── resources.test.ts # Resource management tests
-│   ├── research.test.ts # Research unlock tests
-│   ├── tech-tree.test.ts # Tech tree logic tests
-│   ├── production.test.ts # Unit template tests
-│   ├── unit-designer.test.ts # Unit designer tests
-│   ├── transport.test.ts # Transport unit tests
-│   └── stats.test.ts    # Statistics tracking tests
-├── dist/                # Built output (git-ignored)
-├── index.html           # Browser game + lab modal CSS
-├── test.ts              # CLI test runner
-└── package.json
+│   │   ├── greedy-ai.ts  # Main AI implementation
+│   │   ├── noop-ai.ts    # Testing baseline
+│   │   └── ...
+│   ├── renderer.ts       # Canvas rendering
+│   ├── textures.ts       # Sprite loading and tinting
+│   ├── viewport.ts       # Camera controls
+│   ├── input.ts          # Input handling
+│   ├── menu.ts           # Main menu / game over
+│   ├── stats.ts          # Game statistics
+│   └── main.ts           # Game loop and state machine
+├── tests/                # Test suite (242 tests)
+├── hex_assets/           # Terrain textures
+├── unit_assets/          # Unit sprites
+└── index.html
 ```
 
 ## Development
@@ -306,121 +132,30 @@ hex-dominion/
 ```bash
 npm run watch      # Build + serve with auto-rebuild
 npm run build      # One-time build
-npm run typecheck  # Check types without building
-npm test           # Run tests (321 tests)
+npm run typecheck  # Check types
+npm test           # Run tests (242 tests)
 ```
-
-### Test Map Helper
-
-`createTestMap(grid)` creates a mock map from ASCII for easy test setup:
-
-```typescript
-const map = createTestMap([
-  'GGGGG',  // G=grass, W=water, M=mountain
-  'GWWWG',  // R=road, F=forest, B=building
-  'GGGGG'
-]);
-```
-
-Combat tests use injectable variance parameters for deterministic results.
-
-### Architecture Notes
-
-**Rendering approach:**
-- Game map, units, and in-game popups use **canvas** rendering
-- Unit Designer uses **HTML/DOM** for better form handling and accessibility
-- Popup menus (action menu, production menu) use a unified `PopupMenu` system
-
-**PopupMenu system** (`renderer.ts`):
-```typescript
-this.drawPopupMenu({
-  title: 'Build Unit',           // Optional header
-  items: [
-    { label: 'Soldier', action: 'build_soldier', cost: 1000, enabled: true },
-    { label: 'Cancel', action: 'cancel', color: '#ff8888' },
-  ],
-  worldPos: { q: 5, r: 3 },      // Position near hex
-  clampToScreen: true,           // Keep in viewport
-}, zoom);
-```
-
-**Tech tree system** (`tech-tree.ts`, `tech-data.ts`):
-- Spend science to unlock new chassis, weapons, and systems
-- Prerequisites create branching unlock paths
-- Barycenter algorithm for automatic tree layout (minimizes line crossings)
-- Vertical display with dependency highlighting on hover
-
 
 ## Assets
-- https://dgbaumgart.itch.io/hex-and-tile-terrain-sample-set 
+- Terrain: https://dgbaumgart.itch.io/hex-and-tile-terrain-sample-set
+- Units: [Advance Wars sprite style](https://awbw.fandom.com/wiki/Units)
 
-
-## Next Steps
+## Roadmap
 
 ### Completed
-- [x] Visual units on map with selection and movement
-- [x] Per-unit terrain costs (hover, climber, etc.)
-- [x] Path preview with reachability indicator
-- [x] Combat system with counter-attacks and range
-- [x] Turn system with team switching
-- [x] Action menu with keyboard shortcuts
-- [x] Unit health bars and acted state
-- [x] Building types (city, factory, lab) with ownership display
-- [x] Resource system (funds, science)
-- [x] Unit production from factories
-- [x] Building capture by units with `canCapture` ability
-- [x] Win/lose conditions (no buildings + no units = defeat)
-- [x] Main menu and New Game functionality
-- [x] Game over screen with statistics graphs
-- [x] Unit component system (chassis, weapon, system slots)
-- [x] Armor + armor-piercing combat mechanics
-- [x] Three unit types: Soldier, Tank, Recon
-- [x] Unit Designer interface (click lab to design custom units)
-- [x] Per-team template libraries
-- [x] Research system infrastructure (ready for tech tree)
-- [x] Tech tree (spend science to unlock new components)
-- [x] AI opponent (GreedyAI with research, design, production, combat)
-- [x] View enemy lab (click to see their tech tree and designs, read-only)
-- [x] Improving road generation
-- [x] Multi-turn building capture (resistance system)
-- [x] see AI moves
-- [x] hotkeys to speed up game
-- [x] Upgrade Map visuals
-  - [x] prettier tiles
-  - [x] better icons for units
-- [x] UX improvements
-  - [x] space auto-selects attack target when only 1 option
-  - [x] at beginning of user turn, pan the map back to the first unit (equivalent to hitting spacebar)
-- [ ] feature parity with advance wars
-  - [x] all players have a capital city. if captured, the player insta-loses the game
-  - [x] order units by furthest from capital city when cycling units
-  - [x] support min range as well as max-range
-  - [x] support some units cannot move and shoot the same turn (artillery)
-  - [x] when hovering over a unit, highlight it's damagable range (reachable tiles + range), and when a unit is attacking, but you've not yet selected the attack target, highlight the attack range from the current location.
-  - [x] transport units
-  - [x] weapon compatibility to attack various chassis (i.e. soldier can't shoot airplane)
-  - [x] terrain affects defense
+- [x] Full Advance Wars unit roster (15 units)
+- [x] Terrain movement costs matching AW
+- [x] Combat with armor/AP, counter-attacks, terrain defense
+- [x] Capital capture = instant win
+- [x] Transport units (APC, T-Copter)
+- [x] Weapon targeting restrictions (air vs ground)
+- [x] Indirect fire units with min range
+- [x] AI opponent (builds, captures, fights)
+- [x] Unit sprites with team coloring
 
 ### Upcoming
-- [ ] Come up with strategy for icons and sprites for arbitrary units
-- [ ] OR: add icons for all advance wars units
 - [ ] Balance / playtesting
-  - [ ] More chassis types (hover, etc.)
-  - [ ] More weapon types (missiles, lasers, etc.)
-  - [ ] More system modules (stealth, repair, sensors)
-  - [ ] more building types? Resources?
-- [ ] saving and loading games
-- [ ] AI improvements
-  - [ ] build more capturing units
-  - [ ] stay off of your own factories, and try to sit on enemy factories
-- [ ] Satisfying battle animations
-
-
-### Potential future additions?
-
-- [ ] fog of war?
-- [ ] Building construction (using units with Build ability)
-  - [ ] either light buildings like roads, foxholes, walls, or
-  - [ ] full, resource gathering system and empire building
-
-
+- [ ] Saving and loading games
+- [ ] AI improvements (smarter unit composition, factory blocking)
+- [ ] Battle animations
+- [ ] Fog of war (maybe)

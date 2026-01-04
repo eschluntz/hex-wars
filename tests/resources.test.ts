@@ -18,9 +18,7 @@ runner.describe('ResourceManager', () => {
       const enemyRes = manager.getResources('enemy');
 
       assertEqual(playerRes.funds, 0);
-      assertEqual(playerRes.science, 0);
       assertEqual(enemyRes.funds, 0);
-      assertEqual(enemyRes.science, 0);
     });
 
   });
@@ -41,18 +39,6 @@ runner.describe('ResourceManager', () => {
       manager.addFunds('player', 300);
 
       assertEqual(manager.getResources('player').funds, 800);
-    });
-
-  });
-
-  runner.describe('addScience', () => {
-
-    runner.it('should add science to correct team', () => {
-      const manager = new ResourceManager(['player', 'enemy']);
-      manager.addScience('player', 5);
-
-      assertEqual(manager.getResources('player').science, 5);
-      assertEqual(manager.getResources('enemy').science, 0);
     });
 
   });
@@ -107,56 +93,6 @@ runner.describe('ResourceManager', () => {
 
   });
 
-  runner.describe('spendScience', () => {
-
-    runner.it('should deduct science when affordable', () => {
-      const manager = new ResourceManager(['player']);
-      manager.addScience('player', 20);
-      const result = manager.spendScience('player', 8);
-
-      assert(result);
-      assertEqual(manager.getResources('player').science, 12);
-    });
-
-    runner.it('should return false when not affordable', () => {
-      const manager = new ResourceManager(['player']);
-      manager.addScience('player', 5);
-      const result = manager.spendScience('player', 10);
-
-      assert(!result);
-      assertEqual(manager.getResources('player').science, 5);
-    });
-
-    runner.it('should allow spending exact amount', () => {
-      const manager = new ResourceManager(['player']);
-      manager.addScience('player', 15);
-      const result = manager.spendScience('player', 15);
-
-      assert(result);
-      assertEqual(manager.getResources('player').science, 0);
-    });
-
-  });
-
-  runner.describe('canAffordScience', () => {
-
-    runner.it('should return true when science is sufficient', () => {
-      const manager = new ResourceManager(['player']);
-      manager.addScience('player', 20);
-
-      assert(manager.canAffordScience('player', 10));
-      assert(manager.canAffordScience('player', 20));
-    });
-
-    runner.it('should return false when science is insufficient', () => {
-      const manager = new ResourceManager(['player']);
-      manager.addScience('player', 5);
-
-      assert(!manager.canAffordScience('player', 10));
-    });
-
-  });
-
   runner.describe('collectIncome', () => {
 
     runner.it('should collect income from owned cities', () => {
@@ -169,23 +105,7 @@ runner.describe('ResourceManager', () => {
       const income = manager.collectIncome('player', buildings);
 
       assertEqual(income.funds, 2000); // 2 cities * 1000
-      assertEqual(income.science, 0);
       assertEqual(manager.getResources('player').funds, 2000);
-    });
-
-    runner.it('should collect science from owned labs', () => {
-      const manager = new ResourceManager(['player']);
-      const buildings: Building[] = [
-        createBuilding(0, 0, 'lab', 'player'),
-        createBuilding(1, 0, 'lab', 'player'),
-        createBuilding(2, 0, 'lab', 'player'),
-      ];
-
-      const income = manager.collectIncome('player', buildings);
-
-      assertEqual(income.funds, 0);
-      assertEqual(income.science, 3); // 3 labs * 1
-      assertEqual(manager.getResources('player').science, 3);
     });
 
     runner.it('should not collect from enemy buildings', () => {
@@ -222,21 +142,6 @@ runner.describe('ResourceManager', () => {
       const income = manager.collectIncome('player', buildings);
 
       assertEqual(income.funds, 0);
-      assertEqual(income.science, 0);
-    });
-
-    runner.it('should collect mixed income from cities and labs', () => {
-      const manager = new ResourceManager(['player']);
-      const buildings: Building[] = [
-        createBuilding(0, 0, 'city', 'player'),
-        createBuilding(1, 0, 'lab', 'player'),
-        createBuilding(2, 0, 'city', 'player'),
-      ];
-
-      const income = manager.collectIncome('player', buildings);
-
-      assertEqual(income.funds, 2000);
-      assertEqual(income.science, 1);
     });
 
     runner.it('should collect double income from capitals', () => {
@@ -249,7 +154,6 @@ runner.describe('ResourceManager', () => {
       const income = manager.collectIncome('player', buildings);
 
       assertEqual(income.funds, 3000); // capital (2000) + city (1000)
-      assertEqual(income.science, 0);
     });
 
   });

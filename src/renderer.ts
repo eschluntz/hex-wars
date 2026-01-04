@@ -12,7 +12,6 @@ import { type UnitTemplate } from './unit-templates.js';
 import { type TeamResources } from './resources.js';
 import { drawHex as drawHexBase, drawBuildingIcon } from './rendering-utils.js';
 import { getTexture, getBuildingTexture, getUnitTexture, areTexturesLoaded, TEXTURE_WIDTH, TEXTURE_HEIGHT, TEXTURE_HEX_CENTER_Y } from './textures.js';
-import { getChassis } from './components.js';
 
 export interface PathPreview {
   path: AxialCoord[];
@@ -102,7 +101,7 @@ export class Renderer {
   turnAnnouncement: { text: string; progress: number } | null = null;
   activeUnits: number = 0;
   totalUnits: number = 0;
-  resources: TeamResources = { funds: 0, science: 0 };
+  resources: TeamResources = { funds: 0 };
   teamsFacingLeft: Set<string> = new Set();  // Teams whose units face left
 
   constructor(canvas: HTMLCanvasElement, map: GameMap, viewport: Viewport) {
@@ -313,7 +312,7 @@ export class Renderer {
     }
 
     // Try to draw unit texture if available (pass hasActed for darkened version)
-    const unitTexture = getUnitTexture(unit.chassisId, unit.weaponId, unit.systemIds, unit.team, hasActed);
+    const unitTexture = getUnitTexture(unit.templateId, unit.team, hasActed);
     const spriteSize = size * 2.5;
     const usedSprite = !!unitTexture;
 
@@ -908,9 +907,8 @@ export class Renderer {
     const teamName = u.team.toUpperCase();
 
     // Basic stats line
-    const chassisName = u.chassisId ? getChassis(u.chassisId).name : 'Unknown';
     let statsLine = `${label}: <span style="color: ${teamColor}">${u.id.toUpperCase()}</span> (${teamName})`;
-    statsLine += ` | ${chassisName} | HP: ${u.health}/10 | ATK: ${u.attack} | RNG: ${u.range} | SPD: ${u.speed}`;
+    statsLine += ` | HP: ${u.health}/10 | ATK: ${u.attack} | RNG: ${u.range} | SPD: ${u.speed}`;
     lines.push(statsLine);
 
     // Armor/AP indicators
@@ -964,7 +962,7 @@ export class Renderer {
     // Turn info with resources
     const teamName = this.currentTeam === 'player' ? 'PLAYER' : 'ENEMY';
     lines.push(`Turn ${this.turnNumber} | ${teamName} | Units: ${this.activeUnits}/${this.totalUnits} | Tab=End Turn`);
-    lines.push(`<span style="color: #4caf50">Funds: $${this.resources.funds}</span> | <span style="color: #2196f3">Science: ${this.resources.science}</span>`);
+    lines.push(`<span style="color: #4caf50">Funds: $${this.resources.funds}</span>`);
     lines.push('');
 
     // Hovered hex

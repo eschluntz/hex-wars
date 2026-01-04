@@ -6,7 +6,6 @@ import { type Building, BUILDING_INCOME } from './building.js';
 
 export interface TeamResources {
   funds: number;
-  science: number;
 }
 
 export class ResourceManager {
@@ -14,7 +13,7 @@ export class ResourceManager {
 
   constructor(teams: string[]) {
     for (const team of teams) {
-      this.resources.set(team, { funds: 0, science: 0 });
+      this.resources.set(team, { funds: 0 });
     }
   }
 
@@ -25,11 +24,6 @@ export class ResourceManager {
   addFunds(team: string, amount: number): void {
     const res = this.resources.get(team)!;
     res.funds += amount;
-  }
-
-  addScience(team: string, amount: number): void {
-    const res = this.resources.get(team)!;
-    res.science += amount;
   }
 
   spendFunds(team: string, amount: number): boolean {
@@ -45,34 +39,18 @@ export class ResourceManager {
     return this.resources.get(team)!.funds >= amount;
   }
 
-  spendScience(team: string, amount: number): boolean {
-    const res = this.resources.get(team)!;
-    if (res.science >= amount) {
-      res.science -= amount;
-      return true;
-    }
-    return false;
-  }
-
-  canAffordScience(team: string, amount: number): boolean {
-    return this.resources.get(team)!.science >= amount;
-  }
-
-  collectIncome(team: string, buildings: Building[]): { funds: number; science: number } {
+  collectIncome(team: string, buildings: Building[]): { funds: number } {
     let totalFunds = 0;
-    let totalScience = 0;
 
     for (const building of buildings) {
       if (building.owner === team) {
         const income = BUILDING_INCOME[building.type];
         totalFunds += income.funds;
-        totalScience += income.science;
       }
     }
 
     this.addFunds(team, totalFunds);
-    this.addScience(team, totalScience);
 
-    return { funds: totalFunds, science: totalScience };
+    return { funds: totalFunds };
   }
 }

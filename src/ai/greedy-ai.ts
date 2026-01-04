@@ -1,8 +1,7 @@
 // ============================================================================
 // HEX DOMINION - Greedy AI Controller
 // ============================================================================
-// First playable AI with greedy decision-making:
-// - Research: Pick cheapest affordable tech
+// Simple AI with greedy decision-making:
 // - Production: Order factories by distance to enemy, build random affordable unit
 // - Unit control (per-unit greedy):
 //   1. Capture building (if on one)
@@ -25,7 +24,6 @@ import {
   isInRangeFrom,
   pickRandomTemplate,
 } from './base-utils.js';
-import { planDesignPhase } from './design-utils.js';
 
 export class GreedyAI implements AIController {
   readonly id = 'greedy';
@@ -34,19 +32,11 @@ export class GreedyAI implements AIController {
   planTurn(state: AIGameState, team: string): AIAction[] {
     const actions: AIAction[] = [];
 
-    // Phase 1: Research (pick cheapest affordable tech)
-    const researchActions = this.planResearch(state, team);
-    actions.push(...researchActions);
-
-    // Phase 2: Design (create new unit templates with unlocked components)
-    const designActions = this.planDesign(state, team);
-    actions.push(...designActions);
-
-    // Phase 3: Production (build units at factories)
+    // Phase 1: Production (build units at factories)
     const productionActions = this.planProduction(state, team);
     actions.push(...productionActions);
 
-    // Phase 4: Unit control (greedy per-unit decisions)
+    // Phase 2: Unit control (greedy per-unit decisions)
     const unitActions = this.planUnitActions(state, team);
     actions.push(...unitActions);
 
@@ -54,29 +44,6 @@ export class GreedyAI implements AIController {
     actions.push({ type: 'endTurn' });
 
     return actions;
-  }
-
-  private planResearch(state: AIGameState, team: string): AIAction[] {
-    const actions: AIAction[] = [];
-    const techs = state.getAvailableTechs(team);
-    const resources = state.resources.getResources(team);
-
-    // Find available techs we can afford, sorted by cost (cheapest first)
-    const affordable = techs
-      .filter(t => t.state === 'available' && t.tech.cost <= resources.science)
-      .sort((a, b) => a.tech.cost - b.tech.cost);
-
-    // Research the cheapest one
-    if (affordable.length > 0) {
-      actions.push({ type: 'research', techId: affordable[0]!.tech.id });
-    }
-
-    return actions;
-  }
-
-  private planDesign(state: AIGameState, team: string): AIAction[] {
-    // Use shared design phase implementation
-    return planDesignPhase(state, team, 'AI');
   }
 
   private planProduction(state: AIGameState, team: string): AIAction[] {
@@ -175,7 +142,7 @@ export class GreedyAI implements AIController {
     }
 
     // Priority 3: Attack with maximum expected damage
-    const attackResult = this.findBestAttack(state, team, unit, reachable);
+    const attackResult = this.findBestAttack(state, team, unit, reachable, claimedPositions);
     if (attackResult) {
       if (attackResult.moveFirst) {
         actions.push({
@@ -247,7 +214,8 @@ export class GreedyAI implements AIController {
     state: AIGameState,
     team: string,
     unit: Unit,
-    reachable: Map<string, { q: number; r: number; cost: number }>
+    reachable: Map<string, { q: number; r: number; cost: number }>,
+    claimedPositions: Set<string>
   ): { moveFirst: boolean; moveQ: number; moveR: number; targetQ: number; targetR: number } | null {
     const enemies = state.units.filter(u => u.team !== team && u.isAlive());
     let bestResult: { moveFirst: boolean; moveQ: number; moveR: number; targetQ: number; targetR: number } | null = null;
@@ -273,7 +241,9 @@ export class GreedyAI implements AIController {
 
     // Check attacks from reachable positions (only if unit can move and attack)
     if (unit.canMoveAndAttack) {
-      for (const [_key, pos] of reachable) {
+      for (const [key, pos] of reachable) {
+        // Skip positions already claimed by another unit
+        if (claimedPositions.has(key)) continue;
         for (const enemy of enemies) {
           if (!Combat.canTargetChassis(unit, enemy)) continue;
           if (isInRangeFrom(unit, enemy, pos.q, pos.r)) {

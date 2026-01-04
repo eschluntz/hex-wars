@@ -18,8 +18,6 @@ const ALL_TEXTURES = [
   'village_roofs.png',
   'wip/good_factory.png',
   'wip/good_factory_roofs.png',
-  'wip/good_lab.png',
-  'wip/good_lab_roofs2.png',
   'hexDirtCastle00.png',
   'castle_roofs.png',
 ];
@@ -37,7 +35,6 @@ interface BuildingTextureConfig {
 const BUILDING_TEXTURES: Record<string, BuildingTextureConfig> = {
   city: { base: 'hexDirtVillage00.png', tintOverlay: 'village_roofs.png', desaturation: 0.6 },
   factory: { base: 'wip/good_factory.png', tintOverlay: 'wip/good_factory_roofs.png', desaturation: 0.6 },
-  lab: { base: 'wip/good_lab.png', tintOverlay: 'wip/good_lab_roofs2.png', desaturation: 0.6 },
   capital: { base: 'hexDirtCastle00.png', tintOverlay: 'castle_roofs.png', desaturation: 0.6 },
 };
 
@@ -49,10 +46,35 @@ const UNIT_SPRITE_FILES = [
   'GEArtillery.webp',
   'GETank.webp',
   'GEMd._Tank.webp',
+  'GEMega_Tank.webp',
   'GEAnti-Air.webp',
   'GEMissile.webp',
   'GERocket.webp',
+  'GEAPC.webp',
+  'GEB-Copter.webp',
+  'GEBomber.webp',
+  'GET-Copter.webp',
+  'GEFighter.webp',
 ];
+
+// Direct mapping from unit template ID to sprite file
+const UNIT_ID_TO_SPRITE: Record<string, string> = {
+  infantry: 'GEInfantry.webp',
+  mech: 'GEMech.webp',
+  recon: 'GERecon.webp',
+  tank: 'GETank.webp',
+  mediumTank: 'GEMd._Tank.webp',
+  heavyTank: 'GEMega_Tank.webp',
+  artillery: 'GEArtillery.webp',
+  rockets: 'GERocket.webp',
+  antiAir: 'GEAnti-Air.webp',
+  missiles: 'GEMissile.webp',
+  apc: 'GEAPC.webp',
+  fighter: 'GEFighter.webp',
+  bomber: 'GEBomber.webp',
+  copter: 'GEB-Copter.webp',
+  transportCopter: 'GET-Copter.webp',
+};
 
 // Preloaded unit images by filename
 const unitTextures: Map<string, HTMLImageElement> = new Map();
@@ -63,47 +85,10 @@ const tintedUnitCache: Map<string, HTMLCanvasElement> = new Map();
 // Cache for darkened (acted) unit textures (keyed by "spriteKey_team_dark")
 const darkenedUnitCache: Map<string, HTMLCanvasElement> = new Map();
 
-// Determine which sprite to use based on unit loadout
-function getUnitSpriteFile(
-  chassisId: string | undefined,
-  weaponId: string | undefined,
-  systemIds: string[]
-): string | undefined {
-  const hasArmor = systemIds.includes('armor');
-
-  // Artillery takes priority
-  if (weaponId === 'artillery') {
-    return 'GEArtillery.webp';
-  }
-
-  // Treads chassis
-  if (chassisId === 'treads') {
-    if (weaponId === 'cannon') {
-      return hasArmor ? 'GEMd._Tank.webp' : 'GETank.webp';
-    }
-    if (weaponId === 'machineGun' || weaponId === 'heavyMG') {
-      return 'GEAnti-Air.webp';
-    }
-  }
-
-  // Wheels chassis
-  if (chassisId === 'wheels') {
-    if (weaponId === 'machineGun' || weaponId === 'heavyMG') {
-      return 'GERecon.webp';
-    }
-  }
-
-  // Foot chassis
-  if (chassisId === 'foot') {
-    if (weaponId === 'heavyMG') {
-      return 'GEMech.webp';
-    }
-    if (weaponId === 'machineGun') {
-      return 'GEInfantry.webp';
-    }
-  }
-
-  return undefined; // Fall back to circle
+// Determine which sprite to use based on unit template ID
+function getUnitSpriteFile(templateId: string | undefined): string | undefined {
+  if (!templateId) return undefined;
+  return UNIT_ID_TO_SPRITE[templateId];
 }
 
 // Texture variants with weights: [filename, weight]
@@ -393,16 +378,14 @@ function createDarkenedTexture(
   return canvas;
 }
 
-// Get unit texture based on loadout and team
+// Get unit texture based on template ID and team
 // Set darkened=true for acted units
 export function getUnitTexture(
-  chassisId: string | undefined,
-  weaponId: string | undefined,
-  systemIds: string[],
+  templateId: string | undefined,
   team: string,
   darkened: boolean = false
 ): HTMLImageElement | HTMLCanvasElement | undefined {
-  const spriteFile = getUnitSpriteFile(chassisId, weaponId, systemIds);
+  const spriteFile = getUnitSpriteFile(templateId);
   if (!spriteFile) return undefined;
 
   const original = unitTextures.get(spriteFile);

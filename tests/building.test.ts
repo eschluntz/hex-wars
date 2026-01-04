@@ -29,13 +29,6 @@ runner.describe('Building', () => {
       assertEqual(building.owner, null);
     });
 
-    runner.it('should create a lab with enemy owner', () => {
-      const building = createBuilding(10, 5, 'lab', 'enemy');
-
-      assertEqual(building.type, 'lab');
-      assertEqual(building.owner, 'enemy');
-    });
-
   });
 
   runner.describe('getBuildingKey', () => {
@@ -93,16 +86,13 @@ runner.describe('Building', () => {
     runner.it('all building types are capturable', () => {
       const city = createBuilding(0, 0, 'city', 'enemy');
       const factory = createBuilding(1, 0, 'factory', 'enemy');
-      const lab = createBuilding(2, 0, 'lab', null);
 
       // All can have their owner changed
       city.owner = 'player';
       factory.owner = 'player';
-      lab.owner = 'player';
 
       assertEqual(city.owner, 'player');
       assertEqual(factory.owner, 'player');
-      assertEqual(lab.owner, 'player');
     });
 
   });

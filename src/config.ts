@@ -97,3 +97,15 @@ export const GEN_PARAMS = {
   mapWidth: 50,
   mapHeight: 40
 } as const;
+
+// ============================================================================
+// GAME CONFIG
+// ============================================================================
+
+export interface GameConfig {
+  unlockedUnits: string[];  // Unit IDs available at factories
+}
+
+export const DEFAULT_GAME_CONFIG: GameConfig = {
+  unlockedUnits: ['infantry', 'recon', 'tank'],
+};

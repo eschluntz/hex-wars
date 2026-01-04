@@ -12,31 +12,17 @@ import { Pathfinder } from './pathfinder.js';
 import { Combat } from './combat.js';
 import { type Building, createBuilding } from './building.js';
 import {
-  getAvailableTemplates,
   getTemplate,
   getTeamTemplates,
   getTeamTemplate,
   getTemplateStats,
   initTeamTemplates,
-  registerTemplate,
-  updateTemplate,
-  unregisterTemplate,
-  isNameTaken,
 } from './unit-templates.js';
-import {
-  type DesignState,
-  getResearchedChassis,
-  getResearchedWeapons,
-  getResearchedSystems,
-} from './unit-designer.js';
 import { ResourceManager } from './resources.js';
 import { GameStats } from './stats.js';
 import { MenuRenderer, HTMLMenuController, type GamePhase, type GameOverData } from './menu.js';
 import { InputHandler } from './input.js';
 import { AnimationController } from './animation.js';
-import { initTeamResearch } from './research.js';
-import { getTechTreeState, purchaseTech } from './tech-tree.js';
-import { LabModal } from './lab-modal.js';
 import { type Player, type PlayerConfig } from './player.js';
 import { type AIAction } from './ai/actions.js';
 import { type AIGameState } from './ai/game-state.js';
@@ -69,13 +55,11 @@ class Game {
   private menuRenderer: MenuRenderer;
   private htmlMenuController: HTMLMenuController;
   private inputHandler!: InputHandler;
-  private labModal: LabModal;
   private animationController!: AnimationController;
   private units: Unit[] = [];
   private state: GameState = { type: 'idle' };
   private lastPreviewHex: AxialCoord | null = null;
   private lastHoveredUnitId: string | null = null;
-  private hasShownLabThisCycle: boolean = false;
   private currentTeam: string = TEAMS.PLAYER;
   private turnNumber: number = 1;
   private nextUnitId: number = 1;
@@ -92,7 +76,6 @@ class Game {
       onStartGame: (mapType, playerConfigs) => this.startNewGame(mapType, playerConfigs),
       onRerollSeed: () => rerollNormalSeed(),
     });
-    this.labModal = new LabModal();
 
     // Start loading textures (async, will render fallback until loaded)
     loadTextures();
@@ -238,11 +221,9 @@ class Game {
     this.resources.addFunds(TEAMS.PLAYER, 5000);
     this.resources.addFunds(TEAMS.ENEMY, 5000);
 
-    // Initialize per-team templates and research
+    // Initialize per-team unit templates (with default unlocked units)
     initTeamTemplates(TEAMS.PLAYER);
     initTeamTemplates(TEAMS.ENEMY);
-    initTeamResearch(TEAMS.PLAYER);
-    initTeamResearch(TEAMS.ENEMY);
 
     // Setup based on map type
     // Small map gets manual setup with test units; normal map starts with just home bases
@@ -306,24 +287,24 @@ class Game {
     // Player side (left) - q around 1-2
     this.map.addBuilding(createBuilding(1, centerR, 'capital', TEAMS.PLAYER));
     this.map.addBuilding(createBuilding(1, centerR + 1, 'factory', TEAMS.PLAYER));
-    this.map.addBuilding(createBuilding(1, centerR - 1, 'lab', TEAMS.PLAYER));
+    this.map.addBuilding(createBuilding(1, centerR - 1, 'city', TEAMS.PLAYER));
 
     // Enemy side (right) - q around 7-8
     this.map.addBuilding(createBuilding(8, centerR, 'capital', TEAMS.ENEMY));
     this.map.addBuilding(createBuilding(8, centerR + 1, 'factory', TEAMS.ENEMY));
-    this.map.addBuilding(createBuilding(8, centerR - 1, 'lab', TEAMS.ENEMY));
+    this.map.addBuilding(createBuilding(8, centerR - 1, 'city', TEAMS.ENEMY));
 
-    // Spawn one soldier each
-    const soldierTemplate = getTemplate('soldier');
-    const soldierStats = getTemplateStats(soldierTemplate);
+    // Spawn one infantry each
+    const infantryTemplate = getTemplate('infantry');
+    const infantryStats = getTemplateStats(infantryTemplate);
 
-    this.units.push(new Unit(`soldier_${this.nextUnitId++}`, TEAMS.PLAYER, 3, centerR, {
-      ...soldierStats,
+    this.units.push(new Unit(`infantry_${this.nextUnitId++}`, TEAMS.PLAYER, 3, centerR, {
+      ...infantryStats,
       color: TEAM_COLORS[TEAMS.PLAYER]!.unitColor,
     }));
 
-    this.units.push(new Unit(`soldier_${this.nextUnitId++}`, TEAMS.ENEMY, 6, centerR, {
-      ...soldierStats,
+    this.units.push(new Unit(`infantry_${this.nextUnitId++}`, TEAMS.ENEMY, 6, centerR, {
+      ...infantryStats,
       color: TEAM_COLORS[TEAMS.ENEMY]!.unitColor,
     }));
 
@@ -386,45 +367,45 @@ class Game {
     this.map.setTile(5, 1, 'woods');     // 2 stars defense
     this.map.setTile(7, 1, 'mountain');  // 4 stars defense
 
-    // Enemy soldiers on defensive terrain
-    this.units.push(new Unit(`soldier_city_${this.nextUnitId++}`, TEAMS.ENEMY, 3, 1, {
-      ...soldierStats,
+    // Enemy infantry on defensive terrain
+    this.units.push(new Unit(`infantry_city_${this.nextUnitId++}`, TEAMS.ENEMY, 3, 1, {
+      ...infantryStats,
       color: TEAM_COLORS[TEAMS.ENEMY]!.unitColor,
     }));
-    this.units.push(new Unit(`soldier_woods_${this.nextUnitId++}`, TEAMS.ENEMY, 5, 1, {
-      ...soldierStats,
+    this.units.push(new Unit(`infantry_woods_${this.nextUnitId++}`, TEAMS.ENEMY, 5, 1, {
+      ...infantryStats,
       color: TEAM_COLORS[TEAMS.ENEMY]!.unitColor,
     }));
-    this.units.push(new Unit(`soldier_mountain_${this.nextUnitId++}`, TEAMS.ENEMY, 7, 1, {
-      ...soldierStats,
+    this.units.push(new Unit(`infantry_mountain_${this.nextUnitId++}`, TEAMS.ENEMY, 7, 1, {
+      ...infantryStats,
       color: TEAM_COLORS[TEAMS.ENEMY]!.unitColor,
     }));
 
-    // Player soldiers adjacent (on grass - 1 star defense)
-    this.units.push(new Unit(`soldier_vs_city_${this.nextUnitId++}`, TEAMS.PLAYER, 2, 1, {
-      ...soldierStats,
+    // Player infantry adjacent (on grass - 1 star defense)
+    this.units.push(new Unit(`infantry_vs_city_${this.nextUnitId++}`, TEAMS.PLAYER, 2, 1, {
+      ...infantryStats,
       color: TEAM_COLORS[TEAMS.PLAYER]!.unitColor,
     }));
-    this.units.push(new Unit(`soldier_vs_woods_${this.nextUnitId++}`, TEAMS.PLAYER, 4, 1, {
-      ...soldierStats,
+    this.units.push(new Unit(`infantry_vs_woods_${this.nextUnitId++}`, TEAMS.PLAYER, 4, 1, {
+      ...infantryStats,
       color: TEAM_COLORS[TEAMS.PLAYER]!.unitColor,
     }));
-    this.units.push(new Unit(`soldier_vs_mountain_${this.nextUnitId++}`, TEAMS.PLAYER, 6, 1, {
-      ...soldierStats,
+    this.units.push(new Unit(`infantry_vs_mountain_${this.nextUnitId++}`, TEAMS.PLAYER, 6, 1, {
+      ...infantryStats,
       color: TEAM_COLORS[TEAMS.PLAYER]!.unitColor,
     }));
 
-    console.log('Small map setup: capitals, factories, labs + units for testing (enemy has airplane, terrain defense test units at top)');
+    console.log('Small map setup: capitals, factories, cities + units for testing (enemy has airplane, terrain defense test units at top)');
   }
 
   private collectIncome(team: string): void {
     const buildings = this.map.getAllBuildings();
     const income = this.resources.collectIncome(team, buildings);
-    if (income.funds > 0 || income.science > 0) {
-      console.log(`${team} collected: $${income.funds} funds, ${income.science} science`);
+    if (income.funds > 0) {
+      console.log(`${team} collected: $${income.funds} funds`);
     }
     // Record income in stats
-    this.gameStats.recordIncome(team, income.funds, income.science);
+    this.gameStats.recordIncome(team, income.funds, 0);
   }
 
   // --- Position helpers ---
@@ -474,11 +455,17 @@ class Game {
   private getValidUnloadHexes(carrier: Unit): Set<string> {
     const validHexes = new Set<string>();
     const neighbors = HexUtil.getNeighbors(carrier.q, carrier.r);
+    const cargoUnit = carrier.cargo[0];
+    if (!cargoUnit) return validHexes;
 
     for (const neighbor of neighbors) {
-      // Check if tile exists and is passable
+      // Check if tile exists
       const tile = this.map.getTile(neighbor.q, neighbor.r);
       if (!tile) continue;
+
+      // Check if cargo unit can traverse this terrain
+      const terrainCost = cargoUnit.terrainCosts[tile.type];
+      if (terrainCost === Infinity) continue;
 
       // Check if hex is unoccupied
       const unitAtHex = this.getUnitAt(neighbor.q, neighbor.r);
@@ -502,10 +489,6 @@ class Game {
       resources: this.resources,
       pathfinder: this.pathfinder,
       getTeamTemplates,
-      getResearchedChassis,
-      getResearchedWeapons,
-      getResearchedSystems,
-      getAvailableTechs: (team) => getTechTreeState(team, this.resources.getResources(team).science),
     };
   }
 
@@ -687,56 +670,6 @@ class Game {
         break;
       }
 
-      case 'research': {
-        // Find a lab owned by current team for animation
-        const labs = this.map.getAllBuildings().filter(
-          b => b.type === 'lab' && b.owner === this.currentTeam
-        );
-        if (labs.length > 0) {
-          const lab = labs[0]!;
-          await this.animationController.play({
-            type: 'research',
-            hexQ: lab.q,
-            hexR: lab.r,
-            toastText: `Researched ${action.techId}`
-          });
-        }
-
-        const result = purchaseTech(this.currentTeam, action.techId, this.resources);
-        if (result.success) {
-          console.log(`AI researched: ${action.techId}`);
-        } else {
-          console.log(`AI failed to research ${action.techId}: ${result.error}`);
-        }
-        break;
-      }
-
-      case 'design': {
-        // Find a lab owned by current team for animation
-        const labs = this.map.getAllBuildings().filter(
-          b => b.type === 'lab' && b.owner === this.currentTeam
-        );
-        if (labs.length > 0) {
-          const lab = labs[0]!;
-          await this.animationController.play({
-            type: 'design',
-            hexQ: lab.q,
-            hexR: lab.r,
-            toastText: `Designed ${action.name}`
-          });
-        }
-
-        registerTemplate(
-          this.currentTeam,
-          action.name,
-          action.chassisId,
-          action.weaponId,
-          action.systemIds
-        );
-        console.log(`AI designed new unit: ${action.name}`);
-        break;
-      }
-
       case 'endTurn': {
         // This triggers the actual end of turn
         this.endTurn();
@@ -875,9 +808,6 @@ class Game {
   }
 
   private async startTurn(): Promise<void> {
-    // Reset lab shown flag for new turn
-    this.hasShownLabThisCycle = false;
-
     const teamName = this.currentTeam === TEAMS.PLAYER ? 'Player' : 'Enemy';
     await this.animationController.playTurnAnnouncement(teamName);
 
@@ -900,7 +830,7 @@ class Game {
       teamUnits,
       teamBuildings,
       res.funds,
-      res.science
+      0  // No science anymore
     );
   }
 
@@ -959,28 +889,6 @@ class Game {
       const unit = this.state.unit;
       this.setState({ type: 'moved', unit, fromQ: unit.q, fromR: unit.r });
       return;
-    }
-
-    // Check if any techs are affordable and we haven't shown the lab yet this cycle
-    if (!this.hasShownLabThisCycle) {
-      const teamResources = this.resources.getResources(this.currentTeam);
-      const techNodes = getTechTreeState(this.currentTeam, teamResources.science);
-      const hasAffordableTech = techNodes.some(n => n.state === 'available');
-
-      if (hasAffordableTech) {
-        // Find a lab owned by current team
-        const labs = this.map.getAllBuildings().filter(
-          b => b.type === 'lab' && b.owner === this.currentTeam
-        );
-
-        if (labs.length > 0) {
-          const lab = labs[0]!;
-          this.viewport.panTo(lab.q, lab.r);
-          this.hasShownLabThisCycle = true;
-          setTimeout(() => this.openLabModal(this.currentTeam), 200);
-          return;
-        }
-      }
     }
 
     // Find next active unit (hasn't acted yet, not cargo)
@@ -1091,16 +999,10 @@ class Game {
         if (clickedUnit && clickedUnit.team === this.currentTeam && !clickedUnit.hasActed) {
           this.setState({ type: 'selected', unit: clickedUnit });
         } else if (!clickedUnit) {
-          // Check if clicked on a factory or lab
+          // Check if clicked on a factory
           const building = this.map.getBuilding(hex.q, hex.r);
-          if (building) {
-            if (building.type === 'factory' && building.owner === this.currentTeam) {
-              // Can only use own factories
-              this.setState({ type: 'factory', factory: building });
-            } else if (building.type === 'lab' && building.owner) {
-              // Can view any team's lab (read-only for other teams)
-              this.openLabModal(building.owner);
-            }
+          if (building && building.type === 'factory' && building.owner === this.currentTeam) {
+            this.setState({ type: 'factory', factory: building });
           }
         }
         break;
@@ -1212,42 +1114,6 @@ class Game {
       console.log(`Built ${template.name} at (${factory.q}, ${factory.r}) for $${template.cost}`);
       this.setState({ type: 'idle' });
     }
-  }
-
-  private openLabModal(labOwner: string = this.currentTeam): void {
-    const readOnly = labOwner !== this.currentTeam;
-    const templates = getTeamTemplates(labOwner);
-    const teamResources = this.resources.getResources(labOwner);
-
-    this.labModal.open(
-      labOwner,
-      templates,
-      {
-        onSave: (name, design) => {
-          if (readOnly || !design.chassisId) return;
-          // Check if this is editing an existing template by name
-          const existingTemplate = templates.find(t => t.name.toLowerCase() === name.toLowerCase());
-          if (existingTemplate) {
-            updateTemplate(labOwner, existingTemplate.id, name, design.chassisId, design.weaponId, design.systemIds);
-            console.log(`Updated template: ${name}`);
-          } else {
-            registerTemplate(labOwner, name, design.chassisId, design.weaponId, design.systemIds);
-            console.log(`Created new template: ${name}`);
-          }
-        },
-        onCancel: () => {
-          // Modal handles its own closing
-        },
-        onPurchaseTech: (techId) => {
-          if (!readOnly) {
-            console.log(`Purchased tech: ${techId}`);
-          }
-        }
-      },
-      teamResources.science,
-      readOnly ? undefined : this.resources,
-      readOnly
-    );
   }
 
   private handleCancel(): void {
