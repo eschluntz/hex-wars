@@ -12,6 +12,7 @@ import { type UnitTemplate } from './unit-templates.js';
 import { type TeamResources } from './resources.js';
 import { drawHex as drawHexBase, drawBuildingIcon } from './rendering-utils.js';
 import { getTexture, getBuildingTexture, getUnitTexture, areTexturesLoaded, TEXTURE_WIDTH, TEXTURE_HEIGHT, TEXTURE_HEX_CENTER_Y, getAnimationFrame, getSpriteConfig } from './textures.js';
+import { type CombatAnimator } from './combat-animator.js';
 
 export interface PathPreview {
   path: AxialCoord[];
@@ -84,6 +85,7 @@ export class Renderer {
   private map: GameMap;
   private viewport: Viewport;
   private menuButtons: MenuButton[] = [];
+  private combatAnimator: CombatAnimator | null = null;
   hoveredHex: AxialCoord | null = null;
   units: Unit[] = [];
   selectedUnit: Unit | null = null;
@@ -127,6 +129,10 @@ export class Renderer {
 
   private lastMouseX = 0;
   private lastMouseY = 0;
+
+  setCombatAnimator(animator: CombatAnimator): void {
+    this.combatAnimator = animator;
+  }
 
   private resize(): void {
     this.canvas.width = window.innerWidth;
@@ -278,6 +284,24 @@ export class Renderer {
     const baseColor = unit.color;
     const hasActed = unit.hasActed;
 
+    // Get combat animation visual state
+    const visualState = this.combatAnimator?.getUnitVisualState(unit.id) ?? {
+      offsetX: 0, offsetY: 0, scale: 1, alpha: 1, flashIntensity: 0
+    };
+
+    // Apply combat animation offsets (in world coordinates, need to scale to screen)
+    const animOffsetX = visualState.offsetX * zoom;
+    const animOffsetY = visualState.offsetY * zoom;
+    const drawCx = cx + animOffsetX;
+    const drawCy = cy + animOffsetY;
+
+    // Skip rendering if fully transparent (dead unit faded out)
+    if (visualState.alpha <= 0) return;
+
+    // Apply alpha for death animation
+    const prevAlpha = ctx.globalAlpha;
+    ctx.globalAlpha = prevAlpha * visualState.alpha;
+
     // Desaturate color if unit has acted
     const color = hasActed ? this.desaturateColor(baseColor, 0.5) : baseColor;
 
@@ -285,7 +309,7 @@ export class Renderer {
     const isValidTarget = this.attackTargets?.validTargets.has(`${unit.q},${unit.r}`);
     const isInvalidTarget = this.attackTargets && !isValidTarget && unit.team !== this.attackTargets.unit.team;
 
-    // Draw attack target highlight
+    // Draw attack target highlight (at original position, not animated)
     if (isValidTarget) {
       ctx.beginPath();
       ctx.arc(cx, cy, size + 8 * zoom, 0, Math.PI * 2);
@@ -304,13 +328,22 @@ export class Renderer {
       ctx.stroke();
     }
 
-    // Draw selection ring
+    // Draw selection ring (at original position)
     if (isSelected) {
       ctx.beginPath();
       ctx.arc(cx, cy, size + 4 * zoom, 0, Math.PI * 2);
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 3 * zoom;
       ctx.stroke();
+    }
+
+    // Apply scale transform for death animation
+    const scaleAmount = visualState.scale;
+    if (scaleAmount !== 1) {
+      ctx.save();
+      ctx.translate(drawCx, drawCy);
+      ctx.scale(scaleAmount, scaleAmount);
+      ctx.translate(-drawCx, -drawCy);
     }
 
     // Try to draw unit texture if available (pass hasActed for darkened version)
@@ -320,8 +353,8 @@ export class Renderer {
 
     if (unitTexture) {
       // Scale the 16x16 sprite to fit the unit size (about 2.5x)
-      const drawX = cx - spriteSize / 2;
-      const drawY = cy - spriteSize / 2;
+      const drawX = drawCx - spriteSize / 2;
+      const drawY = drawCy - spriteSize / 2;
       const faceLeft = this.teamsFacingLeft.has(unit.team);
 
       // Get animation frame for sprite sheet clipping
@@ -336,9 +369,9 @@ export class Renderer {
       // Flip horizontally if team faces left
       if (faceLeft) {
         ctx.save();
-        ctx.translate(cx, 0);
+        ctx.translate(drawCx, 0);
         ctx.scale(-1, 1);
-        ctx.translate(-cx, 0);
+        ctx.translate(-drawCx, 0);
       }
 
       // Draw the current frame from the sprite sheet
@@ -353,15 +386,33 @@ export class Renderer {
       }
 
       ctx.imageSmoothingEnabled = true;
+
+      // Draw white flash overlay for hit/death effects
+      if (visualState.flashIntensity > 0) {
+        ctx.globalAlpha = visualState.flashIntensity * visualState.alpha;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(drawX, drawY, spriteSize, spriteSize);
+        ctx.globalAlpha = visualState.alpha;
+      }
     } else {
       // Fall back to circle
       ctx.beginPath();
-      ctx.arc(cx, cy, size, 0, Math.PI * 2);
+      ctx.arc(drawCx, drawCy, size, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
       ctx.strokeStyle = '#000000';
       ctx.lineWidth = 2 * zoom;
       ctx.stroke();
+
+      // Draw white flash overlay for hit effects
+      if (visualState.flashIntensity > 0) {
+        ctx.globalAlpha = visualState.flashIntensity * visualState.alpha;
+        ctx.beginPath();
+        ctx.arc(drawCx, drawCy, size, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.globalAlpha = visualState.alpha;
+      }
 
       // Draw unit ID
       if (zoom > 0.5) {
@@ -369,27 +420,35 @@ export class Renderer {
         ctx.font = `bold ${12 * zoom}px Arial`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(unit.id[0]!.toUpperCase(), cx, cy);
+        ctx.fillText(unit.id[0]!.toUpperCase(), drawCx, drawCy);
       }
 
       // Draw "acted" overlay for circle units
       if (hasActed) {
-        ctx.globalAlpha = 0.4;
+        ctx.globalAlpha = 0.4 * visualState.alpha;
         ctx.beginPath();
-        ctx.arc(cx, cy, size, 0, Math.PI * 2);
+        ctx.arc(drawCx, drawCy, size, 0, Math.PI * 2);
         ctx.fillStyle = '#000000';
         ctx.fill();
-        ctx.globalAlpha = 1.0;
+        ctx.globalAlpha = visualState.alpha;
       }
     }
 
-    // Draw health bar
+    // Restore scale transform
+    if (scaleAmount !== 1) {
+      ctx.restore();
+    }
+
+    // Draw health bar (at animated position)
     if (zoom > 0.3) {
       const barWidth = usedSprite ? spriteSize : size * 1.6;
       const barHeight = 4 * zoom;
-      const barX = cx - barWidth / 2;
-      const barY = cy + (usedSprite ? spriteSize / 2 : size) + 4 * zoom;
-      const healthRatio = unit.health / 10;
+      const barX = drawCx - barWidth / 2;
+      const barY = drawCy + (usedSprite ? spriteSize / 2 : size) + 4 * zoom;
+
+      // Use animated health for smooth drain effect
+      const displayedHealth = this.combatAnimator?.getDisplayedHealth(unit.id, unit.health) ?? unit.health;
+      const healthRatio = displayedHealth / 10;
 
       // Background
       ctx.fillStyle = '#333333';
@@ -405,6 +464,9 @@ export class Renderer {
       ctx.lineWidth = 1;
       ctx.strokeRect(barX, barY, barWidth, barHeight);
     }
+
+    // Restore alpha
+    ctx.globalAlpha = prevAlpha;
   }
 
   private drawHex(cx: number, cy: number, tile: Tile, isHovered: boolean, zoom: number): void {
@@ -692,6 +754,9 @@ export class Renderer {
       this.drawUnit(screenX, screenY, unit, zoom);
     }
 
+    // Draw combat animation effects (floating numbers, death particles)
+    this.drawCombatAnimationEffects(zoom);
+
     // Draw active toast (for animations)
     if (this.activeToast) {
       this.drawToast(this.activeToast, zoom);
@@ -713,6 +778,53 @@ export class Renderer {
     }
 
     this.updateInfoPanel(zoom);
+  }
+
+  // ============================================================================
+  // Combat Animation Effects
+  // ============================================================================
+
+  private drawCombatAnimationEffects(zoom: number): void {
+    if (!this.combatAnimator) return;
+
+    const ctx = this.ctx;
+
+    // Draw death particles
+    const particles = this.combatAnimator.getDeathParticles();
+    for (const particle of particles) {
+      const screen = this.viewport.worldToScreen(particle.x, particle.y);
+      ctx.globalAlpha = particle.alpha;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(
+        screen.x - particle.size * zoom / 2,
+        screen.y - particle.size * zoom / 2,
+        particle.size * zoom,
+        particle.size * zoom
+      );
+    }
+    ctx.globalAlpha = 1;
+
+    // Draw floating damage numbers
+    const floatingNumbers = this.combatAnimator.getFloatingNumbers();
+    for (const fn of floatingNumbers) {
+      const screen = this.viewport.worldToScreen(fn.x, fn.y);
+      const fontSize = Math.max(16, 24 * zoom);
+
+      ctx.globalAlpha = fn.alpha;
+      ctx.font = `bold ${fontSize}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      // Draw outline
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 3;
+      ctx.strokeText(fn.text, screen.x, screen.y + fn.offsetY * zoom);
+
+      // Draw text (red for damage)
+      ctx.fillStyle = '#ff4444';
+      ctx.fillText(fn.text, screen.x, screen.y + fn.offsetY * zoom);
+    }
+    ctx.globalAlpha = 1;
   }
 
   // ============================================================================

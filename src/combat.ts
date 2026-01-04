@@ -10,6 +10,7 @@ export interface CombatResult {
   defenderDamage: number;
   defenderDied: boolean;
   attackerDied: boolean;
+  counterAttackAttempted: boolean;  // True if defender was able to counter (in range + can target)
 }
 
 export class Combat {
@@ -124,13 +125,16 @@ export class Combat {
     // Counter-attack if defender survives, attacker is in range, and defender can target attacker's chassis
     let defenderDamage = 0;
     let attackerDied = false;
+    const counterAttackAttempted = !defenderDied &&
+      Combat.isInRange(defender, attacker) &&
+      Combat.canTargetChassis(defender, attacker);
 
-    if (!defenderDied && Combat.isInRange(defender, attacker) && Combat.canTargetChassis(defender, attacker)) {
+    if (counterAttackAttempted) {
       defenderDamage = Combat.calculateDamage(defender, attacker, defenderVariance, attackerTerrainStars);
       attacker.health = Math.max(0, attacker.health - defenderDamage);
       attackerDied = !attacker.isAlive();
     }
 
-    return { attackerDamage, defenderDamage, defenderDied, attackerDied };
+    return { attackerDamage, defenderDamage, defenderDied, attackerDied, counterAttackAttempted };
   }
 }

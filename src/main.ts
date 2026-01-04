@@ -28,6 +28,7 @@ import { type AIAction } from './ai/actions.js';
 import { type AIGameState } from './ai/game-state.js';
 import { createAI } from './ai/registry.js';
 import { loadTextures } from './textures.js';
+import { CombatAnimator, COUNTER_ATTACK_HEALTH_DELAY, COMBAT_ANIMATION_DURATION } from './combat-animator.js';
 
 const TEAMS = {
   PLAYER: 'player',
@@ -56,6 +57,7 @@ class Game {
   private htmlMenuController: HTMLMenuController;
   private inputHandler!: InputHandler;
   private animationController!: AnimationController;
+  private combatAnimator!: CombatAnimator;
   private units: Unit[] = [];
   private state: GameState = { type: 'idle' };
   private lastPreviewHex: AxialCoord | null = null;
@@ -204,6 +206,8 @@ class Game {
       this.viewport,
       () => this.inputHandler.isSpacebarHeld()
     );
+    this.combatAnimator = new CombatAnimator();
+    this.renderer.setCombatAnimator(this.combatAnimator);
 
     // Reset game state
     this.units = [];
@@ -528,36 +532,10 @@ class Game {
         const target = this.getUnitAt(action.targetQ, action.targetR);
         if (!unit || !target) return;
 
-        // Execute combat with terrain defense
-        const result = Combat.execute(
-          unit, target, undefined, undefined,
-          this.map.getTerrainDefenseStars(target.q, target.r),
-          this.map.getTerrainDefenseStars(unit.q, unit.r)
-        );
+        this.executeCombatWithAnimations(unit, target);
 
-        // Play combat animation
-        await this.animationController.play({
-          type: 'combat',
-          hexQ: target.q,
-          hexR: target.r,
-          toastText: `+${result.attackerDamage} dmg / -${result.defenderDamage} hlth`
-        });
-
-        // Log combat results
-        console.log(`${unit.id} attacks ${target.id}!`);
-        console.log(`  ${unit.id} deals ${result.attackerDamage} damage`);
-        if (result.defenderDied) {
-          console.log(`  ${target.id} destroyed!`);
-          this.gameStats.recordUnitKilled(unit.team, target.team);
-          this.map.resetCaptureByUnit(target.id);
-        } else if (result.defenderDamage > 0) {
-          console.log(`  ${target.id} counter-attacks for ${result.defenderDamage} damage`);
-          if (result.attackerDied) {
-            console.log(`  ${unit.id} destroyed!`);
-            this.gameStats.recordUnitKilled(target.team, unit.team);
-            this.map.resetCaptureByUnit(unit.id);
-          }
-        }
+        // Wait for combat animation to complete
+        await this.delay(COMBAT_ANIMATION_DURATION);
 
         unit.hasActed = true;
         this.checkAndTriggerGameOver();
@@ -920,7 +898,7 @@ class Game {
 
       if (targets.length === 1) {
         // Auto-attack the only target
-        this.executeAttack(unit, targets[0]!);
+        this.executeCombatWithAnimations(unit, targets[0]!);
         unit.hasActed = true;
         this.setState({ type: 'idle' });
         this.checkAndTriggerGameOver();
@@ -1018,7 +996,7 @@ class Game {
 
         if (validTargets?.has(targetKey)) {
           const target = this.getUnitAt(hex.q, hex.r)!;
-          this.executeAttack(unit, target);
+          this.executeCombatWithAnimations(unit, target);
           unit.hasActed = true;
           this.setState({ type: 'idle' });
 
@@ -1213,7 +1191,19 @@ class Game {
     deadUnit.cargo = [];
   }
 
-  private executeAttack(attacker: Unit, defender: Unit): void {
+  /**
+   * Execute combat between two units with animations and death handling.
+   * This is the single source of truth for combat execution - used by both AI and player.
+   */
+  private executeCombatWithAnimations(attacker: Unit, defender: Unit): import('./combat.js').CombatResult {
+    // Store positions and health before combat
+    const attackerQ = attacker.q;
+    const attackerR = attacker.r;
+    const defenderQ = defender.q;
+    const defenderR = defender.r;
+    const attackerHealthBefore = attacker.health;
+    const defenderHealthBefore = defender.health;
+
     // Execute combat with terrain defense
     const result = Combat.execute(
       attacker, defender, undefined, undefined,
@@ -1221,25 +1211,49 @@ class Game {
       this.map.getTerrainDefenseStars(attacker.q, attacker.r)
     );
 
-    // Show combat toast (non-blocking for player attacks)
-    this.showCombatToast(defender.q, defender.r, result.attackerDamage, result.defenderDamage);
+    // Trigger attack animation
+    this.combatAnimator.triggerAttack(
+      attacker.id, attackerQ, attackerR,
+      defender.id, defenderQ, defenderR,
+      result.attackerDamage,
+      result.defenderDied,
+      CONFIG.hexSize
+    );
 
+    // Update defender health display
+    this.combatAnimator.setUnitHealth(defender.id, defenderHealthBefore, defender.health);
+
+    // Trigger counter-attack animation if defender was able to counter
+    if (result.counterAttackAttempted) {
+      this.combatAnimator.triggerCounterAttack(
+        defender.id, defenderQ, defenderR,
+        attacker.id, attackerQ, attackerR,
+        result.defenderDamage,
+        result.attackerDied,
+        CONFIG.hexSize
+      );
+      if (result.defenderDamage > 0) {
+        this.combatAnimator.setUnitHealth(attacker.id, attackerHealthBefore, attacker.health, COUNTER_ATTACK_HEALTH_DELAY);
+      }
+    }
+
+    // Log combat results
     console.log(`${attacker.id} attacks ${defender.id}!`);
     console.log(`  ${attacker.id} deals ${result.attackerDamage} damage`);
+
+    // Handle deaths and log counter-attack
     if (result.defenderDied) {
       console.log(`  ${defender.id} destroyed!`);
       this.handleUnitDeath(defender, attacker.team);
-    } else if (result.defenderDamage > 0) {
+    } else if (result.counterAttackAttempted) {
       console.log(`  ${defender.id} counter-attacks for ${result.defenderDamage} damage`);
       if (result.attackerDied) {
         console.log(`  ${attacker.id} destroyed!`);
         this.handleUnitDeath(attacker, defender.team);
       }
     }
-  }
 
-  private showCombatToast(hexQ: number, hexR: number, attackerDamage: number, defenderDamage: number): void {
-    this.showToast(hexQ, hexR, `+${attackerDamage} dmg / -${defenderDamage} hlth`);
+    return result;
   }
 
   private showToast(hexQ: number, hexR: number, text: string): void {
@@ -1521,9 +1535,12 @@ class Game {
     } else if (this.gamePhase === 'playing') {
       this.htmlMenuController.hide();
       this.viewport.update();
+      this.combatAnimator.update(performance.now());
       this.updatePathPreview();
       this.updateAttackRangeOverlay();
-      this.renderer.units = this.units.filter(u => u.isAlive() && u.carriedBy === null);
+      this.renderer.units = this.units.filter(u =>
+        (u.isAlive() || this.combatAnimator.hasDeathAnimation(u.id)) && u.carriedBy === null
+      );
       this.renderer.currentTeam = this.currentTeam;
       this.renderer.turnNumber = this.turnNumber;
       this.renderer.activeUnits = this.getActiveUnitsCount();
