@@ -137,8 +137,7 @@ Pluggable AI system with multiple strategies:
 
 **Available AIs:**
 - **NoOpAI**: Testing baseline — just ends turn
-- **GreedyAI**: First playable AI with greedy decision-making
-- **TacticalAI**: Smarter AI that prioritizes economy and focus-fires damaged units
+- **GreedyAI**: Playable AI with greedy decision-making
 
 **GreedyAI Behavior (per turn):**
 1. **Research**: Pick cheapest affordable tech
@@ -261,7 +260,6 @@ hex-dominion/
 │   │   ├── base-utils.ts # Shared AI utilities
 │   │   ├── design-utils.ts # Shared design phase logic
 │   │   ├── greedy-ai.ts # GreedyAI implementation
-│   │   ├── tactical-ai.ts # TacticalAI implementation
 │   │   ├── noop-ai.ts   # NoOpAI (testing baseline)
 │   │   └── registry.ts  # AI type lookup by name
 │   ├── noise.ts         # Perlin noise, seeded RNG
@@ -280,7 +278,6 @@ hex-dominion/
 │   ├── fixtures/        # Test fixtures (isolated from game data)
 │   ├── ai/
 │   │   ├── greedy-ai.test.ts   # GreedyAI behavior tests
-│   │   ├── tactical-ai.test.ts # TacticalAI behavior tests
 │   │   ├── conformance.test.ts # AI conformance tests
 │   │   ├── noop-ai.test.ts     # NoOpAI tests
 │   │   └── smoke.test.ts       # AI integration/smoke tests

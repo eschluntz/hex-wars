@@ -6,7 +6,6 @@
 
 import { TestRunner, assert } from '../framework.js';
 import { GreedyAI } from '../../src/ai/greedy-ai.js';
-import { TacticalAI } from '../../src/ai/tactical-ai.js';
 import { getTeamTemplates } from '../../src/unit-templates.js';
 import { getUnlockedTechs } from '../../src/research.js';
 import { type AIController } from '../../src/ai/controller.js';
@@ -21,7 +20,6 @@ const runner = new TestRunner();
 // All production AIs that should pass conformance tests
 const PRODUCTION_AIS: Array<{ name: string; ai: AIController }> = [
   { name: 'GreedyAI', ai: new GreedyAI() },
-  { name: 'TacticalAI', ai: new TacticalAI() },
 ];
 
 runner.describe('AI Conformance Tests', () => {

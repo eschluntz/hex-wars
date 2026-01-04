@@ -6,14 +6,12 @@
 import { type AIController } from './controller.js';
 import { NoOpAI } from './noop-ai.js';
 import { GreedyAI } from './greedy-ai.js';
-import { TacticalAI } from './tactical-ai.js';
 
 type AIFactory = () => AIController;
 
 const AI_REGISTRY: Record<string, AIFactory> = {
   noop: () => new NoOpAI(),
   greedy: () => new GreedyAI(),
-  tactical: () => new TacticalAI(),
 };
 
 export function createAI(type: string): AIController {
@@ -38,6 +36,5 @@ export function getAIMetadata(): AITypeInfo[] {
     { id: 'human', name: 'Human' },
     { id: 'noop', name: 'No-Op AI' },
     { id: 'greedy', name: 'Greedy AI' },
-    { id: 'tactical', name: 'Tactical AI' },
   ];
 }
