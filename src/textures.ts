@@ -38,57 +38,72 @@ const BUILDING_TEXTURES: Record<string, BuildingTextureConfig> = {
   capital: { base: 'hexDirtCastle00.png', tintOverlay: 'castle_roofs.png', desaturation: 0.6 },
 };
 
-// All unit sprite files (path relative to unit_assets/)
-const UNIT_SPRITE_FILES = [
-  'GEInfantry.webp',
-  'GEMech.webp',
-  'GERecon.webp',
-  'GEArtillery.webp',
-  'GETank.webp',
-  'GEMd._Tank.webp',
-  'GEMega_Tank.webp',
-  'GEAnti-Air.webp',
-  'GEMissile.webp',
-  'GERocket.webp',
-  'GEAPC.webp',
-  'GEB-Copter.webp',
-  'GEBomber.webp',
-  'GET-Copter.webp',
-  'GEFighter.webp',
-];
+// Animated unit sprite sheets (path relative to unit_assets/sprites/)
+// Each sprite sheet is a horizontal strip of frames (16x16 pixels each)
+interface SpriteSheetConfig {
+  file: string;
+  frameCount: number;
+  frameDuration: number;  // milliseconds per frame
+}
 
-// Direct mapping from unit template ID to sprite file
-const UNIT_ID_TO_SPRITE: Record<string, string> = {
-  infantry: 'GEInfantry.webp',
-  mech: 'GEMech.webp',
-  recon: 'GERecon.webp',
-  tank: 'GETank.webp',
-  mediumTank: 'GEMd._Tank.webp',
-  heavyTank: 'GEMega_Tank.webp',
-  artillery: 'GEArtillery.webp',
-  rockets: 'GERocket.webp',
-  antiAir: 'GEAnti-Air.webp',
-  missiles: 'GEMissile.webp',
-  apc: 'GEAPC.webp',
-  fighter: 'GEFighter.webp',
-  bomber: 'GEBomber.webp',
-  copter: 'GEB-Copter.webp',
-  transportCopter: 'GET-Copter.webp',
+const UNIT_SPRITE_SHEETS: Record<string, SpriteSheetConfig> = {
+  infantry: { file: 'GEInfantry.png', frameCount: 4, frameDuration: 250 },
+  mech: { file: 'GEMech.png', frameCount: 2, frameDuration: 250 },
+  recon: { file: 'GERecon.png', frameCount: 4, frameDuration: 250 },
+  tank: { file: 'GETank.png', frameCount: 4, frameDuration: 250 },
+  mediumTank: { file: 'GEMd._Tank.png', frameCount: 4, frameDuration: 250 },
+  heavyTank: { file: 'GEMega_Tank.png', frameCount: 4, frameDuration: 250 },
+  artillery: { file: 'GEArtillery.png', frameCount: 4, frameDuration: 250 },
+  rockets: { file: 'GERocket.png', frameCount: 2, frameDuration: 250 },
+  antiAir: { file: 'GEAnti-Air.png', frameCount: 4, frameDuration: 250 },
+  missiles: { file: 'GEMissile.png', frameCount: 2, frameDuration: 250 },
+  apc: { file: 'GEAPC.png', frameCount: 4, frameDuration: 250 },
+  fighter: { file: 'GEFighter.png', frameCount: 2, frameDuration: 250 },
+  bomber: { file: 'GEBomber.png', frameCount: 2, frameDuration: 250 },
+  copter: { file: 'GEB-Copter.png', frameCount: 4, frameDuration: 250 },
+  transportCopter: { file: 'GET-Copter.png', frameCount: 4, frameDuration: 250 },
 };
 
-// Preloaded unit images by filename
+// Build list of all sprite files to load
+const UNIT_SPRITE_FILES = [...new Set(Object.values(UNIT_SPRITE_SHEETS).map(s => s.file))];
+
+// Preloaded unit sprite sheet images by filename
 const unitTextures: Map<string, HTMLImageElement> = new Map();
 
-// Cache for tinted unit textures (keyed by "spriteKey_team")
+// Cache for tinted unit sprite sheets (keyed by "spriteFile_team")
 const tintedUnitCache: Map<string, HTMLCanvasElement> = new Map();
 
-// Cache for darkened (acted) unit textures (keyed by "spriteKey_team_dark")
+// Cache for darkened (acted) unit sprite sheets (keyed by "spriteFile_team_dark")
 const darkenedUnitCache: Map<string, HTMLCanvasElement> = new Map();
 
-// Determine which sprite to use based on unit template ID
+// Animation state - global time for synchronized animations
+let animationStartTime = 0;
+
+export function initAnimationTime(): void {
+  animationStartTime = performance.now();
+}
+
+// Get the current animation frame index for a unit type
+export function getAnimationFrame(templateId: string): number {
+  const config = UNIT_SPRITE_SHEETS[templateId];
+  if (!config) return 0;
+
+  const elapsed = performance.now() - animationStartTime;
+  const totalDuration = config.frameCount * config.frameDuration;
+  const cycleTime = elapsed % totalDuration;
+  return Math.floor(cycleTime / config.frameDuration);
+}
+
+// Get sprite sheet config for a unit type
+export function getSpriteConfig(templateId: string): SpriteSheetConfig | undefined {
+  return UNIT_SPRITE_SHEETS[templateId];
+}
+
+// Get sprite sheet info for rendering (file + current frame)
 function getUnitSpriteFile(templateId: string | undefined): string | undefined {
   if (!templateId) return undefined;
-  return UNIT_ID_TO_SPRITE[templateId];
+  const config = UNIT_SPRITE_SHEETS[templateId];
+  return config?.file;
 }
 
 // Texture variants with weights: [filename, weight]
@@ -143,7 +158,7 @@ export function loadTextures(): Promise<void> {
     });
   });
 
-  // Load unit sprites
+  // Load unit sprite sheets (from sprites/ subdirectory)
   const unitPromises = UNIT_SPRITE_FILES.map(filename => {
     return new Promise<void>((resolve, reject) => {
       const img = new Image();
@@ -152,12 +167,13 @@ export function loadTextures(): Promise<void> {
         resolve();
       };
       img.onerror = () => reject(new Error(`Failed to load unit texture: ${filename}`));
-      img.src = `unit_assets/${filename}`;
+      img.src = `unit_assets/sprites/${filename}`;
     });
   });
 
   loadPromise = Promise.all([...hexPromises, ...unitPromises]).then(() => {
-    console.log(`Loaded ${textures.size} hex textures, ${unitTextures.size} unit sprites`);
+    console.log(`Loaded ${textures.size} hex textures, ${unitTextures.size} unit sprite sheets`);
+    initAnimationTime();
   });
 
   return loadPromise;

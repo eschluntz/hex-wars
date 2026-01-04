@@ -11,7 +11,7 @@ import { type Building, CAPTURE_RESISTANCE } from './building.js';
 import { type UnitTemplate } from './unit-templates.js';
 import { type TeamResources } from './resources.js';
 import { drawHex as drawHexBase, drawBuildingIcon } from './rendering-utils.js';
-import { getTexture, getBuildingTexture, getUnitTexture, areTexturesLoaded, TEXTURE_WIDTH, TEXTURE_HEIGHT, TEXTURE_HEX_CENTER_Y } from './textures.js';
+import { getTexture, getBuildingTexture, getUnitTexture, areTexturesLoaded, TEXTURE_WIDTH, TEXTURE_HEIGHT, TEXTURE_HEX_CENTER_Y, getAnimationFrame, getSpriteConfig } from './textures.js';
 
 export interface PathPreview {
   path: AxialCoord[];
@@ -322,6 +322,13 @@ export class Renderer {
       const drawY = cy - spriteSize / 2;
       const faceLeft = this.teamsFacingLeft.has(unit.team);
 
+      // Get animation frame for sprite sheet clipping
+      const spriteConfig = getSpriteConfig(unit.templateId ?? '');
+      const frameWidth = 16;  // Each frame is 16x16
+      const frameHeight = 16;
+      const frameIndex = spriteConfig ? getAnimationFrame(unit.templateId!) : 0;
+      const sourceX = frameIndex * frameWidth;
+
       ctx.imageSmoothingEnabled = false; // Keep pixel art crisp
 
       // Flip horizontally if team faces left
@@ -332,7 +339,12 @@ export class Renderer {
         ctx.translate(-cx, 0);
       }
 
-      ctx.drawImage(unitTexture, drawX, drawY, spriteSize, spriteSize);
+      // Draw the current frame from the sprite sheet
+      ctx.drawImage(
+        unitTexture,
+        sourceX, 0, frameWidth, frameHeight,  // Source rect (clip from sprite sheet)
+        drawX, drawY, spriteSize, spriteSize   // Destination rect
+      );
 
       if (faceLeft) {
         ctx.restore();
