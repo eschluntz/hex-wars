@@ -50,6 +50,8 @@ Units are built from modular components rather than predefined classes. Each tem
 | Capture Kit | 1 | $0 | Foot only | Can capture buildings |
 | Construction Kit | 1 | $500 | Any | Can build structures |
 | Armor Plating | 2 | $1000 | Wheels or Treads | Takes 1/5 damage from non-AP |
+| Troop Bay | 2 | $300 | Any | Carry 1 foot unit |
+| Cargo Bay | 4 | $800 | Treads or Hover | Carry 2 units of any type |
 
 **Starting Templates**:
 - **Soldier** ($1000): Foot + MG + Capture — can capture buildings
@@ -99,6 +101,28 @@ Units are built from modular components rather than predefined classes. Each tem
 - Counter-attacks: defender strikes back if still alive AND attacker is within defender's range
 - Range-based targeting (melee units can't counter ranged attacks from distance)
 - Tactical example: Soldiers (4 ATK, no AP) deal 0 damage to Tanks (armored)
+
+### Transport Units
+Units with Troop Bay or Cargo Bay can carry other units:
+
+**Loading:**
+- Select a unit, then click on a friendly transport that can carry it
+- Path shows green if loading is possible
+- Unit is loaded and turn ends for that unit
+
+**Unloading:**
+- Move transport, then select "Unload" from action menu
+- Click adjacent empty hexes to place cargo units
+- Unloaded units have already acted for the turn
+
+**Restrictions:**
+- Troop Bay only accepts foot units; Cargo Bay accepts any chassis
+- Transports cannot carry other transports (no nesting)
+- Cargo units are hidden from the map while carried
+
+**Combat:**
+- If a transport is destroyed, all cargo units are also destroyed
+- Each cargo death counts as a kill for the attacker
 
 ### Turn System
 - Two teams: Player vs AI (or hotseat mode)
@@ -270,6 +294,7 @@ hex-dominion/
 │   ├── tech-tree.test.ts # Tech tree logic tests
 │   ├── production.test.ts # Unit template tests
 │   ├── unit-designer.test.ts # Unit designer tests
+│   ├── transport.test.ts # Transport unit tests
 │   └── stats.test.ts    # Statistics tracking tests
 ├── dist/                # Built output (git-ignored)
 ├── index.html           # Browser game + lab modal CSS
@@ -283,7 +308,7 @@ hex-dominion/
 npm run watch      # Build + serve with auto-rebuild
 npm run build      # One-time build
 npm run typecheck  # Check types without building
-npm test           # Run tests (294 tests)
+npm test           # Run tests (324 tests)
 ```
 
 ### Test Map Helper
@@ -328,8 +353,6 @@ this.drawPopupMenu({
 
 
 ## Assets
-Potential tile sets:
-- https://ratbyteboss.itch.io/hex-tile-assets 
 - https://dgbaumgart.itch.io/hex-and-tile-terrain-sample-set 
 
 
@@ -377,7 +400,9 @@ Potential tile sets:
   - [x] support min range as well as max-range
   - [x] support some units cannot move and shoot the same turn (artillery)
   - [x] when hovering over a unit, highlight it's damagable range (reachable tiles + range), and when a unit is attacking, but you've not yet selected the attack target, highlight the attack range from the current location.
-  - [ ] transport units
+  - [x] transport units
+  - [ ] weapon compatibility to attack various chassis (i.e. soldier can't shoot airplane)
+  - [ ] terrain affects defense
 
 - [ ] Come up with strategy for icons and sprites for arbitrary units
 - [ ] Balance / playtesting
