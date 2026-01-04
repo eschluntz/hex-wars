@@ -6,17 +6,20 @@ import { type AxialCoord } from './core.js';
 import { type Renderer, type PathPreview } from './renderer.js';
 import { type Viewport } from './viewport.js';
 
-export type AnimationType = 'move' | 'build' | 'research' | 'design' | 'combat';
+export type AnimationType = 'move' | 'build' | 'combat';
 
 export interface Animation {
   type: AnimationType;
   hexQ: number;
   hexR: number;
   path?: AxialCoord[];      // For 'move'
+  unitId?: string;          // For 'move' - unit to animate along path
+  skipCameraPan?: boolean;  // For 'move' - don't pan camera during animation
   toastText?: string;       // For toast types
 }
 
 const ANIMATION_DURATION = 1000; // ms
+const MOVE_MS_PER_HEX = 120; // ms per hex segment for constant speed movement
 
 export class AnimationController {
   private renderer: Renderer;
@@ -39,8 +42,10 @@ export class AnimationController {
       return;
     }
 
-    // Smoothly pan camera to hex
-    this.viewport.panTo(animation.hexQ, animation.hexR);
+    // Smoothly pan camera to hex (unless skipped for player moves)
+    if (!animation.skipCameraPan) {
+      this.viewport.panTo(animation.hexQ, animation.hexR);
+    }
 
     if (animation.type === 'move' && animation.path) {
       // Set animation path for move animations
@@ -51,17 +56,18 @@ export class AnimationController {
       this.renderer.animationPath = pathPreview;
       this.renderer.activeToast = null;
 
-      // First phase: show path from start position
-      await this.waitForDuration(ANIMATION_DURATION / 2);
-      if (this.isSpacebarHeld()) {
-        this.clearAnimation();
-        return;
-      }
+      // Set up unit animation
+      this.renderer.animatingUnitId = animation.unitId!;
+      this.renderer.animationProgress = 0;
 
-      // Second phase: pan to destination
+      // Calculate duration based on path length (constant speed)
+      const numSegments = animation.path.length - 1;
+      const duration = numSegments * MOVE_MS_PER_HEX;
+
+      // Animate unit sliding along path
       const dest = animation.path[animation.path.length - 1]!;
-      this.viewport.panTo(dest.q, dest.r);
-      await this.waitForDuration(ANIMATION_DURATION / 2);
+      const panCamera = !animation.skipCameraPan;
+      await this.animateMove(dest.q, dest.r, duration, panCamera);
 
       this.clearAnimation();
     } else if (animation.toastText) {
@@ -80,25 +86,6 @@ export class AnimationController {
     }
   }
 
-  private waitForDuration(duration: number): Promise<void> {
-    return new Promise(resolve => {
-      const startTime = performance.now();
-      const check = () => {
-        if (this.isSpacebarHeld()) {
-          resolve();
-          return;
-        }
-        const elapsed = performance.now() - startTime;
-        if (elapsed >= duration) {
-          resolve();
-        } else {
-          requestAnimationFrame(check);
-        }
-      };
-      requestAnimationFrame(check);
-    });
-  }
-
   private animateToast(duration: number): Promise<void> {
     return new Promise(resolve => {
       const startTime = performance.now();
@@ -111,8 +98,36 @@ export class AnimationController {
         const elapsed = performance.now() - startTime;
         const progress = Math.min(elapsed / duration, 1);
 
-        if (this.renderer.activeToast) {
-          this.renderer.activeToast.progress = progress;
+        this.renderer.activeToast!.progress = progress;
+
+        if (progress >= 1) {
+          resolve();
+        } else {
+          requestAnimationFrame(animate);
+        }
+      };
+      requestAnimationFrame(animate);
+    });
+  }
+
+  private animateMove(destQ: number, destR: number, duration: number, panCamera: boolean): Promise<void> {
+    return new Promise(resolve => {
+      const startTime = performance.now();
+      const animate = () => {
+        if (this.isSpacebarHeld()) {
+          this.renderer.animationProgress = 1;
+          resolve();
+          return;
+        }
+
+        const elapsed = performance.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+
+        this.renderer.animationProgress = progress;
+
+        // Pan camera to destination (for AI moves)
+        if (panCamera && progress > 0.5) {
+          this.viewport.panTo(destQ, destR);
         }
 
         if (progress >= 1) {
@@ -127,6 +142,8 @@ export class AnimationController {
 
   private clearAnimation(): void {
     this.renderer.animationPath = null;
+    this.renderer.animatingUnitId = null;
+    this.renderer.animationProgress = 0;
     this.renderer.activeToast = null;
   }
 
@@ -147,9 +164,7 @@ export class AnimationController {
         const duration = this.isSpacebarHeld() ? FAST_DURATION : ANIMATION_DURATION;
         const progress = Math.min(elapsed / duration, 1);
 
-        if (this.renderer.turnAnnouncement) {
-          this.renderer.turnAnnouncement.progress = progress;
-        }
+        this.renderer.turnAnnouncement!.progress = progress;
 
         if (progress >= 1) {
           this.renderer.turnAnnouncement = null;

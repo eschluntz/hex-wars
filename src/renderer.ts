@@ -97,6 +97,8 @@ export class Renderer {
   currentTeam: string = '';
   turnNumber: number = 1;
   animationPath: PathPreview | null = null;  // For move animations (separate from player pathPreview)
+  animatingUnitId: string | null = null;  // Unit currently being animated
+  animationProgress: number = 0;  // Progress along animation path (0 to 1)
   activeToast: { q: number; r: number; text: string; progress: number } | null = null;
   turnAnnouncement: { text: string; progress: number } | null = null;
   activeUnits: number = 0;
@@ -658,9 +660,36 @@ export class Renderer {
 
     // Draw units
     for (const unit of this.units) {
-      const world = HexUtil.axialToPixel(unit.q, unit.r, CONFIG.hexSize);
-      const screen = this.viewport.worldToScreen(world.x, world.y);
-      this.drawUnit(screen.x, screen.y, unit, zoom);
+      let screenX: number, screenY: number;
+
+      // Interpolate position for animating unit
+      if (this.animatingUnitId === unit.id && this.animationPath && this.animationPath.path.length > 1) {
+        const path = this.animationPath.path;
+        const progress = this.animationProgress;
+        const totalSegments = path.length - 1;
+        const segmentProgress = progress * totalSegments;
+        const segmentIndex = Math.min(Math.floor(segmentProgress), totalSegments - 1);
+        const segmentT = segmentProgress - segmentIndex;
+
+        const from = path[segmentIndex]!;
+        const to = path[segmentIndex + 1]!;
+        const fromWorld = HexUtil.axialToPixel(from.q, from.r, CONFIG.hexSize);
+        const toWorld = HexUtil.axialToPixel(to.q, to.r, CONFIG.hexSize);
+
+        // Linear interpolation between hex centers
+        const interpX = fromWorld.x + (toWorld.x - fromWorld.x) * segmentT;
+        const interpY = fromWorld.y + (toWorld.y - fromWorld.y) * segmentT;
+        const screen = this.viewport.worldToScreen(interpX, interpY);
+        screenX = screen.x;
+        screenY = screen.y;
+      } else {
+        const world = HexUtil.axialToPixel(unit.q, unit.r, CONFIG.hexSize);
+        const screen = this.viewport.worldToScreen(world.x, world.y);
+        screenX = screen.x;
+        screenY = screen.y;
+      }
+
+      this.drawUnit(screenX, screenY, unit, zoom);
     }
 
     // Draw active toast (for animations)

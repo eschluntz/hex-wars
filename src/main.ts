@@ -67,6 +67,7 @@ class Game {
   private gameOverData: GameOverData | null = null;
   private players: Player[] = [];
   private isAITurnInProgress: boolean = false;
+  private isAnimating: boolean = false;  // Block input during player move animations
 
   constructor() {
     this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
@@ -116,14 +117,14 @@ class Game {
       onHexClick: (hex) => this.handleClick(hex),
       onCancel: () => this.handleCancel(),
       onEndTurn: () => {
-        // Only allow manual turn ending during human player's turn
-        if (!this.isCurrentPlayerAI()) {
+        // Only allow manual turn ending during human player's turn and not during animation
+        if (!this.isCurrentPlayerAI() && !this.isAnimating) {
           this.endTurn();
         }
       },
       onCycleNext: () => {
-        // Only during human player's turn
-        if (!this.isCurrentPlayerAI()) {
+        // Only during human player's turn and not during animation
+        if (!this.isCurrentPlayerAI() && !this.isAnimating) {
           this.cycleToNextActive();
         }
       },
@@ -308,56 +309,26 @@ class Game {
       color: TEAM_COLORS[TEAMS.ENEMY]!.unitColor,
     }));
 
-    // Add airplane unit for enemy to test weapon targeting restrictions
-    // Player's MG cannot target airplanes, but Heavy MG can
-    this.units.push(new Unit(`airplane_${this.nextUnitId++}`, TEAMS.ENEMY, 6, centerR - 1, {
-      speed: 6,
-      attack: 6,
-      range: 1,
-      minRange: 0,
-      canMoveAndAttack: true,
-      terrainCosts: { grass: 1, water: 1, woods: 1, mountain: 1, road: 1, building: 1 },
-      canCapture: false,
-      canBuild: false,
-      armored: false,
-      armorPiercing: false,
-      chassisId: 'airplane',
-      weaponId: 'heavyMG',
-      systemIds: [],
-      cannotTarget: [],  // Heavy MG can target everything
+    // Add copter for enemy (air unit that infantry can't target)
+    const copterTemplate = getTemplate('copter');
+    const copterStats = getTemplateStats(copterTemplate);
+    this.units.push(new Unit(`copter_${this.nextUnitId++}`, TEAMS.ENEMY, 6, centerR - 1, {
+      ...copterStats,
       color: TEAM_COLORS[TEAMS.ENEMY]!.unitColor,
     }));
 
-    // Add transport units for player testing
-    // Troop carrier (wheels + troopBay) - carries 1 foot unit
-    const reconTemplate = getTemplate('recon');
-    const reconStats = getTemplateStats(reconTemplate);
-    this.units.push(new Unit(`troop_carrier_${this.nextUnitId++}`, TEAMS.PLAYER, 2, centerR + 1, {
-      ...reconStats,
-      chassisId: 'wheels',
-      weaponId: undefined,
-      systemIds: ['troopBay'],
-      attack: 0,
-      range: 0,
-      transportCapacity: 1,
-      transportFilter: ['foot'],
+    // Add vehicles for player
+    const apcTemplate = getTemplate('apc');
+    const apcStats = getTemplateStats(apcTemplate);
+    this.units.push(new Unit(`apc_${this.nextUnitId++}`, TEAMS.PLAYER, 2, centerR + 1, {
+      ...apcStats,
       color: TEAM_COLORS[TEAMS.PLAYER]!.unitColor,
     }));
 
-    // Cargo carrier (cargoBay on treads) - carries 2 units of any type
     const tankTemplate = getTemplate('tank');
     const tankStats = getTemplateStats(tankTemplate);
-    this.units.push(new Unit(`cargo_carrier_${this.nextUnitId++}`, TEAMS.PLAYER, 2, centerR - 1, {
+    this.units.push(new Unit(`tank_${this.nextUnitId++}`, TEAMS.PLAYER, 2, centerR - 1, {
       ...tankStats,
-      chassisId: 'treads',
-      weaponId: undefined,
-      systemIds: ['cargoBay'],
-      attack: 0,
-      range: 0,
-      transportCapacity: 2,
-      transportFilter: [],
-      armored: false,
-      armorPiercing: false,
       color: TEAM_COLORS[TEAMS.PLAYER]!.unitColor,
     }));
 
@@ -538,7 +509,8 @@ class Game {
             type: 'move',
             hexQ: unit.q,
             hexR: unit.r,
-            path: pathResult.path
+            path: pathResult.path,
+            unitId: unit.id
           });
         }
 
@@ -980,7 +952,10 @@ class Game {
     }
   }
 
-  private handleClick(hex: AxialCoord): void {
+  private async handleClick(hex: AxialCoord): Promise<void> {
+    // Block input during animations
+    if (this.isAnimating) return;
+
     // Handle factory menu - it blocks other clicks
     if (this.state.type === 'factory') {
       const action = this.renderer.getActionMenuClick();
@@ -1016,13 +991,13 @@ class Game {
           this.setState({ type: 'moved', unit, fromQ: unit.q, fromR: unit.r });
         } else if (clickedUnit && clickedUnit.team === this.currentTeam && clickedUnit.canLoadUnit(unit)) {
           // Clicked a carrier that can load this unit - try to load
-          this.tryMove(unit, hex);
+          await this.tryMove(unit, hex);
         } else if (clickedUnit && clickedUnit.team === this.currentTeam && !clickedUnit.hasActed) {
           // Clicked another friendly unmoved unit - select it instead
           this.setState({ type: 'selected', unit: clickedUnit });
         } else if (!clickedUnit) {
           // Clicked empty tile - try to move
-          this.tryMove(unit, hex);
+          await this.tryMove(unit, hex);
         }
         break;
       }
@@ -1117,6 +1092,9 @@ class Game {
   }
 
   private handleCancel(): void {
+    // Block input during animations
+    if (this.isAnimating) return;
+
     switch (this.state.type) {
       case 'selected':
         this.setState({ type: 'idle' });
@@ -1146,7 +1124,7 @@ class Game {
     }
   }
 
-  private tryMove(unit: Unit, destination: AxialCoord): void {
+  private async tryMove(unit: Unit, destination: AxialCoord): Promise<void> {
     const blocked = this.getBlockedPositions(unit.team);
     const occupied = this.getOccupiedPositions(unit);
     const fromQ = unit.q;
@@ -1168,6 +1146,19 @@ class Game {
       if (unitAtDest && unitAtDest.team === unit.team && unitAtDest.canLoadUnit(unit)) {
         // Allow loading if within movement range
         if (this.getPathCost(result.path, unit.terrainCosts) <= unit.speed) {
+          // Animate movement to carrier
+          this.renderer.pathPreview = null;
+          this.isAnimating = true;
+          await this.animationController.play({
+            type: 'move',
+            hexQ: unit.q,
+            hexR: unit.r,
+            path: result.path,
+            unitId: unit.id,
+            skipCameraPan: true
+          });
+          this.isAnimating = false;
+
           // Load the unit onto the carrier
           unitAtDest.loadUnit(unit);
           unit.hasActed = true;
@@ -1181,6 +1172,21 @@ class Game {
       const reachableIdx = unit.getReachableIndex(result.path, this.map, occupied);
       if (reachableIdx > 0) {
         const dest = result.path[reachableIdx]!;
+        const animPath = result.path.slice(0, reachableIdx + 1);
+
+        // Animate movement along path
+        this.renderer.pathPreview = null;
+        this.isAnimating = true;
+        await this.animationController.play({
+          type: 'move',
+          hexQ: unit.q,
+          hexR: unit.r,
+          path: animPath,
+          unitId: unit.id,
+          skipCameraPan: true
+        });
+        this.isAnimating = false;
+
         unit.q = dest.q;
         unit.r = dest.r;
         this.setState({ type: 'moved', unit, fromQ, fromR });
@@ -1283,7 +1289,7 @@ class Game {
   // --- Path preview ---
 
   private updatePathPreview(): void {
-    if (this.state.type !== 'selected') {
+    if (this.state.type !== 'selected' || this.isAnimating) {
       this.renderer.pathPreview = null;
       return;
     }
@@ -1346,6 +1352,12 @@ class Game {
   // --- Attack range overlay ---
 
   private updateAttackRangeOverlay(): void {
+    // Don't update during animation
+    if (this.isAnimating) {
+      this.renderer.attackRangeOverlay = null;
+      return;
+    }
+
     // Case 1: We're in attacking state - show range from current position
     if (this.state.type === 'attacking') {
       const unit = this.state.unit;
