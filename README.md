@@ -30,19 +30,20 @@ A turn-based hex strategy game inspired by Advance Wars, Factorio, and roguelike
 Units are built from modular components rather than predefined classes. Each template combines a chassis, an optional weapon, and optional system modules. Total component weight must not exceed chassis capacity. Unit cost = sum of all component costs.
 
 **Chassis** (determines mobility):
-| Chassis | Speed | Max Weight | Cost | Terrain |
-|---------|-------|------------|------|---------|
-| Foot    | 3     | 2          | $500 | All passable terrain costs 1 |
-| Wheels  | 6     | 3          | $800 | Roads 0.5, Woods 2 |
-| Treads  | 4     | 10         | $1500 | Roads 0.5, Woods 2 |
+| Chassis  | Speed | Max Weight | Cost  | Terrain |
+|----------|-------|------------|-------|---------|
+| Foot     | 3     | 2          | $500  | All passable terrain costs 1 |
+| Wheels   | 6     | 3          | $800  | Roads 0.5, Woods 2 |
+| Treads   | 4     | 10         | $1500 | Roads 0.5, Woods 2 |
+| Airplane | 6     | 4          | $2500 | All terrain costs 1 (flying) |
 
 **Weapons** (determines offense):
-| Weapon      | Attack | Range | Armor Piercing | Weight | Cost |
-|-------------|--------|-------|----------------|--------|------|
-| Machine Gun | 4      | 1     | No             | 1      | $500 |
-| Heavy MG    | 6      | 1     | No             | 2      | $800 |
-| Cannon      | 7      | 1     | Yes            | 4      | $1500 |
-| Artillery   | 5      | 3     | Yes            | 5      | $2000 |
+| Weapon      | Attack | Range | Armor Piercing | Weight | Cost  | Targeting |
+|-------------|--------|-------|----------------|--------|-------|-----------|
+| Machine Gun | 4      | 1     | No             | 1      | $500  | Ground only |
+| Heavy MG    | 6      | 1     | No             | 2      | $800  | All (anti-air) |
+| Cannon      | 7      | 1     | Yes            | 4      | $1500 | Ground only |
+| Artillery   | 5      | 3     | Yes            | 5      | $2000 | Ground only |
 
 **System Modules** (special abilities):
 | System | Weight | Cost | Chassis Restriction | Effect |
@@ -90,7 +91,8 @@ Units are built from modular components rather than predefined classes. Each tem
 | Water / Mountain | ∞ | ∞ |
 
 ### Unit System
-- Units have: speed, attack, range, health (max 10), terrain costs, armored, armorPiercing
+- Units have: chassis type, speed, attack, range, health (max 10), terrain costs, armored, armorPiercing
+- Hover over units to see full stats including chassis type
 - Click to select, click destination to move
 - Path preview shows exact movement with arrow indicator
 - Health bars displayed below units
@@ -98,7 +100,8 @@ Units are built from modular components rather than predefined classes. Each tem
 ### Combat System (Advance Wars style)
 - Base damage formula: `attack × (health/10) + random(-1, 0, +1)`
 - **Armor system**: Non-AP damage against armored units is divided by 5 (floored)
-- Counter-attacks: defender strikes back if still alive AND attacker is within defender's range
+- **Weapon targeting**: Some weapons can only target certain chassis types (e.g., MG can't hit airplanes)
+- Counter-attacks: defender strikes back if alive, in range, AND can target attacker's chassis
 - Range-based targeting (melee units can't counter ranged attacks from distance)
 - Tactical example: Soldiers (4 ATK, no AP) deal 0 damage to Tanks (armored)
 
@@ -169,7 +172,7 @@ Buildings have ownership displayed via colored backgrounds:
 
 ### Resource System
 - **Funds ($)**: Collected from cities, spent to build units
-- **Science**: Collected from labs (future: research tech tree)
+- **Science**: Collected from labs, spent to research new components
 - Resources displayed in info panel
 - Each team starts with $5000
 
@@ -188,9 +191,8 @@ Buildings have ownership displayed via colored backgrounds:
 - Real-time validation shows weight limits and component compatibility
 - **Edit existing templates** by clicking on them in the list
 - Hover over components to see detailed stats in the tooltip area
-- Unavailable components are grayed out with explanatory messages
+- Unavailable/unresearched components are grayed out with explanatory messages
 - Each team has their own template library
-- Research system ready for future tech tree (unresearched components will be hidden)
 
 ### Building Capture
 - Units with `canCapture` ability (Soldier) can capture neutral or enemy buildings
@@ -305,7 +307,7 @@ hex-dominion/
 npm run watch      # Build + serve with auto-rebuild
 npm run build      # One-time build
 npm run typecheck  # Check types without building
-npm test           # Run tests (324 tests)
+npm test           # Run tests (321 tests)
 ```
 
 ### Test Map Helper
@@ -398,8 +400,8 @@ this.drawPopupMenu({
   - [x] support some units cannot move and shoot the same turn (artillery)
   - [x] when hovering over a unit, highlight it's damagable range (reachable tiles + range), and when a unit is attacking, but you've not yet selected the attack target, highlight the attack range from the current location.
   - [x] transport units
-  - [ ] weapon compatibility to attack various chassis (i.e. soldier can't shoot airplane)
-  - [ ] terrain affects defense
+  - [x] weapon compatibility to attack various chassis (i.e. soldier can't shoot airplane)
+  - [x] terrain affects defense
 
 - [ ] Come up with strategy for icons and sprites for arbitrary units
 - [ ] Balance / playtesting

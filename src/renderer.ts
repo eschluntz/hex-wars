@@ -2,7 +2,7 @@
 // HEX DOMINION - Renderer
 // ============================================================================
 
-import { HexUtil, TILE_ICONS, TEAM_COLORS, type AxialCoord, type Tile } from './core.js';
+import { HexUtil, TILE_ICONS, TEAM_COLORS, TERRAIN_DEFENSE_STARS, type AxialCoord, type Tile } from './core.js';
 import { CONFIG } from './config.js';
 import { GameMap } from './game-map.js';
 import { Viewport } from './viewport.js';
@@ -12,6 +12,7 @@ import { type UnitTemplate } from './unit-templates.js';
 import { type TeamResources } from './resources.js';
 import { drawHex as drawHexBase, drawBuildingIcon } from './rendering-utils.js';
 import { getTexture, getBuildingTexture, getUnitTexture, areTexturesLoaded, TEXTURE_WIDTH, TEXTURE_HEIGHT, TEXTURE_HEX_CENTER_Y } from './textures.js';
+import { getChassis } from './components.js';
 
 export interface PathPreview {
   path: AxialCoord[];
@@ -907,8 +908,9 @@ export class Renderer {
     const teamName = u.team.toUpperCase();
 
     // Basic stats line
+    const chassisName = u.chassisId ? getChassis(u.chassisId).name : 'Unknown';
     let statsLine = `${label}: <span style="color: ${teamColor}">${u.id.toUpperCase()}</span> (${teamName})`;
-    statsLine += ` | HP: ${u.health}/10 | ATK: ${u.attack} | RNG: ${u.range} | SPD: ${u.speed}`;
+    statsLine += ` | ${chassisName} | HP: ${u.health}/10 | ATK: ${u.attack} | RNG: ${u.range} | SPD: ${u.speed}`;
     lines.push(statsLine);
 
     // Armor/AP indicators
@@ -973,6 +975,11 @@ export class Renderer {
         if (this.selectedUnit) {
           const cost = this.selectedUnit.terrainCosts[tile.type];
           hexInfo += ` [cost: ${cost === Infinity ? '∞' : cost}]`;
+        }
+        // Show terrain defense stars
+        const defenseStars = TERRAIN_DEFENSE_STARS[tile.type];
+        if (defenseStars > 0) {
+          hexInfo += ` <span style="color: #ffb74d">[def: ${'★'.repeat(defenseStars)}]</span>`;
         }
         lines.push(hexInfo);
 

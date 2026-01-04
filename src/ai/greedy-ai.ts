@@ -255,8 +255,9 @@ export class GreedyAI implements AIController {
 
     // Check attacks from current position
     for (const enemy of enemies) {
+      if (!Combat.canTargetChassis(unit, enemy)) continue;
       if (isInRangeFrom(unit, enemy, unit.q, unit.r)) {
-        const damage = Combat.calculateExpectedDamage(unit, enemy);
+        const damage = Combat.calculateExpectedDamage(unit, enemy, state.map.getTerrainDefenseStars(enemy.q, enemy.r));
         if (damage > bestDamage) {
           bestDamage = damage;
           bestResult = {
@@ -274,8 +275,9 @@ export class GreedyAI implements AIController {
     if (unit.canMoveAndAttack) {
       for (const [_key, pos] of reachable) {
         for (const enemy of enemies) {
+          if (!Combat.canTargetChassis(unit, enemy)) continue;
           if (isInRangeFrom(unit, enemy, pos.q, pos.r)) {
-            const damage = Combat.calculateExpectedDamage(unit, enemy);
+            const damage = Combat.calculateExpectedDamage(unit, enemy, state.map.getTerrainDefenseStars(enemy.q, enemy.r));
             if (damage > bestDamage) {
               bestDamage = damage;
               bestResult = {

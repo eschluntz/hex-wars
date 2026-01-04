@@ -2,7 +2,7 @@
 // HEX DOMINION - Game Map
 // ============================================================================
 
-import { TILE_TYPES, HexUtil, type Tile, type TileType, type TerrainCosts } from './core.js';
+import { TILE_TYPES, TERRAIN_DEFENSE_STARS, HexUtil, type Tile, type TileType, type TerrainCosts } from './core.js';
 import { PerlinNoise, SeededRandom } from './noise.js';
 import { GEN_PARAMS, type MapConfig } from './config.js';
 import { type Building, type BuildingType, createBuilding, getBuildingKey, CAPTURE_RESISTANCE } from './building.js';
@@ -24,6 +24,11 @@ export class GameMap {
 
   getTile(q: number, r: number): Tile | undefined {
     return this.tiles.get(this.key(q, r));
+  }
+
+  getTerrainDefenseStars(q: number, r: number): number {
+    const tile = this.getTile(q, r);
+    return tile ? TERRAIN_DEFENSE_STARS[tile.type] : 0;
   }
 
   setTile(q: number, r: number, type: TileType): void {
@@ -85,6 +90,7 @@ export class GameMap {
   }
 
   addBuilding(building: Building): void {
+    this.setTile(building.q, building.r, TILE_TYPES.BUILDING);
     this.buildings.set(getBuildingKey(building.q, building.r), building);
   }
 
@@ -253,9 +259,6 @@ export class GameMap {
       for (let i = 0; i < cluster.buildings.length; i++) {
         const pos = cluster.buildings[i]!;
 
-        // Set tile to grass (buildings are passable like grass)
-        this.setTile(pos.q, pos.r, TILE_TYPES.GRASS);
-
         // Determine building type: mostly cities, some factories, 1 lab per cluster
         let buildingType: BuildingType;
         if (i === 0) {
@@ -292,9 +295,6 @@ export class GameMap {
       const q = rng.nextInt(-rOffset, width - rOffset - 1);
 
       if (this.isValidBuildingTile(q, r) && !this.isTooCloseToBuilding(q, r, allClusterBuildings, clusterCfg.singletonMinDistance)) {
-        // Set tile to grass
-        this.setTile(q, r, TILE_TYPES.GRASS);
-
         // Random building type: 50% city, 30% factory, 20% lab
         const typeRoll = rng.next();
         let buildingType: BuildingType;

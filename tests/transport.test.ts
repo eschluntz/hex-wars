@@ -7,7 +7,7 @@ import { Unit, CARRIED_COORD } from '../src/unit.js';
 import { DEFAULT_TERRAIN_COSTS } from '../src/core.js';
 import { GameStats } from '../src/stats.js';
 
-const runner = new TestRunner('Transport');
+const runner = new TestRunner();
 
 function createUnit(id: string, team: string, q: number, r: number, overrides: Partial<{
   chassisId: string;
@@ -207,7 +207,7 @@ runner.describe('unload behavior', () => {
   });
 
   runner.it('unloaded unit should be at specified position', () => {
-    const carrier = createCarrier('carrier', 'player', 0, 0, []);
+    const carrier = createCarrier('carrier', 'player', 1);
     const cargo = createUnit('cargo', 'player', 0, 0, { chassisId: 'foot' });
 
     carrier.loadUnit(cargo);

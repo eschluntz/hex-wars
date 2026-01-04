@@ -15,6 +15,7 @@ export interface ChassisComponent {
   terrainCosts: TerrainCosts;
   maxWeight: number;
   baseCost: number;
+  flying?: boolean;
 }
 
 const FOOT_TERRAIN_COSTS: TerrainCosts = {
@@ -71,6 +72,15 @@ const TITAN_TERRAIN_COSTS: TerrainCosts = {
   water: Infinity, // Too heavy
   mountain: 3,  // Can climb slowly
   road: 1,      // Too big for road bonus
+};
+
+const AIRPLANE_TERRAIN_COSTS: TerrainCosts = {
+  grass: 1,
+  water: 1,
+  woods: 1,
+  mountain: 1,
+  road: 1,
+  building: 1,
 };
 
 export const CHASSIS: Record<string, ChassisComponent> = {
@@ -143,6 +153,24 @@ export const CHASSIS: Record<string, ChassisComponent> = {
     maxWeight: 20,
     baseCost: 6000,
   },
+  airplane: {
+    id: 'airplane',
+    name: 'Airplane',
+    speed: 6,
+    terrainCosts: AIRPLANE_TERRAIN_COSTS,
+    maxWeight: 4,
+    baseCost: 2500,
+    flying: true,
+  },
+  helicopter: {
+    id: 'helicopter',
+    name: 'Helicopter',
+    speed: 5,
+    terrainCosts: AIRPLANE_TERRAIN_COSTS,  // Same as airplane - flies over all terrain
+    maxWeight: 5,
+    baseCost: 2200,
+    flying: true,
+  },
 };
 
 // ============================================================================
@@ -160,6 +188,7 @@ export interface WeaponComponent {
   weight: number;
   cost: number;
   requiresChassis?: string[];  // Only these chassis can use this weapon
+  cannotTarget?: string[];     // Chassis IDs this weapon cannot target
 }
 
 export const WEAPONS: Record<string, WeaponComponent> = {
@@ -171,6 +200,7 @@ export const WEAPONS: Record<string, WeaponComponent> = {
     range: 1,
     weight: 1,
     cost: 500,
+    cannotTarget: ['airplane'],
   },
   heavyMG: {
     id: 'heavyMG',
@@ -180,6 +210,7 @@ export const WEAPONS: Record<string, WeaponComponent> = {
     range: 1,
     weight: 2,
     cost: 800,
+    // Heavy MG can target all chassis including airplane
   },
   cannon: {
     id: 'cannon',
@@ -189,6 +220,7 @@ export const WEAPONS: Record<string, WeaponComponent> = {
     range: 1,
     weight: 4,
     cost: 1500,
+    cannotTarget: ['airplane'],
   },
   artillery: {
     id: 'artillery',
@@ -200,6 +232,7 @@ export const WEAPONS: Record<string, WeaponComponent> = {
     canMoveAndAttack: false,
     weight: 5,
     cost: 2000,
+    cannotTarget: ['airplane'],
   },
   // Locked: requires rocketLauncher tech
   rockets: {

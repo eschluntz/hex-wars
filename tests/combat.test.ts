@@ -20,6 +20,9 @@ function createUnit(
     health?: number;
     armored?: boolean;
     armorPiercing?: boolean;
+    flying?: boolean;
+    chassisId?: string;
+    cannotTarget?: string[];
   } = {}
 ) {
   const unit = new Unit(id, team, q, r, {
@@ -28,6 +31,9 @@ function createUnit(
     minRange: stats.minRange ?? 0,
     armored: stats.armored ?? false,
     armorPiercing: stats.armorPiercing ?? false,
+    flying: stats.flying ?? false,
+    chassisId: stats.chassisId ?? 'foot',
+    cannotTarget: stats.cannotTarget ?? [],
   });
   if (stats.health !== undefined) {
     unit.health = stats.health;
@@ -399,6 +405,247 @@ runner.describe('Combat', () => {
     runner.it('should return false for unit with health = 0', () => {
       const unit = createUnit('u', 'player', 0, 0, { health: 0 });
       assert(!unit.isAlive());
+    });
+  });
+
+  runner.describe('canTargetChassis', () => {
+    runner.it('should return true when weapon has no restrictions', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { cannotTarget: [] });
+      const defender = createUnit('d', 'enemy', 1, 0, { chassisId: 'airplane' });
+      assert(Combat.canTargetChassis(attacker, defender));
+    });
+
+    runner.it('should return false when target chassis is in cannotTarget list', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { cannotTarget: ['airplane'] });
+      const defender = createUnit('d', 'enemy', 1, 0, { chassisId: 'airplane' });
+      assert(!Combat.canTargetChassis(attacker, defender));
+    });
+
+    runner.it('should return true when target chassis is not in cannotTarget list', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { cannotTarget: ['airplane'] });
+      const defender = createUnit('d', 'enemy', 1, 0, { chassisId: 'foot' });
+      assert(Combat.canTargetChassis(attacker, defender));
+    });
+
+    runner.it('should handle multiple chassis in cannotTarget list', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { cannotTarget: ['airplane', 'hover'] });
+      const airplane = createUnit('d1', 'enemy', 1, 0, { chassisId: 'airplane' });
+      const hover = createUnit('d2', 'enemy', 2, 0, { chassisId: 'hover' });
+      const foot = createUnit('d3', 'enemy', 0, 1, { chassisId: 'foot' });
+
+      assert(!Combat.canTargetChassis(attacker, airplane), 'Should not target airplane');
+      assert(!Combat.canTargetChassis(attacker, hover), 'Should not target hover');
+      assert(Combat.canTargetChassis(attacker, foot), 'Should target foot');
+    });
+  });
+
+  runner.describe('getTargetsInRange (with chassis restrictions)', () => {
+    runner.it('should exclude enemies with incompatible chassis', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { range: 2, cannotTarget: ['airplane'] });
+      const enemies = [
+        createUnit('e1', 'enemy', 1, 0, { chassisId: 'foot' }),
+        createUnit('e2', 'enemy', 0, 1, { chassisId: 'airplane' }),
+        createUnit('e3', 'enemy', 1, 1, { chassisId: 'treads' }),
+      ];
+      const targets = Combat.getTargetsInRange(attacker, enemies);
+
+      assertEqual(targets.length, 2);
+      assert(targets.some(t => t.id === 'e1'), 'Should include foot enemy');
+      assert(!targets.some(t => t.id === 'e2'), 'Should exclude airplane enemy');
+      assert(targets.some(t => t.id === 'e3'), 'Should include treads enemy');
+    });
+
+    runner.it('should include all enemies when no chassis restrictions', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { range: 2, cannotTarget: [] });
+      const enemies = [
+        createUnit('e1', 'enemy', 1, 0, { chassisId: 'foot' }),
+        createUnit('e2', 'enemy', 0, 1, { chassisId: 'airplane' }),
+      ];
+      const targets = Combat.getTargetsInRange(attacker, enemies);
+
+      assertEqual(targets.length, 2);
+    });
+
+    runner.it('should combine range and chassis restrictions', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { range: 1, cannotTarget: ['airplane'] });
+      const enemies = [
+        createUnit('e1', 'enemy', 1, 0, { chassisId: 'foot' }),      // in range, targetable
+        createUnit('e2', 'enemy', 0, 1, { chassisId: 'airplane' }), // in range, not targetable
+        createUnit('e3', 'enemy', 2, 0, { chassisId: 'foot' }),      // out of range
+      ];
+      const targets = Combat.getTargetsInRange(attacker, enemies);
+
+      assertEqual(targets.length, 1);
+      assertEqual(targets[0]!.id, 'e1');
+    });
+  });
+
+  runner.describe('applyTerrainDefense', () => {
+    runner.it('should return full damage when terrain stars is 0', () => {
+      const damage = Combat.applyTerrainDefense(10, 10, 0, false);
+      assertEqual(damage, 10);
+    });
+
+    runner.it('should return full damage for flying units', () => {
+      // Flying units don't get terrain defense
+      const damage = Combat.applyTerrainDefense(10, 10, 4, true);
+      assertEqual(damage, 10);
+    });
+
+    runner.it('should reduce damage by 10% for 1 star terrain at full HP', () => {
+      // 1 star * (10/10) * 0.1 = 10% reduction
+      // 10 * (1 - 0.1) = 9
+      const damage = Combat.applyTerrainDefense(10, 10, 1, false);
+      assertEqual(damage, 9);
+    });
+
+    runner.it('should reduce damage by 20% for 2 star terrain at full HP', () => {
+      // 2 stars * (10/10) * 0.1 = 20% reduction
+      // 10 * (1 - 0.2) = 8
+      const damage = Combat.applyTerrainDefense(10, 10, 2, false);
+      assertEqual(damage, 8);
+    });
+
+    runner.it('should reduce damage by 40% for 4 star terrain at full HP', () => {
+      // 4 stars * (10/10) * 0.1 = 40% reduction
+      // 10 * (1 - 0.4) = 6
+      const damage = Combat.applyTerrainDefense(10, 10, 4, false);
+      assertEqual(damage, 6);
+    });
+
+    runner.it('should scale defense with defender HP', () => {
+      // 2 stars * (5/10) * 0.1 = 10% reduction (not 20%)
+      // 10 * (1 - 0.1) = 9
+      const damage = Combat.applyTerrainDefense(10, 5, 2, false);
+      assertEqual(damage, 9);
+    });
+
+    runner.it('should floor the final damage', () => {
+      // 7 damage, 2 stars, full HP: 7 * (1 - 0.2) = 5.6 -> 5
+      const damage = Combat.applyTerrainDefense(7, 10, 2, false);
+      assertEqual(damage, 5);
+    });
+  });
+
+  runner.describe('calculateExpectedDamage (with terrain)', () => {
+    runner.it('should apply terrain defense after armor reduction', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { attack: 10 });
+      const defender = createUnit('d', 'enemy', 1, 0);
+
+      // No terrain: 10 damage
+      const damageNoTerrain = Combat.calculateExpectedDamage(attacker, defender, 0);
+      assertEqual(damageNoTerrain, 10);
+
+      // With 2 stars terrain: 10 * (1 - 0.2) = 8
+      const damageWithTerrain = Combat.calculateExpectedDamage(attacker, defender, 2);
+      assertEqual(damageWithTerrain, 8);
+    });
+
+    runner.it('should not apply terrain defense to flying defenders', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { attack: 10 });
+      const flyingDefender = createUnit('d', 'enemy', 1, 0, { flying: true, chassisId: 'airplane' });
+
+      // With 4 stars terrain but flying: still 10 damage
+      const damage = Combat.calculateExpectedDamage(attacker, flyingDefender, 4);
+      assertEqual(damage, 10);
+    });
+
+    runner.it('should apply both armor and terrain defense', () => {
+      // Non-AP attacker vs armored defender on terrain
+      const attacker = createUnit('a', 'player', 0, 0, { attack: 10, armorPiercing: false });
+      const defender = createUnit('d', 'enemy', 1, 0, { armored: true });
+
+      // Armor first: 10 / 5 = 2
+      // Then 2 stars terrain: 2 * (1 - 0.2) = 1.6 -> 1
+      const damage = Combat.calculateExpectedDamage(attacker, defender, 2);
+      assertEqual(damage, 1);
+    });
+  });
+
+  runner.describe('execute (with terrain)', () => {
+    runner.it('should apply terrain defense to defender', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { attack: 10, range: 1 });
+      const defender = createUnit('d', 'enemy', 1, 0, { attack: 5, range: 1 });
+
+      // Defender on 2-star terrain (woods)
+      const result = Combat.execute(attacker, defender, 0, 0, 2, 0);
+
+      // 10 * (1 - 0.2) = 8 damage to defender
+      assertEqual(result.attackerDamage, 8);
+      assertEqual(defender.health, 2);
+    });
+
+    runner.it('should apply terrain defense to attacker on counter-attack', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { attack: 3, range: 1 });
+      const defender = createUnit('d', 'enemy', 1, 0, { attack: 10, range: 1 });
+
+      // Attacker on 2-star terrain (woods)
+      const result = Combat.execute(attacker, defender, 0, 0, 0, 2);
+
+      // Attacker deals 3 damage (no terrain defense for defender)
+      assertEqual(result.attackerDamage, 3);
+      assertEqual(defender.health, 7);
+
+      // Defender counter-attacks: 10 * 0.7 = 7, then terrain: 7 * (1 - 0.2) = 5.6 -> 5
+      assertEqual(result.defenderDamage, 5);
+      assertEqual(attacker.health, 5);
+    });
+
+    runner.it('should not apply terrain defense to flying units', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { attack: 10, range: 1 });
+      const flyingDefender = createUnit('d', 'enemy', 1, 0, { attack: 5, range: 1, flying: true, chassisId: 'airplane' });
+
+      // Flying defender on 4-star terrain (mountain) - should get no defense
+      const result = Combat.execute(attacker, flyingDefender, 0, 0, 4, 0);
+
+      assertEqual(result.attackerDamage, 10);
+      assertEqual(flyingDefender.health, 0);
+      assertEqual(result.defenderDied, true);
+    });
+  });
+
+  runner.describe('execute (with chassis restrictions)', () => {
+    runner.it('should not allow counter-attack when defender cannot target attacker chassis', () => {
+      // Airplane attacks soldier - soldier cannot counter (MG can't target airplane)
+      const airplane = createUnit('airplane', 'player', 0, 0, {
+        attack: 5,
+        chassisId: 'airplane',
+        cannotTarget: [],  // Heavy MG can target all
+      });
+      const soldier = createUnit('soldier', 'enemy', 1, 0, {
+        attack: 4,
+        chassisId: 'foot',
+        cannotTarget: ['airplane'],  // MG cannot target airplane
+      });
+
+      const result = Combat.execute(airplane, soldier, 0, 0);
+
+      assertEqual(result.attackerDamage, 5);
+      assertEqual(result.defenderDamage, 0);  // No counter-attack!
+      assertEqual(soldier.health, 5);
+      assertEqual(airplane.health, 10);  // Airplane takes no damage
+    });
+
+    runner.it('should allow counter-attack when defender can target attacker chassis', () => {
+      // Ground unit attacks ground unit - normal counter-attack
+      const tank = createUnit('tank', 'player', 0, 0, {
+        attack: 7,
+        chassisId: 'treads',
+        cannotTarget: ['airplane'],
+      });
+      const soldier = createUnit('soldier', 'enemy', 1, 0, {
+        attack: 4,
+        chassisId: 'foot',
+        cannotTarget: ['airplane'],
+      });
+
+      const result = Combat.execute(tank, soldier, 0, 0);
+
+      assertEqual(result.attackerDamage, 7);
+      // Soldier at 3 HP (30%), counter damage = floor(4 * 0.3) = 1
+      assertEqual(result.defenderDamage, 1);
+      assertEqual(soldier.health, 3);
+      assertEqual(tank.health, 9);
     });
   });
 });

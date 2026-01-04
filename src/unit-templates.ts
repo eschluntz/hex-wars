@@ -35,10 +35,12 @@ export interface UnitTemplate {
   terrainCosts: TerrainCosts;
   armored: boolean;
   armorPiercing: boolean;
+  flying: boolean;
   canCapture: boolean;
   canBuild: boolean;
   transportCapacity: number;
   transportFilter: string[];
+  cannotTarget: string[];
 }
 
 // ============================================================================
@@ -94,10 +96,12 @@ export function createTemplate(
     terrainCosts: chassis.terrainCosts,
     armored,
     armorPiercing: weapon?.armorPiercing ?? false,
+    flying: chassis.flying ?? false,
     canCapture,
     canBuild,
     transportCapacity,
     transportFilter,
+    cannotTarget: weapon?.cannotTarget ?? [],
   };
 }
 
@@ -130,11 +134,13 @@ export function getTemplateStats(template: UnitTemplate): {
   canBuild: boolean;
   armored: boolean;
   armorPiercing: boolean;
+  flying: boolean;
   chassisId: string;
   weaponId: string | undefined;
   systemIds: string[];
   transportCapacity: number;
   transportFilter: string[];
+  cannotTarget: string[];
 } {
   return {
     speed: template.speed,
@@ -147,11 +153,13 @@ export function getTemplateStats(template: UnitTemplate): {
     canBuild: template.canBuild,
     armored: template.armored,
     armorPiercing: template.armorPiercing,
+    flying: template.flying,
     chassisId: template.chassisId,
     weaponId: template.weaponId ?? undefined,
     systemIds: template.systemIds,
     transportCapacity: template.transportCapacity,
     transportFilter: template.transportFilter,
+    cannotTarget: template.cannotTarget,
   };
 }
 

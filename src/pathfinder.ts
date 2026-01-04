@@ -6,6 +6,7 @@ import { HexUtil, DEFAULT_TERRAIN_COSTS, type AxialCoord, type Tile, type TileTy
 
 export interface GameMap {
   getTile(q: number, r: number): Tile | undefined;
+  getTerrainDefenseStars(q: number, r: number): number;
 }
 
 export interface PathResult {

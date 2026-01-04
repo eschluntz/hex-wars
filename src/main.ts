@@ -327,6 +327,26 @@ class Game {
       color: TEAM_COLORS[TEAMS.ENEMY]!.unitColor,
     }));
 
+    // Add airplane unit for enemy to test weapon targeting restrictions
+    // Player's MG cannot target airplanes, but Heavy MG can
+    this.units.push(new Unit(`airplane_${this.nextUnitId++}`, TEAMS.ENEMY, 6, centerR - 1, {
+      speed: 6,
+      attack: 6,
+      range: 1,
+      minRange: 0,
+      canMoveAndAttack: true,
+      terrainCosts: { grass: 1, water: 1, woods: 1, mountain: 1, road: 1, building: 1 },
+      canCapture: false,
+      canBuild: false,
+      armored: false,
+      armorPiercing: false,
+      chassisId: 'airplane',
+      weaponId: 'heavyMG',
+      systemIds: [],
+      cannotTarget: [],  // Heavy MG can target everything
+      color: TEAM_COLORS[TEAMS.ENEMY]!.unitColor,
+    }));
+
     // Add transport units for player testing
     // Troop carrier (wheels + troopBay) - carries 1 foot unit
     const reconTemplate = getTemplate('recon');
@@ -360,7 +380,41 @@ class Game {
       color: TEAM_COLORS[TEAMS.PLAYER]!.unitColor,
     }));
 
-    console.log('Small map setup: 1 city, 1 factory, 1 infantry + 2 transports for player');
+    // Terrain defense test setup along top row (row 1)
+    // Set up specific terrain types for testing
+    this.map.addBuilding(createBuilding(3, 1, 'city', null));  // 3 stars defense (addBuilding sets tile type)
+    this.map.setTile(5, 1, 'woods');     // 2 stars defense
+    this.map.setTile(7, 1, 'mountain');  // 4 stars defense
+
+    // Enemy soldiers on defensive terrain
+    this.units.push(new Unit(`soldier_city_${this.nextUnitId++}`, TEAMS.ENEMY, 3, 1, {
+      ...soldierStats,
+      color: TEAM_COLORS[TEAMS.ENEMY]!.unitColor,
+    }));
+    this.units.push(new Unit(`soldier_woods_${this.nextUnitId++}`, TEAMS.ENEMY, 5, 1, {
+      ...soldierStats,
+      color: TEAM_COLORS[TEAMS.ENEMY]!.unitColor,
+    }));
+    this.units.push(new Unit(`soldier_mountain_${this.nextUnitId++}`, TEAMS.ENEMY, 7, 1, {
+      ...soldierStats,
+      color: TEAM_COLORS[TEAMS.ENEMY]!.unitColor,
+    }));
+
+    // Player soldiers adjacent (on grass - 1 star defense)
+    this.units.push(new Unit(`soldier_vs_city_${this.nextUnitId++}`, TEAMS.PLAYER, 2, 1, {
+      ...soldierStats,
+      color: TEAM_COLORS[TEAMS.PLAYER]!.unitColor,
+    }));
+    this.units.push(new Unit(`soldier_vs_woods_${this.nextUnitId++}`, TEAMS.PLAYER, 4, 1, {
+      ...soldierStats,
+      color: TEAM_COLORS[TEAMS.PLAYER]!.unitColor,
+    }));
+    this.units.push(new Unit(`soldier_vs_mountain_${this.nextUnitId++}`, TEAMS.PLAYER, 6, 1, {
+      ...soldierStats,
+      color: TEAM_COLORS[TEAMS.PLAYER]!.unitColor,
+    }));
+
+    console.log('Small map setup: capitals, factories, labs + units for testing (enemy has airplane, terrain defense test units at top)');
   }
 
   private collectIncome(team: string): void {
@@ -519,8 +573,12 @@ class Game {
         const target = this.getUnitAt(action.targetQ, action.targetR);
         if (!unit || !target) return;
 
-        // Execute combat first to get result for toast
-        const result = Combat.execute(unit, target);
+        // Execute combat with terrain defense
+        const result = Combat.execute(
+          unit, target, undefined, undefined,
+          this.map.getTerrainDefenseStars(target.q, target.r),
+          this.map.getTerrainDefenseStars(unit.q, unit.r)
+        );
 
         // Play combat animation
         await this.animationController.play({
@@ -1284,7 +1342,12 @@ class Game {
   }
 
   private executeAttack(attacker: Unit, defender: Unit): void {
-    const result = Combat.execute(attacker, defender);
+    // Execute combat with terrain defense
+    const result = Combat.execute(
+      attacker, defender, undefined, undefined,
+      this.map.getTerrainDefenseStars(defender.q, defender.r),
+      this.map.getTerrainDefenseStars(attacker.q, attacker.r)
+    );
 
     // Show combat toast (non-blocking for player attacks)
     this.showCombatToast(defender.q, defender.r, result.attackerDamage, result.defenderDamage);

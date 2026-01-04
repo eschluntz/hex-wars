@@ -64,6 +64,17 @@ export const DEFAULT_TERRAIN_COSTS: TerrainCosts = {
   mountain: Infinity
 };
 
+// Terrain defense stars - determines damage reduction based on terrain
+// Each star = 10% damage reduction at full HP (10 HP), scales with defender HP
+export const TERRAIN_DEFENSE_STARS: Record<TileType, number> = {
+  road: 0,
+  grass: 1,
+  woods: 2,
+  building: 3,
+  mountain: 4,
+  water: 0,
+};
+
 // ============================================================================
 // HEX UTILITIES (Axial Coordinates, Pointy-Top)
 // ============================================================================

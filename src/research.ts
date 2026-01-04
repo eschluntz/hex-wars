@@ -5,7 +5,7 @@
 // Currently all base components are unlocked; future tech tree will gate advanced ones.
 
 // Components that are always available (don't require research)
-const BASE_CHASSIS = new Set(['foot', 'wheels', 'treads']);
+const BASE_CHASSIS = new Set(['foot', 'wheels', 'treads', 'airplane', 'helicopter']);
 const BASE_WEAPONS = new Set(['machineGun', 'heavyMG', 'cannon', 'artillery']);
 const BASE_SYSTEMS = new Set(['capture', 'build', 'armor']);
 

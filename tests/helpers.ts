@@ -2,7 +2,7 @@
 // HEX DOMINION - Test Helpers
 // ============================================================================
 
-import type { Tile, TileType } from '../src/core.js';
+import { TERRAIN_DEFENSE_STARS, type Tile, type TileType } from '../src/core.js';
 import type { GameMap } from '../src/pathfinder.js';
 
 /**
@@ -41,6 +41,10 @@ export function createTestMap(grid: string[]): GameMap {
   return {
     getTile(q: number, r: number): Tile | undefined {
       return tiles.get(`${q},${r}`);
+    },
+    getTerrainDefenseStars(q: number, r: number): number {
+      const tile = tiles.get(`${q},${r}`);
+      return tile ? TERRAIN_DEFENSE_STARS[tile.type] : 0;
     }
   };
 }

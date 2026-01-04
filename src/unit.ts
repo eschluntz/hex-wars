@@ -20,11 +20,13 @@ export interface UnitStats {
   canBuild: boolean;
   armored: boolean;
   armorPiercing: boolean;
+  flying?: boolean;
   chassisId?: string;
   weaponId?: string;
   systemIds?: string[];
   transportCapacity?: number;
   transportFilter?: string[];
+  cannotTarget?: string[];
 }
 
 const DEFAULT_STATS: UnitStats = {
@@ -39,11 +41,13 @@ const DEFAULT_STATS: UnitStats = {
   canBuild: false,
   armored: false,
   armorPiercing: false,
+  flying: false,
   chassisId: undefined,
   weaponId: undefined,
   systemIds: [],
   transportCapacity: 0,
   transportFilter: [],
+  cannotTarget: [],
 };
 
 export class Unit {
@@ -63,9 +67,11 @@ export class Unit {
   canBuild: boolean;
   armored: boolean;
   armorPiercing: boolean;
+  flying: boolean;
   chassisId: string | undefined;
   weaponId: string | undefined;
   systemIds: string[];
+  cannotTarget: string[];
   hasActed: boolean = false;
   // Transport properties
   cargo: Unit[] = [];
@@ -90,11 +96,13 @@ export class Unit {
     this.canBuild = stats.canBuild ?? DEFAULT_STATS.canBuild;
     this.armored = stats.armored ?? DEFAULT_STATS.armored;
     this.armorPiercing = stats.armorPiercing ?? DEFAULT_STATS.armorPiercing;
+    this.flying = stats.flying ?? DEFAULT_STATS.flying ?? false;
     this.chassisId = stats.chassisId ?? DEFAULT_STATS.chassisId;
     this.weaponId = stats.weaponId ?? DEFAULT_STATS.weaponId;
     this.systemIds = stats.systemIds ?? DEFAULT_STATS.systemIds ?? [];
     this.transportCapacity = stats.transportCapacity ?? DEFAULT_STATS.transportCapacity ?? 0;
     this.transportFilter = stats.transportFilter ?? DEFAULT_STATS.transportFilter ?? [];
+    this.cannotTarget = stats.cannotTarget ?? DEFAULT_STATS.cannotTarget ?? [];
   }
 
   isAlive(): boolean {

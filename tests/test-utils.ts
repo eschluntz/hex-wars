@@ -3,7 +3,7 @@
 // ============================================================================
 // Common helpers for tests to avoid duplication and ensure tests use real game logic.
 
-import { TEAM_COLORS } from '../src/core.js';
+import { TEAM_COLORS, TERRAIN_DEFENSE_STARS } from '../src/core.js';
 import { type Building, createBuilding } from '../src/building.js';
 import { Unit } from '../src/unit.js';
 import { Combat } from '../src/combat.js';
@@ -48,6 +48,11 @@ export class TestMap {
       return { q, r, type: 'grass' as TileType };
     }
     return undefined;
+  }
+
+  getTerrainDefenseStars(q: number, r: number): number {
+    const tile = this.getTile(q, r);
+    return tile ? TERRAIN_DEFENSE_STARS[tile.type] : 0;
   }
 
   getAllTiles(): Tile[] {

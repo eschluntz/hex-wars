@@ -100,6 +100,7 @@ function createMockState(config: {
       getAllBuildings: () => buildings,
       getTile: (q: number, r: number) => ({ q, r, type: 'grass' }),
       getAllTiles: () => [],
+      getTerrainDefenseStars: () => 1,  // All grass = 1 star
     } as any,
     buildings,
     resources: resourceManager,
@@ -136,8 +137,8 @@ runner.describe('GreedyAI', () => {
         id: 'soldier', name: 'Soldier', chassisId: 'foot', weaponId: 'machineGun',
         systemIds: ['capture'], cost: 1000, speed: 3, attack: 4, range: 1, minRange: 0,
         canMoveAndAttack: true, terrainCosts: DEFAULT_TERRAIN_COSTS, armored: false,
-        armorPiercing: false, canCapture: true, canBuild: false,
-        transportCapacity: 0, transportFilter: [],
+        armorPiercing: false, flying: false, canCapture: true, canBuild: false,
+        transportCapacity: 0, transportFilter: [], cannotTarget: [],
       }];
       const state = createMockState({ units: [], buildings: [], templates: existingTemplates });
       const actions = ai.planTurn(state, 'enemy');
@@ -284,10 +285,12 @@ runner.describe('GreedyAI', () => {
         terrainCosts: DEFAULT_TERRAIN_COSTS,
         armored: false,
         armorPiercing: false,
+        flying: false,
         canCapture: true,
         canBuild: false,
         transportCapacity: 0,
         transportFilter: [],
+        cannotTarget: [],
       };
 
       const state = createMockState({
@@ -326,10 +329,12 @@ runner.describe('GreedyAI', () => {
         terrainCosts: DEFAULT_TERRAIN_COSTS,
         armored: false,
         armorPiercing: false,
+        flying: false,
         canCapture: true,
         canBuild: false,
         transportCapacity: 0,
         transportFilter: [],
+        cannotTarget: [],
       };
 
       const state = createMockState({
@@ -363,10 +368,12 @@ runner.describe('GreedyAI', () => {
         terrainCosts: DEFAULT_TERRAIN_COSTS,
         armored: false,
         armorPiercing: false,
+        flying: false,
         canCapture: true,
         canBuild: false,
         transportCapacity: 0,
         transportFilter: [],
+        cannotTarget: [],
       };
 
       const state = createMockState({
