@@ -7,7 +7,7 @@ import { TEAM_COLORS } from './core.js';
 import { getAIMetadata } from './ai/registry.js';
 import { type PlayerConfig } from './player.js';
 
-export type GamePhase = 'main_menu' | 'playing' | 'game_over';
+export type GamePhase = 'main_menu' | 'campaign' | 'playing' | 'game_over';
 
 export interface GameOverData {
   winner: string;
@@ -353,6 +353,7 @@ export class MenuRenderer {
 
 export interface HTMLMenuCallbacks {
   onStartGame: (mapType: string, playerConfigs: PlayerConfig[]) => void;
+  onStartCampaign: () => void;
   onRerollSeed: () => number;
 }
 
@@ -362,6 +363,7 @@ export class HTMLMenuController {
   private enemySelect: HTMLSelectElement;
   private btnSmall: HTMLButtonElement;
   private btnNormal: HTMLButtonElement;
+  private btnCampaign: HTMLButtonElement;
   private btnReroll: HTMLButtonElement;
   private seedDisplay: HTMLElement;
   private callbacks: HTMLMenuCallbacks;
@@ -374,6 +376,7 @@ export class HTMLMenuController {
     this.enemySelect = document.getElementById('enemy-select') as HTMLSelectElement;
     this.btnSmall = document.getElementById('btn-small-map') as HTMLButtonElement;
     this.btnNormal = document.getElementById('btn-normal-map') as HTMLButtonElement;
+    this.btnCampaign = document.getElementById('btn-campaign') as HTMLButtonElement;
     this.btnReroll = document.getElementById('btn-reroll-seed') as HTMLButtonElement;
     this.seedDisplay = document.getElementById('seed-display')!;
 
@@ -404,8 +407,8 @@ export class HTMLMenuController {
   private setupEventListeners(): void {
     this.btnSmall.addEventListener('click', () => this.startGame('small'));
     this.btnNormal.addEventListener('click', () => this.startGame('normal'));
+    this.btnCampaign.addEventListener('click', () => this.callbacks.onStartCampaign());
     this.btnReroll.addEventListener('click', () => this.rerollSeed());
-
   }
 
   private rerollSeed(): void {

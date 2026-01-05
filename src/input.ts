@@ -11,6 +11,9 @@ export interface InputCallbacks {
   onMainMenuAction: (action: string) => void;
   onGameOverAction: (action: string) => void;
 
+  // Campaign phase handlers
+  onCampaignEscape: () => void;
+
   // Game phase handlers
   onHexClick: (hex: AxialCoord) => void;
   onCancel: () => void;
@@ -21,7 +24,7 @@ export interface InputCallbacks {
   onMenuMouseMove: (x: number, y: number) => void;
 
   // State queries
-  getPhase: () => 'main_menu' | 'playing' | 'game_over';
+  getPhase: () => 'main_menu' | 'campaign' | 'playing' | 'game_over';
   getMenuContext: () => 'none' | 'action' | 'production';
   getSelectionState: () => 'idle' | 'selected' | 'other';
   isDragging: () => boolean;
@@ -86,6 +89,11 @@ export class InputHandler {
       return;
     }
 
+    if (phase === 'campaign') {
+      // Campaign clicks handled by HTML UI
+      return;
+    }
+
     if (phase === 'game_over') {
       this.callbacks.onGameOverAction('click');
       return;
@@ -104,9 +112,18 @@ export class InputHandler {
 
     if (phase === 'main_menu') {
       if (e.key === '1') {
+        document.getElementById('btn-campaign')?.click();
+      } else if (e.key === '2') {
         document.getElementById('btn-small-map')?.click();
-      } else if (e.key === '2' || e.key === 'Enter' || e.key === ' ') {
+      } else if (e.key === '3' || e.key === 'Enter' || e.key === ' ') {
         document.getElementById('btn-normal-map')?.click();
+      }
+      return;
+    }
+
+    if (phase === 'campaign') {
+      if (e.key === 'Escape') {
+        this.callbacks.onCampaignEscape();
       }
       return;
     }

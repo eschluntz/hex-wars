@@ -10,6 +10,8 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:8000',
     trace: 'on-first-retry',
+    headless: true,
+    viewport: { width: 1280, height: 1200 },
     launchOptions: {
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     },
@@ -23,6 +25,6 @@ export default defineConfig({
   webServer: {
     command: 'npm run watch',
     url: 'http://localhost:8000',
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: true,
   },
 });

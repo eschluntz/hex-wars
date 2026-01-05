@@ -165,6 +165,57 @@
       display: block;
       margin-top: 4px;
     }
+    .menu-btn-campaign {
+      background: #6b21a8;
+      color: #ffffff;
+    }
+    .menu-btn-campaign:hover {
+      background: #9333ea;
+    }
+    .menu-btn-campaign .btn-desc {
+      font-size: 12px;
+      font-weight: normal;
+      color: #d8b4fe;
+      display: block;
+      margin-top: 4px;
+    }
+    #debug-controls {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      display: none;
+      gap: 10px;
+      z-index: 100;
+    }
+    #debug-controls.visible {
+      display: flex;
+    }
+    #debug-controls button {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+    #debug-controls button:hover {
+      transform: scale(1.05);
+    }
+    #btn-debug-win {
+      background: #22c55e;
+      color: #ffffff;
+    }
+    #btn-debug-win:hover {
+      background: #16a34a;
+    }
+    #btn-debug-lose {
+      background: #ef4444;
+      color: #ffffff;
+    }
+    #btn-debug-lose:hover {
+      background: #dc2626;
+    }
     .menu-hint {
       margin-top: 40px;
       font-size: 14px;
@@ -198,6 +249,341 @@
       background: #6495ED40;
       border-color: #6495ED;
     }
+
+    /* Campaign Overlay */
+    #campaign-overlay {
+      position: fixed;
+      inset: 0;
+      background: #0a0c10;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem;
+      z-index: 100;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      overflow-y: auto;
+    }
+    #campaign-overlay.visible {
+      display: flex;
+    }
+
+    /* Campaign CSS Variables */
+    #campaign-overlay {
+      --bg-dark: #0a0c10;
+      --bg-panel: #12151c;
+      --border: #2a3040;
+      --text: #c8d0e0;
+      --text-dim: #5a6070;
+      --blue: #3b82f6;
+      --blue-glow: rgba(59, 130, 246, 0.4);
+      --blue-dim: #1e3a5f;
+      --red: #ef4444;
+      --red-glow: rgba(239, 68, 68, 0.4);
+      --red-dim: #5f1e1e;
+      --orange: #f97316;
+      --orange-glow: rgba(249, 115, 22, 0.4);
+      --orange-dim: #5f3a1e;
+      --purple: #a855f7;
+      --purple-glow: rgba(168, 85, 247, 0.5);
+      --purple-dim: #3b1e5f;
+      --gold: #eab308;
+      --gold-glow: rgba(234, 179, 8, 0.5);
+      --gold-dim: #5f4a1e;
+      --completed: #22c55e;
+      --cell-size: 70px;
+      --gap: 8px;
+    }
+
+    .campaign-header {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+    .campaign-title {
+      font-size: 2rem;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #ffffff;
+      margin-bottom: 0.5rem;
+    }
+    .campaign-subtitle {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      letter-spacing: 0.15em;
+    }
+    .campaign-reinforcements {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-top: 1rem;
+      font-size: 1rem;
+      color: var(--text-dim);
+    }
+    .campaign-hearts {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .campaign-heart {
+      font-size: 1.5rem;
+      transition: all 0.3s ease;
+    }
+    .campaign-heart.filled { color: var(--red); }
+    .campaign-heart.empty { color: var(--text-dim); opacity: 0.4; }
+
+    .campaign-grid-container {
+      position: relative;
+      padding: 2rem;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    .campaign-grid {
+      display: flex;
+      flex-direction: column;
+      gap: var(--gap);
+    }
+
+    .campaign-row {
+      display: grid;
+      grid-template-columns: repeat(6, var(--cell-size));
+      gap: var(--gap);
+      height: var(--cell-size);
+    }
+    .campaign-row.boss-row { height: 90px; }
+    .campaign-row.tall-row { height: calc(var(--cell-size) * 2 + var(--gap)); }
+
+    /* Standard cell */
+    .campaign-cell {
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+      border: 2px solid transparent;
+    }
+    .campaign-cell.locked {
+      background: var(--bg-dark);
+      border-color: var(--border);
+      cursor: not-allowed;
+      opacity: 0.4;
+    }
+    .campaign-cell.available.unit {
+      background: var(--blue-dim);
+      border-color: var(--blue);
+      box-shadow: 0 0 20px var(--blue-glow), inset 0 0 20px var(--blue-glow);
+      animation: campaign-pulse-blue 2s ease-in-out infinite;
+    }
+    .campaign-cell.available.upgrade {
+      background: var(--red-dim);
+      border-color: var(--red);
+      box-shadow: 0 0 20px var(--red-glow), inset 0 0 20px var(--red-glow);
+      animation: campaign-pulse-red 2s ease-in-out infinite;
+    }
+    .campaign-cell.available.special {
+      background: var(--orange-dim);
+      border-color: var(--orange);
+      box-shadow: 0 0 20px var(--orange-glow), inset 0 0 20px var(--orange-glow);
+      animation: campaign-pulse-orange 2s ease-in-out infinite;
+    }
+    @keyframes campaign-pulse-blue {
+      0%, 100% { box-shadow: 0 0 15px var(--blue-glow), inset 0 0 15px var(--blue-glow); }
+      50% { box-shadow: 0 0 25px var(--blue-glow), inset 0 0 25px var(--blue-glow); }
+    }
+    @keyframes campaign-pulse-red {
+      0%, 100% { box-shadow: 0 0 15px var(--red-glow), inset 0 0 15px var(--red-glow); }
+      50% { box-shadow: 0 0 25px var(--red-glow), inset 0 0 25px var(--red-glow); }
+    }
+    @keyframes campaign-pulse-orange {
+      0%, 100% { box-shadow: 0 0 15px var(--orange-glow), inset 0 0 15px var(--orange-glow); }
+      50% { box-shadow: 0 0 25px var(--orange-glow), inset 0 0 25px var(--orange-glow); }
+    }
+    .campaign-cell.available:hover { transform: scale(1.08); }
+    .campaign-cell.completed {
+      background: rgba(34, 197, 94, 0.15);
+      border-color: var(--completed);
+    }
+    .campaign-cell.completed .cell-icon { color: var(--completed); }
+    .campaign-cell.completed .cell-label { color: var(--completed); }
+    .cell-icon { font-size: 1.5rem; margin-bottom: 2px; }
+    .campaign-cell.unit .cell-icon { color: var(--blue); }
+    .campaign-cell.upgrade .cell-icon { color: var(--red); }
+    .campaign-cell.special .cell-icon { color: var(--orange); }
+    .cell-label {
+      font-size: 0.55rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-dim);
+      text-align: center;
+      line-height: 1.2;
+    }
+
+    /* Boss cell */
+    .campaign-boss-cell {
+      grid-column: 1 / -1;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1.5rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+      border: 3px solid transparent;
+      background: var(--bg-dark);
+    }
+    .campaign-boss-cell.locked {
+      border-color: var(--purple-dim);
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+    .campaign-boss-cell.available {
+      background: var(--purple-dim);
+      border-color: var(--purple);
+      box-shadow: 0 0 30px var(--purple-glow), inset 0 0 30px var(--purple-glow);
+      animation: campaign-pulse-boss 2s ease-in-out infinite;
+    }
+    @keyframes campaign-pulse-boss {
+      0%, 100% { box-shadow: 0 0 25px var(--purple-glow), inset 0 0 20px var(--purple-glow); }
+      50% { box-shadow: 0 0 40px var(--purple-glow), inset 0 0 35px var(--purple-glow); }
+    }
+    .campaign-boss-cell.available:hover { transform: scale(1.02); }
+    .campaign-boss-cell.completed {
+      background: rgba(34, 197, 94, 0.15);
+      border-color: var(--completed);
+    }
+    .boss-icon { font-size: 2.5rem; color: var(--purple); }
+    .campaign-boss-cell.completed .boss-icon { color: var(--completed); }
+    .boss-info { display: flex; flex-direction: column; gap: 0.25rem; }
+    .boss-name {
+      font-size: 1rem;
+      font-weight: bold;
+      color: var(--purple);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    .campaign-boss-cell.completed .boss-name { color: var(--completed); }
+    .boss-reward { font-size: 0.7rem; color: var(--text-dim); }
+    .boss-tag {
+      position: absolute;
+      top: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--purple);
+      color: var(--bg-dark);
+      font-size: 0.6rem;
+      font-weight: bold;
+      padding: 2px 12px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+    .campaign-boss-cell.completed .boss-tag { background: var(--completed); }
+
+    /* Fortress cell */
+    .campaign-fortress-cell {
+      grid-column: span 2;
+      grid-row: span 2;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+      border: 3px solid transparent;
+      background: var(--bg-dark);
+    }
+    .campaign-fortress-cell.locked {
+      border-color: var(--gold-dim);
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+    .campaign-fortress-cell.available {
+      background: var(--gold-dim);
+      border-color: var(--gold);
+      box-shadow: 0 0 35px var(--gold-glow), inset 0 0 35px var(--gold-glow);
+      animation: campaign-pulse-fortress 2s ease-in-out infinite;
+    }
+    @keyframes campaign-pulse-fortress {
+      0%, 100% { box-shadow: 0 0 30px var(--gold-glow), inset 0 0 25px var(--gold-glow); }
+      50% { box-shadow: 0 0 45px var(--gold-glow), inset 0 0 40px var(--gold-glow); }
+    }
+    .campaign-fortress-cell.available:hover { transform: scale(1.03); }
+    .campaign-fortress-cell.completed {
+      background: rgba(34, 197, 94, 0.15);
+      border-color: var(--completed);
+    }
+    .fortress-icon { font-size: 3rem; color: var(--gold); margin-bottom: 0.5rem; }
+    .campaign-fortress-cell.completed .fortress-icon { color: var(--completed); }
+    .fortress-name {
+      font-size: 0.85rem;
+      font-weight: bold;
+      color: var(--gold);
+      text-transform: uppercase;
+    }
+    .campaign-fortress-cell.completed .fortress-name { color: var(--completed); }
+    .fortress-reward { font-size: 0.6rem; color: var(--text-dim); margin-top: 0.25rem; text-align: center; }
+    .fortress-tag {
+      position: absolute;
+      top: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--gold);
+      color: var(--bg-dark);
+      font-size: 0.55rem;
+      font-weight: bold;
+      padding: 2px 10px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+    .campaign-fortress-cell.completed .fortress-tag { background: var(--completed); }
+    .fortress-req { position: absolute; bottom: 8px; font-size: 0.6rem; color: var(--text-dim); }
+    .fortress-req .filled { color: var(--completed); }
+
+    /* Legend */
+    .campaign-legend {
+      display: flex;
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+      font-size: 0.7rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .legend-item { display: flex; align-items: center; gap: 0.5rem; color: var(--text); }
+    .legend-dot { width: 16px; height: 16px; border-radius: 4px; }
+    .legend-dot.unit { background: var(--blue); }
+    .legend-dot.upgrade { background: var(--red); }
+    .legend-dot.special { background: var(--orange); }
+    .legend-dot.boss { background: var(--purple); }
+    .legend-dot.fortress { background: var(--gold); }
+    .legend-dot.completed { background: var(--completed); }
+
+    .campaign-back-btn {
+      margin-top: 1.5rem;
+      padding: 10px 24px;
+      border: 2px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-dim);
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .campaign-back-btn:hover {
+      border-color: var(--text);
+      color: var(--text);
+    }
+
+    @keyframes campaign-complete-pop {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+    .completing { animation: campaign-complete-pop 0.3s ease; }
   </style>
 </head>
 <body>
@@ -219,8 +605,12 @@
       </div>
     </div>
 
-    <p class="menu-map-label">Select Map Size</p>
+    <p class="menu-map-label">Select Game Mode</p>
     <div class="menu-buttons">
+      <button id="btn-campaign" class="menu-btn menu-btn-campaign">
+        Campaign
+        <span class="btn-desc">Roguelike progression</span>
+      </button>
       <button id="btn-small-map" class="menu-btn menu-btn-small">
         Small
         <span class="btn-desc">Test map - all grass</span>
@@ -239,6 +629,34 @@
     <p class="menu-hint">Press 1 for Small, 2 for Normal, or click a button</p>
   </div>
 
+  <!-- Campaign Overlay -->
+  <div id="campaign-overlay">
+    <header class="campaign-header">
+      <h1 class="campaign-title">Campaign</h1>
+      <div class="campaign-subtitle">Unlock adjacent cells • Surround fortresses • Defeat bosses</div>
+      <div class="campaign-reinforcements">
+        <span>Reinforcements:</span>
+        <div class="campaign-hearts">
+          <span class="campaign-heart filled">♥</span>
+          <span class="campaign-heart filled">♥</span>
+          <span class="campaign-heart filled">♥</span>
+        </div>
+      </div>
+    </header>
+    <div class="campaign-grid-container">
+      <div class="campaign-grid" id="campaign-grid"></div>
+    </div>
+    <div class="campaign-legend">
+      <div class="legend-item"><div class="legend-dot unit"></div> Unit</div>
+      <div class="legend-item"><div class="legend-dot upgrade"></div> Upgrade</div>
+      <div class="legend-item"><div class="legend-dot special"></div> Special</div>
+      <div class="legend-item"><div class="legend-dot boss"></div> Boss</div>
+      <div class="legend-item"><div class="legend-dot fortress"></div> Fortress</div>
+      <div class="legend-item"><div class="legend-dot completed"></div> Done</div>
+    </div>
+    <button class="campaign-back-btn" id="campaign-back-btn">← Back to Menu</button>
+  </div>
+
   <div id="hud">
     <h1>HEX DOMINION</h1>
     <p><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> pan · <kbd>drag</kbd> mouse<br><kbd>scroll</kbd> to zoom</p>
@@ -246,6 +664,11 @@
   </div>
 
   <div id="coords">--</div>
+
+  <div id="debug-controls">
+    <button id="btn-debug-win">Win</button>
+    <button id="btn-debug-lose">Lose</button>
+  </div>
 
   <script src="dist/bundle.js"></script>
 </body>

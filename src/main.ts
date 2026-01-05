@@ -26,6 +26,17 @@ import { createAI } from './ai/registry.js';
 import { loadTextures } from './textures.js';
 import { CombatAnimator, COUNTER_ATTACK_HEALTH_DELAY } from './combat-animator.js';
 import { AITurnExecutor, type AIGameOperations } from './ai-turn-executor.js';
+import { CampaignUI } from './campaign-ui.js';
+import { createCampaignGrid } from './campaign-config.js';
+import {
+  type CampaignState,
+  type CampaignCell,
+  type CampaignGrid,
+  createInitialCampaignState,
+  completeCell,
+  loseReinforcement,
+  isCampaignOver,
+} from './campaign-state.js';
 
 const TEAMS = {
   PLAYER: 'player',
@@ -69,12 +80,25 @@ class Game {
   private isAITurnInProgress: boolean = false;
   private isAnimating: boolean = false;  // Block input during player move animations
 
+  // Campaign state
+  private campaignState: CampaignState | null = null;
+  private campaignGrid: CampaignGrid | null = null;
+  private campaignUI: CampaignUI;
+  private activeCampaignCell: CampaignCell | null = null;
+  private debugWinBtn: HTMLButtonElement | null = null;
+  private debugLoseBtn: HTMLButtonElement | null = null;
+
   constructor() {
     this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
     this.ctx = this.canvas.getContext('2d')!;
     this.menuRenderer = new MenuRenderer(this.ctx, this.canvas.width, this.canvas.height);
+    this.campaignUI = new CampaignUI({
+      onCellClick: (cell) => this.handleCampaignCellClick(cell),
+      onBackClick: () => this.returnToMainMenu(),
+    });
     this.htmlMenuController = new HTMLMenuController({
       onStartGame: (mapType, playerConfigs) => this.startNewGame(mapType, playerConfigs),
+      onStartCampaign: () => this.startCampaign(),
       onRerollSeed: () => rerollNormalSeed(),
     });
 
@@ -84,6 +108,12 @@ class Game {
     // In-game reroll button
     const rerollBtn = document.getElementById('btn-reroll-ingame');
     rerollBtn?.addEventListener('click', () => this.rerollAndRegenerate());
+
+    // Debug buttons for campaign
+    this.debugWinBtn = document.getElementById('btn-debug-win') as HTMLButtonElement;
+    this.debugLoseBtn = document.getElementById('btn-debug-lose') as HTMLButtonElement;
+    this.debugWinBtn?.addEventListener('click', () => this.handleDebugWin());
+    this.debugLoseBtn?.addEventListener('click', () => this.handleDebugLose());
 
     // Create a dummy viewport for initial input handler setup
     this.viewport = new Viewport(this.canvas);
@@ -106,12 +136,13 @@ class Game {
           this.startNewGame('normal');
         }
       },
+      onCampaignEscape: () => this.returnToMainMenu(),
       onGameOverAction: (action) => {
         if (action === 'click') {
           const menuAction = this.menuRenderer.getClickedAction();
-          if (menuAction === 'main_menu') this.gamePhase = 'main_menu';
+          if (menuAction === 'main_menu') this.handleGameOverReturn();
         } else if (action === 'main_menu') {
-          this.gamePhase = 'main_menu';
+          this.handleGameOverReturn();
         }
       },
       onHexClick: (hex) => this.handleClick(hex),
@@ -149,7 +180,9 @@ class Game {
           this.executeProductionAction(action);
         }
       },
-      onMenuMouseMove: (x, y) => this.menuRenderer.updateMouse(x, y),
+      onMenuMouseMove: (x, y) => {
+        this.menuRenderer.updateMouse(x, y);
+      },
       getPhase: () => this.gamePhase,
       getMenuContext: () => {
         if (this.state.type === 'moved') return 'action';
@@ -665,8 +698,138 @@ class Game {
     const hudEl = document.getElementById('hud');
     if (infoEl) infoEl.style.display = 'none';
     if (hudEl) hudEl.style.display = 'none';
+    this.showDebugControls(false);
 
     console.log(`Game Over! ${winner.toUpperCase()} wins in ${this.turnNumber} turns!`);
+  }
+
+  // --- Campaign Methods ---
+
+  private startCampaign(): void {
+    this.campaignGrid = createCampaignGrid();
+    this.campaignState = createInitialCampaignState(this.campaignGrid);
+    this.activeCampaignCell = null;
+    this.gamePhase = 'campaign';
+
+    // Hide menu, show campaign UI
+    this.htmlMenuController.hide();
+    this.campaignUI.show();
+    this.campaignUI.render(this.campaignGrid, this.campaignState);
+    this.showDebugControls(false);
+
+    console.log('Campaign started!');
+  }
+
+  private handleCampaignCellClick(cell: CampaignCell): void {
+    // Start battle for this cell (UI already checked availability)
+    this.startCampaignBattle(cell);
+  }
+
+  private startCampaignBattle(cell: CampaignCell): void {
+    this.activeCampaignCell = cell;
+    console.log(`Starting battle for cell: ${cell.name}`);
+
+    // Hide campaign UI
+    this.campaignUI.hide();
+
+    // Start a normal map battle
+    // TODO: In the future, cell type could influence map generation
+    const playerConfigs: PlayerConfig[] = [
+      { id: TEAMS.PLAYER, name: 'Player', type: 'human' },
+      { id: TEAMS.ENEMY, name: 'Enemy AI', type: 'ai', aiType: 'greedy' }
+    ];
+
+    this.startNewGame('normal', playerConfigs);
+
+    // Show debug controls during battle
+    this.showDebugControls(true);
+  }
+
+  private handleDebugWin(): void {
+    if (this.gamePhase !== 'playing' || !this.activeCampaignCell) return;
+
+    console.log('Debug: Player wins!');
+    // Trigger game over screen with player as winner
+    this.triggerGameOver(TEAMS.PLAYER, TEAMS.ENEMY);
+  }
+
+  private handleDebugLose(): void {
+    if (this.gamePhase !== 'playing' || !this.activeCampaignCell) return;
+
+    console.log('Debug: Player loses!');
+    // Trigger game over screen with enemy as winner
+    this.triggerGameOver(TEAMS.ENEMY, TEAMS.PLAYER);
+  }
+
+  private handleBattleResult(playerWon: boolean): void {
+    if (!this.campaignState || !this.campaignGrid || !this.activeCampaignCell) return;
+
+    if (playerWon) {
+      // Mark cell as completed
+      this.campaignState = completeCell(
+        this.activeCampaignCell.id,
+        this.campaignState,
+        this.campaignGrid
+      );
+      console.log(`Cell ${this.activeCampaignCell.name} completed!`);
+    } else {
+      // Lose a reinforcement
+      this.campaignState = loseReinforcement(this.campaignState);
+      console.log(`Lost a reinforcement. Remaining: ${this.campaignState.reinforcements}`);
+    }
+
+    // Check if campaign is over
+    if (isCampaignOver(this.campaignState)) {
+      console.log('Campaign over - no reinforcements left!');
+      this.returnToMainMenu();
+      return;
+    }
+
+    // Return to campaign view
+    this.activeCampaignCell = null;
+    this.gamePhase = 'campaign';
+    this.showDebugControls(false);
+
+    // Hide game UI
+    const infoEl = document.getElementById('coords');
+    const hudEl = document.getElementById('hud');
+    if (infoEl) infoEl.style.display = 'none';
+    if (hudEl) hudEl.style.display = 'none';
+
+    // Show campaign UI and re-render
+    this.campaignUI.show();
+    this.campaignUI.render(this.campaignGrid, this.campaignState);
+  }
+
+  private handleGameOverReturn(): void {
+    // If in campaign, handle as battle result
+    if (this.activeCampaignCell && this.campaignState && this.campaignGrid) {
+      const playerWon = this.gameOverData?.winner === TEAMS.PLAYER;
+      this.handleBattleResult(playerWon);
+    } else {
+      // Normal game over - return to main menu
+      this.returnToMainMenu();
+    }
+  }
+
+  private returnToMainMenu(): void {
+    this.gamePhase = 'main_menu';
+    this.campaignState = null;
+    this.campaignGrid = null;
+    this.activeCampaignCell = null;
+    this.campaignUI.hide();
+    this.showDebugControls(false);
+  }
+
+  private showDebugControls(visible: boolean): void {
+    const debugControls = document.getElementById('debug-controls');
+    if (debugControls) {
+      if (visible && this.activeCampaignCell) {
+        debugControls.classList.add('visible');
+      } else {
+        debugControls.classList.remove('visible');
+      }
+    }
   }
 
   private getActiveUnitsCount(): number {
@@ -1394,6 +1557,11 @@ class Game {
       this.htmlMenuController.show();
       // Clear canvas behind menu
       this.ctx.fillStyle = '#1a1a2e';
+      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    } else if (this.gamePhase === 'campaign') {
+      this.htmlMenuController.hide();
+      // Campaign UI is HTML-based, just clear canvas
+      this.ctx.fillStyle = '#0a0c10';
       this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     } else if (this.gamePhase === 'game_over' && this.gameOverData) {
       this.htmlMenuController.hide();
