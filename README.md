@@ -88,12 +88,27 @@ Capture the enemy's capital to win instantly.
 3. Attack with maximum expected damage
 4. Move toward nearest enemy/building
 
+### Campaign Mode
+Roguelike progression through a grid of battles:
+
+- **6-column grid** with normal cells, boss barriers, and 2x2 fortresses
+- **3 reinforcements** (lives) - lose one per lost battle, campaign ends at zero
+- **Cell types**:
+  - 🔵 **Unit** - Unlock a new unit type
+  - 🔴 **Upgrade** - Stat bonuses
+  - 🟠 **Special** - Unique abilities
+  - 🟣 **Boss** - Spans full row, unlocks when any cell below is completed
+  - 🟡 **Fortress** - 2x2 block, unlocks when 50%+ of perimeter cells are completed
+- **Adjacency unlocking** - Complete a cell to unlock orthogonally adjacent cells
+- Win a battle → cell turns green, adjacent cells unlock
+- Lose a battle → lose a reinforcement, cell stays available to retry
+
 ### Controls
 - **Click** to select unit, click destination to move
 - **Action menu**: Wait, Cancel, Attack, Capture, Unload
 - **Tab** to end turn
 - **Space** to cycle to next active unit
-- **Escape** to cancel
+- **Escape** to cancel (or return to menu from campaign)
 - **Arrow keys + Enter** for menu navigation
 
 ## Project Structure
@@ -119,6 +134,9 @@ hex-dominion/
 │   ├── input.ts          # Input handling
 │   ├── menu.ts           # Main menu / game over
 │   ├── stats.ts          # Game statistics
+│   ├── campaign-state.ts # Campaign state and cell availability
+│   ├── campaign-config.ts# Campaign grid layout
+│   ├── campaign-ui.ts    # Campaign HTML UI
 │   └── main.ts           # Game loop and state machine
 ├── tests/                # Test suite (206 tests)
 ├── hex_assets/           # Terrain textures
@@ -172,10 +190,10 @@ The tests automatically start the dev server (`npm run watch`) before running. R
 - [x] cities heal
 - [x] balance actually attack values from AW
 - [x] basic AI improvements (smarter unit composition, factory blocking)
+- [x] Campaign mode (roguelike progression grid)
 
 ### Upcoming
 - [ ] make smaller maps
-- [ ] metagame basics
 - [ ] Saving and loading games
 - [ ] better AI
     - [ ] can use transports

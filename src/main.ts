@@ -741,6 +741,11 @@ class Game {
 
     this.startNewGame('normal', playerConfigs);
 
+    // Override player's available units with campaign unlocks
+    if (this.campaignState) {
+      initTeamUnits(TEAMS.PLAYER, Array.from(this.campaignState.unlockedUnits));
+    }
+
     // Show debug controls during battle
     this.showDebugControls(true);
   }
@@ -1512,6 +1517,15 @@ class Game {
   /** Get funds for a team */
   getFunds(team: string): number {
     return this.resources.getResources(team).funds;
+  }
+
+  /** Get player's available unit templates (for testing) */
+  getPlayerTemplates(): { id: string; name: string; cost: number }[] {
+    return getTeamTemplates(TEAMS.PLAYER).map(t => ({
+      id: t.id,
+      name: t.name,
+      cost: t.cost
+    }));
   }
 
   // --- Game loop ---

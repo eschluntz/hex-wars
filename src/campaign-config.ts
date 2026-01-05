@@ -5,8 +5,7 @@
 import type { CampaignCell, CampaignGrid } from './campaign-state.js';
 
 /**
- * Grid layout matching progression-grid-v4.html
- * 6 columns, ~13 rows with boss barriers and fortress blocks
+ * Campaign grid layout: 6 columns, 13 rows with boss barriers and fortress blocks
  *
  * Row layout (bottom to top):
  *   Row 0: Starting row (6 normal cells)
@@ -62,10 +61,10 @@ function createCampaignCells(): CampaignCell[] {
   const cells: CampaignCell[] = [];
 
   // Row 0 (bottom - starting row)
-  cells.push(makeCell(0, 0, 'unit', 'Infantry', 'infantry'));
+  cells.push(makeCell(0, 0, 'unit', 'Recon', 'recon'));
   cells.push(makeCell(0, 1, 'upgrade', '+5% Atk', ''));
-  cells.push(makeCell(0, 2, 'unit', 'Recon', 'recon'));
-  cells.push(makeCell(0, 3, 'special', 'Quick Deploy', ''));
+  cells.push(makeCell(0, 2, 'unit', 'Infantry', 'infantry'));
+  cells.push(makeCell(0, 3, 'unit', 'Tank', 'tank'));
   cells.push(makeCell(0, 4, 'upgrade', '+1 Vision', ''));
   cells.push(makeCell(0, 5, 'unit', 'Mech', 'mech'));
 
@@ -78,7 +77,7 @@ function createCampaignCells(): CampaignCell[] {
   cells.push(makeCell(1, 5, 'upgrade', 'Capture+', ''));
 
   // Row 2 (bottom of fortress block) - cols 0, 1, 4, 5 only
-  cells.push(makeCell(2, 0, 'unit', 'Light Tank', 'tank'));
+  cells.push(makeCell(2, 0, 'special', 'Quick Deploy', ''));
   cells.push(makeCell(2, 1, 'upgrade', 'Treads', ''));
   cells.push(makeCell(2, 4, 'unit', 'Rockets', 'rockets'));
   cells.push(makeCell(2, 5, 'special', 'Ambush', ''));
@@ -87,16 +86,16 @@ function createCampaignCells(): CampaignCell[] {
   cells.push(makeCell(3, 0, 'special', 'First Strike', ''));
   cells.push(makeCell(3, 1, 'upgrade', 'Ammo+', ''));
   cells.push(makeCell(3, 4, 'upgrade', '+15% Air', ''));
-  cells.push(makeCell(3, 5, 'unit', 'Anti-Air', 'anti-air'));
+  cells.push(makeCell(3, 5, 'unit', 'Anti-Air', 'antiAir'));
 
   // Fortress 1 (rows 2-3, cols 2-3)
-  cells.push(makeFortress(2, 2, 'Steel Bastion', 'heavy_tank'));
+  cells.push(makeFortress(2, 2, 'Steel Bastion', 'heavyTank'));
 
   // Row 4: Boss
-  cells.push(makeCell(4, 0, 'boss', 'General Steelheart', 'medium_tank'));
+  cells.push(makeCell(4, 0, 'boss', 'General Steelheart', 'mediumTank'));
 
   // Row 5
-  cells.push(makeCell(5, 0, 'unit', 'Med Tank', 'medium_tank'));
+  cells.push(makeCell(5, 0, 'unit', 'Med Tank', 'mediumTank'));
   cells.push(makeCell(5, 1, 'special', 'Blitz', ''));
   cells.push(makeCell(5, 2, 'upgrade', 'Armor+', ''));
   cells.push(makeCell(5, 3, 'unit', 'Fighter', 'fighter'));
@@ -105,7 +104,7 @@ function createCampaignCells(): CampaignCell[] {
 
   // Row 6 (bottom of fortress block) - cols 0, 1, 4, 5 only
   cells.push(makeCell(6, 0, 'special', 'Air Drop', ''));
-  cells.push(makeCell(6, 1, 'unit', 'Hvy Tank', 'heavy_tank'));
+  cells.push(makeCell(6, 1, 'unit', 'Hvy Tank', 'heavyTank'));
   cells.push(makeCell(6, 4, 'upgrade', '+10% All', ''));
   cells.push(makeCell(6, 5, 'special', 'Airstrike', ''));
 
@@ -113,19 +112,19 @@ function createCampaignCells(): CampaignCell[] {
   cells.push(makeCell(7, 0, 'upgrade', 'Fuel+', ''));
   cells.push(makeCell(7, 1, 'special', 'Entrench', ''));
   cells.push(makeCell(7, 4, 'unit', 'Missiles', 'missiles'));
-  cells.push(makeCell(7, 5, 'unit', 'Cruiser', 'cruiser'));
+  cells.push(makeCell(7, 5, 'unit', 'B-Copter', 'copter'));
 
   // Fortress 2 (rows 6-7, cols 2-3)
-  cells.push(makeFortress(6, 2, 'Sky Citadel', 'stealth'));
+  cells.push(makeFortress(6, 2, 'Sky Citadel', 'heavyTank'));
 
   // Row 8: Boss
-  cells.push(makeCell(8, 0, 'boss', 'Admiral Darkwave', 'battleship'));
+  cells.push(makeCell(8, 0, 'boss', 'Admiral Darkwave', 'mediumTank'));
 
   // Row 9
-  cells.push(makeCell(9, 0, 'unit', 'Submarine', 'sub'));
+  cells.push(makeCell(9, 0, 'unit', 'T-Copter', 'transportCopter'));
   cells.push(makeCell(9, 1, 'special', 'Sonar', ''));
   cells.push(makeCell(9, 2, 'upgrade', '+20% Naval', ''));
-  cells.push(makeCell(9, 3, 'unit', 'Carrier', 'carrier'));
+  cells.push(makeCell(9, 3, 'upgrade', 'Elite Strike', ''));
   cells.push(makeCell(9, 4, 'upgrade', '+2 Range', ''));
   cells.push(makeCell(9, 5, 'special', 'Fortress', ''));
 
@@ -133,16 +132,16 @@ function createCampaignCells(): CampaignCell[] {
   cells.push(makeCell(10, 0, 'upgrade', 'Economy+', ''));
   cells.push(makeCell(10, 1, 'special', 'Veterancy', ''));
   cells.push(makeCell(10, 4, 'upgrade', '+15% All', ''));
-  cells.push(makeCell(10, 5, 'unit', 'Stealth', 'stealth'));
+  cells.push(makeCell(10, 5, 'upgrade', 'Ultimate Power', ''));
 
   // Row 11 (top of fortress block) - cols 0, 1, 4, 5 only
   cells.push(makeCell(11, 0, 'special', 'EMP', ''));
   cells.push(makeCell(11, 1, 'upgrade', 'Elite', ''));
-  cells.push(makeCell(11, 4, 'unit', 'Laser Tank', 'laser_tank'));
+  cells.push(makeCell(11, 4, 'upgrade', 'Final Strike', ''));
   cells.push(makeCell(11, 5, 'special', '???', ''));
 
   // Fortress 3 (rows 10-11, cols 2-3)
-  cells.push(makeFortress(10, 2, 'Omega Base', 'mega_tank'));
+  cells.push(makeFortress(10, 2, 'Omega Base', 'heavyTank'));
 
   // Row 12: Final Boss
   cells.push(makeCell(12, 0, 'boss', 'Supreme Commander', ''));
@@ -161,7 +160,7 @@ export function createCampaignGrid(): CampaignGrid {
   return {
     cells,
     startingCells,
-    startingUnits: ['infantry', 'mech', 'recon'],
+    startingUnits: ['infantry', 'tank'],
     startingReinforcements: 3,
   };
 }
