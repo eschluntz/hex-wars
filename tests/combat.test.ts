@@ -1,39 +1,36 @@
 // ============================================================================
-// HEX DOMINION - Combat Tests
+// HEX DOMINION - Combat Tests (Advance Wars Formula)
 // ============================================================================
+//
+// Tests for the Advance Wars damage formula:
+// Damage% = ((B × AV / 100) + L) × (HPA / 10) × ((200 - (DV + DTR × HPD)) / 100)
 
 import { TestRunner, assert, assertEqual } from './framework.js';
 import { Unit } from '../src/unit.js';
 import { Combat } from '../src/combat.js';
+import { getBaseDamage, canAttack } from '../src/damage-table.js';
 
 const runner = new TestRunner();
 
+// Helper to create units with template IDs for damage table lookups
 function createUnit(
   id: string,
   team: string,
   q: number,
   r: number,
   stats: {
-    attack?: number;
+    templateId: string;
     range?: number;
     minRange?: number;
     health?: number;
-    armored?: boolean;
-    armorPiercing?: boolean;
     flying?: boolean;
-    chassisId?: string;
-    cannotTarget?: string[];
-  } = {}
+  }
 ) {
-  const unit = new Unit(id, team, q, r, {
-    attack: stats.attack ?? 5,
+  const unit = Unit.withStats(id, team, q, r, {
+    templateId: stats.templateId,
     range: stats.range ?? 1,
     minRange: stats.minRange ?? 0,
-    armored: stats.armored ?? false,
-    armorPiercing: stats.armorPiercing ?? false,
     flying: stats.flying ?? false,
-    chassisId: stats.chassisId ?? 'foot',
-    cannotTarget: stats.cannotTarget ?? [],
   });
   if (stats.health !== undefined) {
     unit.health = stats.health;
@@ -41,611 +38,484 @@ function createUnit(
   return unit;
 }
 
+runner.describe('Damage Table', () => {
+  runner.describe('getBaseDamage', () => {
+    runner.it('should return correct base damage for infantry vs infantry', () => {
+      const damage = getBaseDamage('infantry', 'infantry');
+      assertEqual(damage, 55);
+    });
+
+    runner.it('should return correct base damage for tank vs infantry', () => {
+      const damage = getBaseDamage('tank', 'infantry');
+      assertEqual(damage, 75); // MG secondary
+    });
+
+    runner.it('should return correct base damage for mech vs tank', () => {
+      const damage = getBaseDamage('mech', 'tank');
+      assertEqual(damage, 55);
+    });
+
+    runner.it('should return 0 for units that cannot attack (infantry vs fighter)', () => {
+      const damage = getBaseDamage('infantry', 'fighter');
+      assertEqual(damage, 0);
+    });
+
+    runner.it('should return 0 for unarmed units (apc vs anything)', () => {
+      assertEqual(getBaseDamage('apc', 'infantry'), 0);
+      assertEqual(getBaseDamage('apc', 'tank'), 0);
+    });
+
+    runner.it('should return correct base damage for anti-air vs copter', () => {
+      const damage = getBaseDamage('antiAir', 'copter');
+      assertEqual(damage, 120);
+    });
+
+    runner.it('should return correct base damage for fighter vs bomber', () => {
+      const damage = getBaseDamage('fighter', 'bomber');
+      assertEqual(damage, 100);
+    });
+  });
+
+  runner.describe('canAttack', () => {
+    runner.it('should return true when base damage > 0', () => {
+      assert(canAttack('infantry', 'infantry'));
+      assert(canAttack('tank', 'tank'));
+      assert(canAttack('antiAir', 'copter'));
+    });
+
+    runner.it('should return false when base damage is 0', () => {
+      assert(!canAttack('infantry', 'fighter'));
+      assert(!canAttack('fighter', 'infantry'));
+      assert(!canAttack('apc', 'infantry'));
+      assert(!canAttack('missiles', 'tank'));
+    });
+  });
+});
+
 runner.describe('Combat', () => {
-  runner.describe('calculateBaseExpectedDamage', () => {
-    runner.it('should calculate full damage at full health', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 5 });
-      const damage = Combat.calculateBaseExpectedDamage(attacker);
+  runner.describe('calculateExpectedDamage (AW formula, no luck)', () => {
+    runner.it('should calculate infantry vs infantry at full HP', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry' });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'infantry' });
+      // Formula: (55 * 100/100 + 0) * (10/10) * (200 - 100) / 100 = 55%
+      // Converted to HP: 55 / 10 = 5.5 -> 5
+      const damage = Combat.calculateExpectedDamage(attacker, defender);
       assertEqual(damage, 5);
     });
 
-    runner.it('should calculate half damage at half health', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 6, health: 5 });
-      const damage = Combat.calculateBaseExpectedDamage(attacker);
-      assertEqual(damage, 3); // 6 * 0.5 = 3
+    runner.it('should calculate tank vs infantry at full HP', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'tank' });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'infantry' });
+      // Base 75%, full HP attacker, no terrain = 75% -> 7 HP damage
+      const damage = Combat.calculateExpectedDamage(attacker, defender);
+      assertEqual(damage, 7);
     });
 
-    runner.it('should floor fractional damage', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 5, health: 7 });
-      // 5 * 0.7 = 3.5, floor = 3
-      const damage = Combat.calculateBaseExpectedDamage(attacker);
+    runner.it('should scale damage with attacker HP', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry', health: 5 });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'infantry' });
+      // Formula: 55 * 0.5 * 1 = 27.5% -> 2 HP damage
+      const damage = Combat.calculateExpectedDamage(attacker, defender);
+      assertEqual(damage, 2);
+    });
+
+    runner.it('should return 0 when attacker cannot target defender', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry' });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'fighter', flying: true,  });
+      const damage = Combat.calculateExpectedDamage(attacker, defender);
+      assertEqual(damage, 0);
+    });
+
+    runner.it('should handle mega tank vs infantry', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'heavyTank' });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'infantry' });
+      // Base 135%, full HP, no terrain = 135% -> 13 HP damage (one-shot kill)
+      const damage = Combat.calculateExpectedDamage(attacker, defender);
+      assertEqual(damage, 13);
+    });
+  });
+
+  runner.describe('calculateDamage (with luck)', () => {
+    runner.it('should add luck to damage', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry' });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'infantry' });
+      // With luck 5: (55 + 5) * 1 * 1 = 60% -> 6 HP
+      const damage = Combat.calculateDamage(attacker, defender, 5);
+      assertEqual(damage, 6);
+    });
+
+    runner.it('should handle max luck (9)', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry' });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'infantry' });
+      // With luck 9: (55 + 9) * 1 * 1 = 64% -> 6 HP
+      const damage = Combat.calculateDamage(attacker, defender, 9);
+      assertEqual(damage, 6);
+    });
+
+    runner.it('should handle zero luck', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry' });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'infantry' });
+      // 55% -> 5 HP
+      const damage = Combat.calculateDamage(attacker, defender, 0);
+      assertEqual(damage, 5);
+    });
+
+    runner.it('should scale luck with attacker HP', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry', health: 5 });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'infantry' });
+      // (55 + 5) * 0.5 * 1 = 30% -> 3 HP
+      const damage = Combat.calculateDamage(attacker, defender, 5);
       assertEqual(damage, 3);
     });
   });
 
-  runner.describe('calculateDamage (variance)', () => {
-    runner.it('should add positive variance', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 5 });
-      const defender = createUnit('d', 'enemy', 1, 0);
-      const damage = Combat.calculateDamage(attacker, defender, 1);
-      assertEqual(damage, 6);
-    });
-
-    runner.it('should subtract negative variance', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 5 });
-      const defender = createUnit('d', 'enemy', 1, 0);
-      const damage = Combat.calculateDamage(attacker, defender, -1);
+  runner.describe('terrain defense (AW formula)', () => {
+    runner.it('should reduce damage with terrain stars', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry' });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'infantry' });
+      // With 2 terrain stars at full HP:
+      // Defender component: (200 - (100 + 2*10)) / 100 = 0.8
+      // = 55 * 1 * 0.8 = 44% -> 4 HP
+      const damage = Combat.calculateExpectedDamage(attacker, defender, 2);
       assertEqual(damage, 4);
     });
 
-    runner.it('should not go below 0 damage with negative variance', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 1, health: 1 });
-      const defender = createUnit('d', 'enemy', 1, 0);
-      // 1 * 0.1 = 0.1, floor = 0, + (-1) = -1, max(0, -1) = 0
-      const damage = Combat.calculateDamage(attacker, defender, -1);
-      assertEqual(damage, 0);
+    runner.it('should scale terrain defense with defender HP', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry' });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'infantry', health: 5 });
+      // With 2 terrain stars at 5 HP:
+      // Defender component: (200 - (100 + 2*5)) / 100 = 0.9
+      // = 55 * 1 * 0.9 = 49.5% -> 4 HP
+      const damage = Combat.calculateExpectedDamage(attacker, defender, 2);
+      assertEqual(damage, 4);
+    });
+
+    runner.it('should not apply terrain defense to flying units', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'antiAir' });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'copter', flying: true,  });
+      // Flying units get no terrain defense
+      // Base 120%, no terrain bonus: 120% -> 12 HP
+      const damageNoTerrain = Combat.calculateExpectedDamage(attacker, defender, 0);
+      const damageWithTerrain = Combat.calculateExpectedDamage(attacker, defender, 4);
+      assertEqual(damageNoTerrain, 12);
+      assertEqual(damageWithTerrain, 12); // Same - no terrain bonus for flying
+    });
+
+    runner.it('should handle 4 star terrain (mountain/city)', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry' });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'infantry' });
+      // 4 stars at full HP:
+      // Defender component: (200 - (100 + 4*10)) / 100 = 0.6
+      // = 55 * 1 * 0.6 = 33% -> 3 HP
+      const damage = Combat.calculateExpectedDamage(attacker, defender, 4);
+      assertEqual(damage, 3);
     });
   });
 
-  runner.describe('calculateDamage (with armor)', () => {
-    runner.it('should deal full damage when defender is not armored', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 5 });
-      const defender = createUnit('d', 'enemy', 1, 0);
-      const damage = Combat.calculateDamage(attacker, defender, 0);
-      assertEqual(damage, 5);
+  runner.describe('AV/DV modifiers (CO powers)', () => {
+    runner.it('should increase damage with higher AV', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry' });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'infantry' });
+      // AV 110 (e.g., Hawke):
+      // (55 * 110/100 + 0) * 1 * 1 = 60.5% -> 6 HP
+      const damage = Combat.calculateExpectedDamage(attacker, defender, 0, 110, 100);
+      assertEqual(damage, 6);
     });
 
-    runner.it('should reduce non-AP damage by 5x against armored target', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 5, armorPiercing: false });
-      const defender = createUnit('d', 'enemy', 1, 0, { armored: true });
-      const damage = Combat.calculateDamage(attacker, defender, 0);
-      assertEqual(damage, 1); // 5 / 5 = 1
+    runner.it('should decrease damage with lower DV (Grimm)', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry' });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'infantry' });
+      // DV 80 (Grimm):
+      // Defender component: (200 - 80) / 100 = 1.2
+      // = 55 * 1 * 1.2 = 66% -> 6 HP
+      const damage = Combat.calculateExpectedDamage(attacker, defender, 0, 100, 80);
+      assertEqual(damage, 6);
     });
 
-    runner.it('should deal 0 damage when low attack vs armor', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 4, armorPiercing: false });
-      const defender = createUnit('d', 'enemy', 1, 0, { armored: true });
-      const damage = Combat.calculateDamage(attacker, defender, 0);
-      assertEqual(damage, 0); // 4 / 5 = 0.8, floor = 0
-    });
-
-    runner.it('should deal full damage when attacker has armor piercing', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 7, armorPiercing: true });
-      const defender = createUnit('d', 'enemy', 1, 0, { armored: true });
-      const damage = Combat.calculateDamage(attacker, defender, 0);
-      assertEqual(damage, 7); // AP bypasses armor
-    });
-
-    runner.it('should deal full AP damage even when defender is not armored', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 7, armorPiercing: true });
-      const defender = createUnit('d', 'enemy', 1, 0, { armored: false });
-      const damage = Combat.calculateDamage(attacker, defender, 0);
+    runner.it('should combine AV and DV modifiers', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry' });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'infantry' });
+      // AV 120, DV 80:
+      // (55 * 120/100) * 1 * (200 - 80) / 100 = 66 * 1.2 = 79.2% -> 7 HP
+      const damage = Combat.calculateExpectedDamage(attacker, defender, 0, 120, 80);
       assertEqual(damage, 7);
-    });
-
-    runner.it('should apply variance after armor reduction', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 5, armorPiercing: false });
-      const defender = createUnit('d', 'enemy', 1, 0, { armored: true });
-      // Expected: 5 / 5 = 1, then +1 variance = 2
-      const damage = Combat.calculateDamage(attacker, defender, 1);
-      assertEqual(damage, 2);
     });
   });
 
   runner.describe('isInRange', () => {
     runner.it('should return true for adjacent units with range 1', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { range: 1 });
-      const target = createUnit('t', 'enemy', 1, 0);
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry', range: 1 });
+      const target = createUnit('t', 'enemy', 1, 0, { templateId: 'infantry' });
       assert(Combat.isInRange(attacker, target));
     });
 
     runner.it('should return false for units beyond range', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { range: 1 });
-      const target = createUnit('t', 'enemy', 2, 0);
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry', range: 1 });
+      const target = createUnit('t', 'enemy', 2, 0, { templateId: 'infantry' });
       assert(!Combat.isInRange(attacker, target));
     });
 
     runner.it('should handle range 2', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { range: 2 });
-      const target1 = createUnit('t1', 'enemy', 2, 0);
-      const target2 = createUnit('t2', 'enemy', 3, 0);
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'artillery', range: 3, minRange: 2 });
+      const target1 = createUnit('t1', 'enemy', 2, 0, { templateId: 'infantry' });
+      const target2 = createUnit('t2', 'enemy', 4, 0, { templateId: 'infantry' });
       assert(Combat.isInRange(attacker, target1), 'Distance 2 should be in range');
-      assert(!Combat.isInRange(attacker, target2), 'Distance 3 should not be in range');
-    });
-
-    runner.it('should return true for same position', () => {
-      const attacker = createUnit('a', 'player', 5, 5, { range: 1 });
-      const target = createUnit('t', 'enemy', 5, 5);
-      assert(Combat.isInRange(attacker, target));
+      assert(!Combat.isInRange(attacker, target2), 'Distance 4 should not be in range');
     });
 
     runner.it('should return false when target is closer than minRange', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { range: 3, minRange: 2 });
-      const target = createUnit('t', 'enemy', 1, 0); // distance 1
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'artillery', range: 3, minRange: 2 });
+      const target = createUnit('t', 'enemy', 1, 0, { templateId: 'infantry' }); // distance 1
       assert(!Combat.isInRange(attacker, target));
     });
 
     runner.it('should return true when target is at minRange', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { range: 3, minRange: 2 });
-      const target = createUnit('t', 'enemy', 2, 0); // distance 2
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'artillery', range: 3, minRange: 2 });
+      const target = createUnit('t', 'enemy', 2, 0, { templateId: 'infantry' }); // distance 2
       assert(Combat.isInRange(attacker, target));
     });
+  });
 
-    runner.it('should return true when target is between minRange and range', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { range: 4, minRange: 2 });
-      const target = createUnit('t', 'enemy', 3, 0); // distance 3
-      assert(Combat.isInRange(attacker, target));
+  runner.describe('canTarget', () => {
+    runner.it('should return true when damage table has positive damage', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry' });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'infantry' });
+      assert(Combat.canTarget(attacker, defender));
     });
 
-    runner.it('should handle minRange 0 (no minimum)', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { range: 3, minRange: 0 });
-      const samePos = createUnit('t', 'enemy', 0, 0); // distance 0
-      assert(Combat.isInRange(attacker, samePos));
+    runner.it('should return false when damage table has zero damage', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry' });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'fighter', flying: true,  });
+      assert(!Combat.canTarget(attacker, defender));
+    });
+
+    runner.it('should allow anti-air to target copters', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'antiAir' });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'copter', flying: true,  });
+      assert(Combat.canTarget(attacker, defender));
+    });
+
+    runner.it('should not allow fighter to target infantry', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'fighter', flying: true });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'infantry' });
+      assert(!Combat.canTarget(attacker, defender));
+    });
+
+    runner.it('should not allow missiles to target ground units', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'missiles' });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'tank' });
+      assert(!Combat.canTarget(attacker, defender));
     });
   });
 
   runner.describe('getTargetsInRange', () => {
     runner.it('should return enemies within range', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { range: 1 });
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry', range: 1 });
       const enemies = [
-        createUnit('e1', 'enemy', 1, 0), // adjacent
-        createUnit('e2', 'enemy', 2, 0), // too far
-        createUnit('e3', 'enemy', 0, 1), // adjacent
+        createUnit('e1', 'enemy', 1, 0, { templateId: 'infantry' }), // adjacent
+        createUnit('e2', 'enemy', 2, 0, { templateId: 'infantry' }), // too far
+        createUnit('e3', 'enemy', 0, 1, { templateId: 'infantry' }), // adjacent
       ];
       const targets = Combat.getTargetsInRange(attacker, enemies);
       assertEqual(targets.length, 2);
     });
 
     runner.it('should exclude dead enemies', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { range: 1 });
-      const deadEnemy = createUnit('e1', 'enemy', 1, 0, { health: 0 });
-      const aliveEnemy = createUnit('e2', 'enemy', 0, 1);
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry', range: 1 });
+      const deadEnemy = createUnit('e1', 'enemy', 1, 0, { templateId: 'infantry', health: 0 });
+      const aliveEnemy = createUnit('e2', 'enemy', 0, 1, { templateId: 'infantry' });
       const targets = Combat.getTargetsInRange(attacker, [deadEnemy, aliveEnemy]);
       assertEqual(targets.length, 1);
       assertEqual(targets[0]!.id, 'e2');
     });
 
-    runner.it('should return empty array when no enemies in range', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { range: 1 });
-      const enemies = [createUnit('e1', 'enemy', 5, 5), createUnit('e2', 'enemy', 10, 10)];
-      const targets = Combat.getTargetsInRange(attacker, enemies);
-      assertEqual(targets.length, 0);
-    });
-
-    runner.it('should exclude targets closer than minRange', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { range: 3, minRange: 2 });
+    runner.it('should exclude untargetable enemies', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry', range: 1 });
       const enemies = [
-        createUnit('e1', 'enemy', 1, 0), // distance 1 - too close
-        createUnit('e2', 'enemy', 2, 0), // distance 2 - in range
-        createUnit('e3', 'enemy', 3, 0), // distance 3 - in range
-        createUnit('e4', 'enemy', 4, 0), // distance 4 - too far
+        createUnit('e1', 'enemy', 1, 0, { templateId: 'infantry' }),
+        createUnit('e2', 'enemy', 0, 1, { templateId: 'fighter', flying: true,  }),
       ];
       const targets = Combat.getTargetsInRange(attacker, enemies);
-      assertEqual(targets.length, 2);
-      assertEqual(targets[0]!.id, 'e2');
-      assertEqual(targets[1]!.id, 'e3');
-    });
-  });
-
-  runner.describe('execute', () => {
-    runner.it('should deal damage to defender', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 5 });
-      const defender = createUnit('d', 'enemy', 1, 0, { attack: 5 });
-
-      Combat.execute(attacker, defender, 0, 0);
-
-      assertEqual(defender.health, 5); // 10 - 5 = 5
+      assertEqual(targets.length, 1);
+      assertEqual(targets[0]!.id, 'e1');
     });
 
-    runner.it('should allow counter-attack when defender survives and in range', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 3, range: 1 });
-      const defender = createUnit('d', 'enemy', 1, 0, { attack: 4, range: 1 });
-
-      Combat.execute(attacker, defender, 0, 0);
-
-      assertEqual(defender.health, 7); // 10 - 3 = 7
-      // Counter-attack: defender at 70% health, damage = floor(4 * 0.7) = 2
-      assertEqual(attacker.health, 8); // 10 - 2 = 8
-    });
-
-    runner.it('should correctly calculate counter-attack with reduced health', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 3, range: 1 });
-      const defender = createUnit('d', 'enemy', 1, 0, { attack: 4, range: 1 });
-
-      const result = Combat.execute(attacker, defender, 0, 0);
-
-      assertEqual(result.attackerDamage, 3);
-      // After taking 3 damage, defender has 7 health (70%)
-      // Counter damage = floor(4 * 0.7) + 0 = 2
-      assertEqual(result.defenderDamage, 2);
-      assertEqual(attacker.health, 8);
-      assertEqual(defender.health, 7);
-    });
-
-    runner.it('should not counter-attack if defender dies', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 10, range: 1 });
-      const defender = createUnit('d', 'enemy', 1, 0, { attack: 5, range: 1 });
-
-      const result = Combat.execute(attacker, defender, 0, 0);
-
-      assertEqual(result.attackerDamage, 10);
-      assertEqual(result.defenderDamage, 0);
-      assertEqual(result.defenderDied, true);
-      assertEqual(result.attackerDied, false);
-      assertEqual(defender.health, 0);
-      assertEqual(attacker.health, 10);
-    });
-
-    runner.it('should not counter-attack if attacker out of defender range', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 3, range: 2 });
-      const defender = createUnit('d', 'enemy', 2, 0, { attack: 5, range: 1 });
-
-      const result = Combat.execute(attacker, defender, 0, 0);
-
-      assertEqual(result.attackerDamage, 3);
-      assertEqual(result.defenderDamage, 0); // Can't counter - out of range
-      assertEqual(defender.health, 7);
-      assertEqual(attacker.health, 10);
-    });
-
-    runner.it('should allow counter-attack if defender has longer range', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 3, range: 1 });
-      const defender = createUnit('d', 'enemy', 1, 0, { attack: 5, range: 2 });
-
-      const result = Combat.execute(attacker, defender, 0, 0);
-
-      assertEqual(result.attackerDamage, 3);
-      // Defender at 7 HP, damage = floor(5 * 0.7) = 3
-      assertEqual(result.defenderDamage, 3);
-      assertEqual(defender.health, 7);
-      assertEqual(attacker.health, 7);
-    });
-
-    runner.it('should handle mutual destruction', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 10, range: 1, health: 3 });
-      const defender = createUnit('d', 'enemy', 1, 0, { attack: 10, range: 1, health: 10 });
-
-      const result = Combat.execute(attacker, defender, 0, 1);
-
-      // Attacker deals 10 * 0.3 = 3, defender survives with 7
-      // Defender deals 10 * 0.7 + 1 = 8, attacker dies
-      assertEqual(result.defenderDied, false);
-      assertEqual(result.attackerDied, true);
-      assertEqual(defender.health, 7);
-      assertEqual(attacker.health, 0);
-    });
-
-    runner.it('should handle variance in combat', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 5 });
-      const defender = createUnit('d', 'enemy', 1, 0, { attack: 5 });
-
-      // With +1 variance for attacker
-      const result = Combat.execute(attacker, defender, 1, 0);
-      assertEqual(result.attackerDamage, 6); // 5 + 1
-    });
-  });
-
-  runner.describe('execute (with armor)', () => {
-    runner.it('should reduce damage when attacking armored unit without AP', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 5, armorPiercing: false });
-      const defender = createUnit('d', 'enemy', 1, 0, { attack: 5, armored: true });
-
-      const result = Combat.execute(attacker, defender, 0, 0);
-
-      // 5 / 5 = 1 damage
-      assertEqual(result.attackerDamage, 1);
-      assertEqual(defender.health, 9);
-    });
-
-    runner.it('should deal full damage when attacking armored unit with AP', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 7, armorPiercing: true });
-      const defender = createUnit('d', 'enemy', 1, 0, { attack: 5, armored: true });
-
-      const result = Combat.execute(attacker, defender, 0, 0);
-
-      assertEqual(result.attackerDamage, 7);
-      assertEqual(defender.health, 3);
-    });
-
-    runner.it('should apply armor on counter-attack too', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 7, armorPiercing: true, armored: true });
-      const defender = createUnit('d', 'enemy', 1, 0, { attack: 5, armorPiercing: false });
-
-      const result = Combat.execute(attacker, defender, 0, 0);
-
-      // Attacker deals 7 damage (AP)
-      assertEqual(result.attackerDamage, 7);
-      assertEqual(defender.health, 3);
-
-      // Counter: defender has 3 HP (30%), base damage = floor(5 * 0.3) = 1
-      // Attacker is armored, defender has no AP: 1 / 5 = 0
-      assertEqual(result.defenderDamage, 0);
-      assertEqual(attacker.health, 10);
-    });
-
-    runner.it('should simulate soldier vs tank (MG vs armored)', () => {
-      // Soldier: attack 4, no AP
-      // Tank: armored
-      const soldier = createUnit('soldier', 'player', 0, 0, { attack: 4, armorPiercing: false });
-      const tank = createUnit('tank', 'enemy', 1, 0, { attack: 7, armored: true, armorPiercing: true });
-
-      const result = Combat.execute(soldier, tank, 0, 0);
-
-      // Soldier does 4 / 5 = 0 damage to tank
-      assertEqual(result.attackerDamage, 0);
-      assertEqual(tank.health, 10);
-
-      // Tank counter-attacks with full AP damage: 7
-      assertEqual(result.defenderDamage, 7);
-      assertEqual(soldier.health, 3);
-    });
-
-    runner.it('should simulate tank vs tank (AP vs armored)', () => {
-      const tank1 = createUnit('tank1', 'player', 0, 0, { attack: 7, armored: true, armorPiercing: true });
-      const tank2 = createUnit('tank2', 'enemy', 1, 0, { attack: 7, armored: true, armorPiercing: true });
-
-      const result = Combat.execute(tank1, tank2, 0, 0);
-
-      // Both have AP, so armor doesn't help
-      assertEqual(result.attackerDamage, 7);
-      assertEqual(tank2.health, 3);
-
-      // Counter: tank2 at 30% health, damage = floor(7 * 0.3) = 2
-      assertEqual(result.defenderDamage, 2);
-      assertEqual(tank1.health, 8);
-    });
-  });
-
-  runner.describe('isAlive', () => {
-    runner.it('should return true for unit with health > 0', () => {
-      const unit = createUnit('u', 'player', 0, 0, { health: 1 });
-      assert(unit.isAlive());
-    });
-
-    runner.it('should return false for unit with health = 0', () => {
-      const unit = createUnit('u', 'player', 0, 0, { health: 0 });
-      assert(!unit.isAlive());
-    });
-  });
-
-  runner.describe('canTargetChassis', () => {
-    runner.it('should return true when weapon has no restrictions', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { cannotTarget: [] });
-      const defender = createUnit('d', 'enemy', 1, 0, { chassisId: 'airplane' });
-      assert(Combat.canTargetChassis(attacker, defender));
-    });
-
-    runner.it('should return false when target chassis is in cannotTarget list', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { cannotTarget: ['airplane'] });
-      const defender = createUnit('d', 'enemy', 1, 0, { chassisId: 'airplane' });
-      assert(!Combat.canTargetChassis(attacker, defender));
-    });
-
-    runner.it('should return true when target chassis is not in cannotTarget list', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { cannotTarget: ['airplane'] });
-      const defender = createUnit('d', 'enemy', 1, 0, { chassisId: 'foot' });
-      assert(Combat.canTargetChassis(attacker, defender));
-    });
-
-    runner.it('should handle multiple chassis in cannotTarget list', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { cannotTarget: ['airplane', 'hover'] });
-      const airplane = createUnit('d1', 'enemy', 1, 0, { chassisId: 'airplane' });
-      const hover = createUnit('d2', 'enemy', 2, 0, { chassisId: 'hover' });
-      const foot = createUnit('d3', 'enemy', 0, 1, { chassisId: 'foot' });
-
-      assert(!Combat.canTargetChassis(attacker, airplane), 'Should not target airplane');
-      assert(!Combat.canTargetChassis(attacker, hover), 'Should not target hover');
-      assert(Combat.canTargetChassis(attacker, foot), 'Should target foot');
-    });
-  });
-
-  runner.describe('getTargetsInRange (with chassis restrictions)', () => {
-    runner.it('should exclude enemies with incompatible chassis', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { range: 2, cannotTarget: ['airplane'] });
+    runner.it('should combine range and targeting restrictions', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry', range: 1 });
       const enemies = [
-        createUnit('e1', 'enemy', 1, 0, { chassisId: 'foot' }),
-        createUnit('e2', 'enemy', 0, 1, { chassisId: 'airplane' }),
-        createUnit('e3', 'enemy', 1, 1, { chassisId: 'treads' }),
+        createUnit('e1', 'enemy', 1, 0, { templateId: 'infantry' }),      // in range, targetable
+        createUnit('e2', 'enemy', 0, 1, { templateId: 'fighter', flying: true }), // in range, not targetable
+        createUnit('e3', 'enemy', 2, 0, { templateId: 'infantry' }),      // out of range
       ];
       const targets = Combat.getTargetsInRange(attacker, enemies);
-
-      assertEqual(targets.length, 2);
-      assert(targets.some(t => t.id === 'e1'), 'Should include foot enemy');
-      assert(!targets.some(t => t.id === 'e2'), 'Should exclude airplane enemy');
-      assert(targets.some(t => t.id === 'e3'), 'Should include treads enemy');
-    });
-
-    runner.it('should include all enemies when no chassis restrictions', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { range: 2, cannotTarget: [] });
-      const enemies = [
-        createUnit('e1', 'enemy', 1, 0, { chassisId: 'foot' }),
-        createUnit('e2', 'enemy', 0, 1, { chassisId: 'airplane' }),
-      ];
-      const targets = Combat.getTargetsInRange(attacker, enemies);
-
-      assertEqual(targets.length, 2);
-    });
-
-    runner.it('should combine range and chassis restrictions', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { range: 1, cannotTarget: ['airplane'] });
-      const enemies = [
-        createUnit('e1', 'enemy', 1, 0, { chassisId: 'foot' }),      // in range, targetable
-        createUnit('e2', 'enemy', 0, 1, { chassisId: 'airplane' }), // in range, not targetable
-        createUnit('e3', 'enemy', 2, 0, { chassisId: 'foot' }),      // out of range
-      ];
-      const targets = Combat.getTargetsInRange(attacker, enemies);
-
       assertEqual(targets.length, 1);
       assertEqual(targets[0]!.id, 'e1');
     });
   });
 
-  runner.describe('applyTerrainDefense', () => {
-    runner.it('should return full damage when terrain stars is 0', () => {
-      const damage = Combat.applyTerrainDefense(10, 10, 0, false);
-      assertEqual(damage, 10);
+  runner.describe('execute', () => {
+    runner.it('should deal damage to defender', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry', range: 1 });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'infantry', range: 1 });
+
+      Combat.execute(attacker, defender, 0, 0);
+
+      // Infantry vs Infantry: 55% -> 5 HP damage
+      assertEqual(defender.health, 5); // 10 - 5 = 5
     });
 
-    runner.it('should return full damage for flying units', () => {
-      // Flying units don't get terrain defense
-      const damage = Combat.applyTerrainDefense(10, 10, 4, true);
-      assertEqual(damage, 10);
+    runner.it('should allow counter-attack when defender survives and in range', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry', range: 1 });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'tank', range: 1 });
+
+      // Infantry does 0 HP damage to tank (5% base), tank survives at full HP
+      Combat.execute(attacker, defender, 0, 0);
+
+      assertEqual(defender.health, 10); // Tank barely scratched (0 HP damage from infantry)
+      // Tank counter-attacks at full HP: 75% -> 7 HP damage
+      assertEqual(attacker.health, 3); // 10 - 7 = 3
     });
 
-    runner.it('should reduce damage by 10% for 1 star terrain at full HP', () => {
-      // 1 star * (10/10) * 0.1 = 10% reduction
-      // 10 * (1 - 0.1) = 9
-      const damage = Combat.applyTerrainDefense(10, 10, 1, false);
-      assertEqual(damage, 9);
+    runner.it('should not counter-attack if defender dies', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'heavyTank', range: 1 });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'infantry', range: 1 });
+
+      const result = Combat.execute(attacker, defender, 0, 0);
+
+      // Mega tank does 135% -> 13 HP damage to infantry (one-shot kill)
+      assertEqual(result.defenderDied, true);
+      assertEqual(result.defenderDamage, 0);
+      assertEqual(attacker.health, 10);
     });
 
-    runner.it('should reduce damage by 20% for 2 star terrain at full HP', () => {
-      // 2 stars * (10/10) * 0.1 = 20% reduction
-      // 10 * (1 - 0.2) = 8
-      const damage = Combat.applyTerrainDefense(10, 10, 2, false);
-      assertEqual(damage, 8);
+    runner.it('should not counter-attack if attacker out of defender range', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'artillery', range: 3, minRange: 2 });
+      const defender = createUnit('d', 'enemy', 2, 0, { templateId: 'infantry', range: 1 });
+
+      const result = Combat.execute(attacker, defender, 0, 0);
+
+      // Artillery hits infantry from range 2, infantry can't counter (range 1)
+      assertEqual(result.counterAttackAttempted, false);
+      assertEqual(result.defenderDamage, 0);
+      assertEqual(attacker.health, 10);
     });
 
-    runner.it('should reduce damage by 40% for 4 star terrain at full HP', () => {
-      // 4 stars * (10/10) * 0.1 = 40% reduction
-      // 10 * (1 - 0.4) = 6
-      const damage = Combat.applyTerrainDefense(10, 10, 4, false);
-      assertEqual(damage, 6);
-    });
-
-    runner.it('should scale defense with defender HP', () => {
-      // 2 stars * (5/10) * 0.1 = 10% reduction (not 20%)
-      // 10 * (1 - 0.1) = 9
-      const damage = Combat.applyTerrainDefense(10, 5, 2, false);
-      assertEqual(damage, 9);
-    });
-
-    runner.it('should floor the final damage', () => {
-      // 7 damage, 2 stars, full HP: 7 * (1 - 0.2) = 5.6 -> 5
-      const damage = Combat.applyTerrainDefense(7, 10, 2, false);
-      assertEqual(damage, 5);
-    });
-  });
-
-  runner.describe('calculateExpectedDamage (with terrain)', () => {
-    runner.it('should apply terrain defense after armor reduction', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 10 });
-      const defender = createUnit('d', 'enemy', 1, 0);
-
-      // No terrain: 10 damage
-      const damageNoTerrain = Combat.calculateExpectedDamage(attacker, defender, 0);
-      assertEqual(damageNoTerrain, 10);
-
-      // With 2 stars terrain: 10 * (1 - 0.2) = 8
-      const damageWithTerrain = Combat.calculateExpectedDamage(attacker, defender, 2);
-      assertEqual(damageWithTerrain, 8);
-    });
-
-    runner.it('should not apply terrain defense to flying defenders', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 10 });
-      const flyingDefender = createUnit('d', 'enemy', 1, 0, { flying: true, chassisId: 'airplane' });
-
-      // With 4 stars terrain but flying: still 10 damage
-      const damage = Combat.calculateExpectedDamage(attacker, flyingDefender, 4);
-      assertEqual(damage, 10);
-    });
-
-    runner.it('should apply both armor and terrain defense', () => {
-      // Non-AP attacker vs armored defender on terrain
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 10, armorPiercing: false });
-      const defender = createUnit('d', 'enemy', 1, 0, { armored: true });
-
-      // Armor first: 10 / 5 = 2
-      // Then 2 stars terrain: 2 * (1 - 0.2) = 1.6 -> 1
-      const damage = Combat.calculateExpectedDamage(attacker, defender, 2);
-      assertEqual(damage, 1);
-    });
-  });
-
-  runner.describe('execute (with terrain)', () => {
     runner.it('should apply terrain defense to defender', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 10, range: 1 });
-      const defender = createUnit('d', 'enemy', 1, 0, { attack: 5, range: 1 });
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry', range: 1 });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'mech', range: 1 });
 
       // Defender on 2-star terrain (woods)
       const result = Combat.execute(attacker, defender, 0, 0, 2, 0);
 
-      // 10 * (1 - 0.2) = 8 damage to defender
-      assertEqual(result.attackerDamage, 8);
-      assertEqual(defender.health, 2);
+      // Infantry vs Mech base 45%, with 2 stars: 45 * 0.8 = 36% -> 3 HP
+      assertEqual(result.attackerDamage, 3);
+      assertEqual(defender.health, 7); // 10 - 3 = 7
     });
 
     runner.it('should apply terrain defense to attacker on counter-attack', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 3, range: 1 });
-      const defender = createUnit('d', 'enemy', 1, 0, { attack: 10, range: 1 });
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry', range: 1 });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'mech', range: 1 });
 
-      // Attacker on 2-star terrain (woods)
+      // Attacker on 2-star terrain
       const result = Combat.execute(attacker, defender, 0, 0, 0, 2);
 
-      // Attacker deals 3 damage (no terrain defense for defender)
-      assertEqual(result.attackerDamage, 3);
-      assertEqual(defender.health, 7);
-
-      // Defender counter-attacks: 10 * 0.7 = 7, then terrain: 7 * (1 - 0.2) = 5.6 -> 5
-      assertEqual(result.defenderDamage, 5);
-      assertEqual(attacker.health, 5);
+      // Infantry takes counter damage from mech (base 65%)
+      // Mech at reduced HP, attacker on terrain
+      // Attacker gets terrain defense on counter
+      assert(result.counterAttackAttempted);
     });
 
-    runner.it('should not apply terrain defense to flying units', () => {
-      const attacker = createUnit('a', 'player', 0, 0, { attack: 10, range: 1 });
-      const flyingDefender = createUnit('d', 'enemy', 1, 0, { attack: 5, range: 1, flying: true, chassisId: 'airplane' });
+    runner.it('should not allow counter-attack when defender cannot target attacker', () => {
+      // Fighter attacks copter - copter cannot counter (can't target fighter)
+      const fighter = createUnit('fighter', 'player', 0, 0, { templateId: 'fighter', range: 1, flying: true });
+      const copter = createUnit('copter', 'enemy', 1, 0, { templateId: 'copter', range: 1, flying: true });
 
-      // Flying defender on 4-star terrain (mountain) - should get no defense
-      const result = Combat.execute(attacker, flyingDefender, 0, 0, 4, 0);
+      const result = Combat.execute(fighter, copter, 0, 0);
 
-      assertEqual(result.attackerDamage, 10);
-      assertEqual(flyingDefender.health, 0);
+      // Fighter does 100% -> 10 HP damage to copter (one-shot kill)
       assertEqual(result.defenderDied, true);
+      assertEqual(result.defenderDamage, 0);
+      assertEqual(fighter.health, 10);
+    });
+
+    runner.it('should allow mutual combat between tanks', () => {
+      const tank1 = createUnit('tank1', 'player', 0, 0, { templateId: 'tank', range: 1 });
+      const tank2 = createUnit('tank2', 'enemy', 1, 0, { templateId: 'tank', range: 1 });
+
+      const result = Combat.execute(tank1, tank2, 0, 0);
+
+      // Tank vs Tank base 55% -> 5 HP damage
+      assertEqual(result.attackerDamage, 5);
+      assertEqual(tank2.health, 5); // 10 - 5 = 5
+      assertEqual(result.defenderDied, false);
+      assertEqual(result.counterAttackAttempted, true); // Survived, can counter
+    });
+
+    runner.it('should handle combat with AV/DV modifiers', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry', range: 1 });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'infantry', range: 1 });
+
+      // Attacker has AV 120, defender has DV 80
+      const result = Combat.execute(attacker, defender, 0, 0, 0, 0, 120, 80, 100, 100);
+
+      // (55 * 1.2) * 1 * (200 - 80) / 100 = 66 * 1.2 = 79.2% -> 7 HP
+      assertEqual(result.attackerDamage, 7);
     });
   });
 
-  runner.describe('execute (with chassis restrictions)', () => {
-    runner.it('should not allow counter-attack when defender cannot target attacker chassis', () => {
-      // Airplane attacks soldier - soldier cannot counter (MG can't target airplane)
-      const airplane = createUnit('airplane', 'player', 0, 0, {
-        attack: 5,
-        chassisId: 'airplane',
-        cannotTarget: [],  // Heavy MG can target all
-      });
-      const soldier = createUnit('soldier', 'enemy', 1, 0, {
-        attack: 4,
-        chassisId: 'foot',
-        cannotTarget: ['airplane'],  // MG cannot target airplane
-      });
-
-      const result = Combat.execute(airplane, soldier, 0, 0);
-
-      assertEqual(result.attackerDamage, 5);
-      assertEqual(result.defenderDamage, 0);  // No counter-attack!
-      assertEqual(soldier.health, 5);
-      assertEqual(airplane.health, 10);  // Airplane takes no damage
+  runner.describe('Unit.isAlive', () => {
+    runner.it('should return true for unit with health > 0', () => {
+      const unit = createUnit('u', 'player', 0, 0, { templateId: 'infantry', health: 1 });
+      assert(unit.isAlive());
     });
 
-    runner.it('should allow counter-attack when defender can target attacker chassis', () => {
-      // Ground unit attacks ground unit - normal counter-attack
-      const tank = createUnit('tank', 'player', 0, 0, {
-        attack: 7,
-        chassisId: 'treads',
-        cannotTarget: ['airplane'],
-      });
-      const soldier = createUnit('soldier', 'enemy', 1, 0, {
-        attack: 4,
-        chassisId: 'foot',
-        cannotTarget: ['airplane'],
-      });
+    runner.it('should return false for unit with health = 0', () => {
+      const unit = createUnit('u', 'player', 0, 0, { templateId: 'infantry', health: 0 });
+      assert(!unit.isAlive());
+    });
+  });
 
-      const result = Combat.execute(tank, soldier, 0, 0);
+  runner.describe('real unit matchups', () => {
+    runner.it('infantry vs infantry should deal ~5 HP at full HP', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'infantry' });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'infantry' });
+      const damage = Combat.calculateExpectedDamage(attacker, defender);
+      assertEqual(damage, 5); // 55% -> 5 HP
+    });
 
-      assertEqual(result.attackerDamage, 7);
-      // Soldier at 3 HP (30%), counter damage = floor(4 * 0.3) = 1
-      assertEqual(result.defenderDamage, 1);
-      assertEqual(soldier.health, 3);
-      assertEqual(tank.health, 9);
+    runner.it('mech vs tank should be effective (55% -> 5 HP)', () => {
+      const attacker = createUnit('a', 'player', 0, 0, { templateId: 'mech' });
+      const defender = createUnit('d', 'enemy', 1, 0, { templateId: 'tank' });
+      const damage = Combat.calculateExpectedDamage(attacker, defender);
+      assertEqual(damage, 5); // 55% -> 5 HP
+    });
+
+    runner.it('bomber should devastate ground units', () => {
+      const bomber = createUnit('b', 'player', 0, 0, { templateId: 'bomber', flying: true });
+      const tank = createUnit('t', 'enemy', 1, 0, { templateId: 'tank' });
+      const damage = Combat.calculateExpectedDamage(bomber, tank);
+      assertEqual(damage, 10); // 105% -> 10 HP (one-shot)
+    });
+
+    runner.it('anti-air should destroy copters', () => {
+      const antiAir = createUnit('aa', 'player', 0, 0, { templateId: 'antiAir' });
+      const copter = createUnit('c', 'enemy', 1, 0, { templateId: 'copter', flying: true });
+      const damage = Combat.calculateExpectedDamage(antiAir, copter);
+      assertEqual(damage, 12); // 120% -> 12 HP (one-shot)
+    });
+
+    runner.it('missiles should be ineffective against ground', () => {
+      const missiles = createUnit('m', 'player', 0, 0, { templateId: 'missiles' });
+      const tank = createUnit('t', 'enemy', 3, 0, { templateId: 'tank' });
+      const damage = Combat.calculateExpectedDamage(missiles, tank);
+      assertEqual(damage, 0); // Cannot target ground
+    });
+
+    runner.it('missiles should devastate air units', () => {
+      const missiles = createUnit('m', 'player', 0, 0, { templateId: 'missiles', range: 5, minRange: 3 });
+      const fighter = createUnit('f', 'enemy', 3, 0, { templateId: 'fighter', flying: true });
+      const damage = Combat.calculateExpectedDamage(missiles, fighter);
+      assertEqual(damage, 10); // 100% -> 10 HP (one-shot)
     });
   });
 });

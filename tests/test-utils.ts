@@ -3,7 +3,7 @@
 // ============================================================================
 // Common helpers for tests to avoid duplication and ensure tests use real game logic.
 
-import { TEAM_COLORS, TERRAIN_DEFENSE_STARS } from '../src/core.js';
+import { TERRAIN_DEFENSE_STARS } from '../src/core.js';
 import { type Building, createBuilding, type BuildingType } from '../src/building.js';
 import { Unit } from '../src/unit.js';
 import { Combat } from '../src/combat.js';
@@ -13,10 +13,9 @@ import { type AIAction } from '../src/ai/actions.js';
 import { type AIController } from '../src/ai/controller.js';
 import { type AIGameState } from '../src/ai/game-state.js';
 import {
-  initTeamTemplates,
+  initTeamUnits,
   getTeamTemplates,
   getTeamTemplate,
-  getTemplate,
 } from '../src/unit-templates.js';
 
 // ============================================================================
@@ -106,7 +105,7 @@ export class TestGame {
     this.resources = new ResourceManager(teams);
 
     for (const team of teams) {
-      initTeamTemplates(team);
+      initTeamUnits(team);
     }
   }
 
@@ -115,28 +114,7 @@ export class TestGame {
   }
 
   addUnit(team: string, q: number, r: number, templateId: string = 'infantry'): Unit {
-    // Try team-specific template first, fall back to default templates
-    const template = getTeamTemplate(team, templateId) ?? getTemplate(templateId);
-    if (!template) {
-      throw new Error(`Template ${templateId} not found for team ${team}`);
-    }
-    const unit = new Unit(
-      `${templateId}_${this.nextUnitId++}`,
-      team,
-      q,
-      r,
-      {
-        speed: template.speed,
-        attack: template.attack,
-        range: template.range,
-        terrainCosts: template.terrainCosts,
-        color: TEAM_COLORS[team]?.unitColor ?? '#ffffff',
-        canCapture: template.canCapture,
-        canBuild: template.canBuild,
-        armored: template.armored,
-        armorPiercing: template.armorPiercing,
-      }
-    );
+    const unit = new Unit(`${templateId}_${this.nextUnitId++}`, team, q, r, templateId);
     this.units.push(unit);
     return unit;
   }

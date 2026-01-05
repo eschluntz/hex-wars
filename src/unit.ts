@@ -4,53 +4,25 @@
 
 import { DEFAULT_TERRAIN_COSTS, type AxialCoord, type TerrainCosts } from './core.js';
 import { type GameMap } from './pathfinder.js';
+import { getUnitType } from './unit-templates.js';
 
 // Coordinate value for units inside a carrier (obviously invalid map position)
 export const CARRIED_COORD = -9999;
 
+/** Stats for creating units with custom properties (mainly for tests) */
 export interface UnitStats {
-  speed: number;
-  attack: number;
-  range: number;
-  minRange: number;
-  canMoveAndAttack: boolean;
-  terrainCosts: TerrainCosts;
-  color: string;
-  canCapture: boolean;
-  canBuild: boolean;
-  armored: boolean;
-  armorPiercing: boolean;
+  speed?: number;
+  range?: number;
+  minRange?: number;
+  canMoveAndAttack?: boolean;
+  terrainCosts?: TerrainCosts;
+  canCapture?: boolean;
+  canBuild?: boolean;
   flying?: boolean;
-  chassisId?: string;
-  weaponId?: string;
-  systemIds?: string[];
   transportCapacity?: number;
   transportFilter?: string[];
-  cannotTarget?: string[];
-  templateId?: string;  // Unit type ID for sprite lookup
+  templateId?: string;
 }
-
-const DEFAULT_STATS: UnitStats = {
-  speed: 4,
-  attack: 5,
-  range: 1,
-  minRange: 0,
-  canMoveAndAttack: true,
-  terrainCosts: DEFAULT_TERRAIN_COSTS,
-  color: '#ffffff',
-  canCapture: false,
-  canBuild: false,
-  armored: false,
-  armorPiercing: false,
-  flying: false,
-  chassisId: undefined,
-  weaponId: undefined,
-  systemIds: [],
-  transportCapacity: 0,
-  transportFilter: [],
-  cannotTarget: [],
-  templateId: undefined,
-};
 
 export class Unit {
   id: string;
@@ -58,23 +30,15 @@ export class Unit {
   q: number;
   r: number;
   speed: number;
-  attack: number;
   range: number;
   minRange: number;
   canMoveAndAttack: boolean;
   health: number;
   terrainCosts: TerrainCosts;
-  color: string;
   canCapture: boolean;
   canBuild: boolean;
-  armored: boolean;
-  armorPiercing: boolean;
   flying: boolean;
-  chassisId: string | undefined;
-  weaponId: string | undefined;
-  systemIds: string[];
-  cannotTarget: string[];
-  templateId: string | undefined;  // Unit type ID for sprite lookup
+  templateId: string;
   hasActed: boolean = false;
   // Transport properties
   cargo: Unit[] = [];
@@ -82,31 +46,50 @@ export class Unit {
   transportFilter: string[] = [];
   carriedBy: Unit | null = null;
 
-  constructor(id: string, team: string, q: number, r: number, stats: Partial<UnitStats> = {}) {
+  /** Create a unit from a template ID (e.g., 'infantry', 'tank') */
+  constructor(id: string, team: string, q: number, r: number, templateId: string) {
+    const template = getUnitType(templateId);
     this.id = id;
     this.team = team;
     this.q = q;
     this.r = r;
-    this.speed = stats.speed ?? DEFAULT_STATS.speed;
-    this.attack = stats.attack ?? DEFAULT_STATS.attack;
-    this.range = stats.range ?? DEFAULT_STATS.range;
-    this.minRange = stats.minRange ?? DEFAULT_STATS.minRange;
-    this.canMoveAndAttack = stats.canMoveAndAttack ?? DEFAULT_STATS.canMoveAndAttack;
+    this.templateId = templateId;
+    this.speed = template.speed;
+    this.range = template.range;
+    this.minRange = template.minRange;
+    this.canMoveAndAttack = template.canMoveAndAttack;
     this.health = 10;
-    this.terrainCosts = stats.terrainCosts ?? DEFAULT_STATS.terrainCosts;
-    this.color = stats.color ?? DEFAULT_STATS.color;
-    this.canCapture = stats.canCapture ?? DEFAULT_STATS.canCapture;
-    this.canBuild = stats.canBuild ?? DEFAULT_STATS.canBuild;
-    this.armored = stats.armored ?? DEFAULT_STATS.armored;
-    this.armorPiercing = stats.armorPiercing ?? DEFAULT_STATS.armorPiercing;
-    this.flying = stats.flying ?? DEFAULT_STATS.flying ?? false;
-    this.chassisId = stats.chassisId ?? DEFAULT_STATS.chassisId;
-    this.weaponId = stats.weaponId ?? DEFAULT_STATS.weaponId;
-    this.systemIds = stats.systemIds ?? DEFAULT_STATS.systemIds ?? [];
-    this.transportCapacity = stats.transportCapacity ?? DEFAULT_STATS.transportCapacity ?? 0;
-    this.transportFilter = stats.transportFilter ?? DEFAULT_STATS.transportFilter ?? [];
-    this.cannotTarget = stats.cannotTarget ?? DEFAULT_STATS.cannotTarget ?? [];
-    this.templateId = stats.templateId ?? DEFAULT_STATS.templateId;
+    this.terrainCosts = template.terrainCosts;
+    this.canCapture = template.canCapture;
+    this.canBuild = template.canBuild;
+    this.flying = template.flying;
+    this.transportCapacity = template.transportCapacity;
+    this.transportFilter = template.transportFilter;
+  }
+
+  /** Create a unit with custom stats (for tests) */
+  static withStats(id: string, team: string, q: number, r: number, stats: UnitStats): Unit {
+    const unit = Object.create(Unit.prototype) as Unit;
+    unit.id = id;
+    unit.team = team;
+    unit.q = q;
+    unit.r = r;
+    unit.templateId = stats.templateId ?? 'infantry';
+    unit.speed = stats.speed ?? 4;
+    unit.range = stats.range ?? 1;
+    unit.minRange = stats.minRange ?? 0;
+    unit.canMoveAndAttack = stats.canMoveAndAttack ?? true;
+    unit.health = 10;
+    unit.terrainCosts = stats.terrainCosts ?? DEFAULT_TERRAIN_COSTS;
+    unit.canCapture = stats.canCapture ?? false;
+    unit.canBuild = stats.canBuild ?? false;
+    unit.flying = stats.flying ?? false;
+    unit.transportCapacity = stats.transportCapacity ?? 0;
+    unit.transportFilter = stats.transportFilter ?? [];
+    unit.hasActed = false;
+    unit.cargo = [];
+    unit.carriedBy = null;
+    return unit;
   }
 
   isAlive(): boolean {
@@ -148,9 +131,9 @@ export class Unit {
     if (unit.canTransport()) return false;
     // Cannot load if already being carried
     if (unit.carriedBy !== null) return false;
-    // Check chassis filter (empty filter = any allowed)
-    if (this.transportFilter.length > 0 && unit.chassisId) {
-      if (!this.transportFilter.includes(unit.chassisId)) return false;
+    // Check transport filter by templateId (empty filter = any allowed)
+    if (this.transportFilter.length > 0 && unit.templateId) {
+      if (!this.transportFilter.includes(unit.templateId)) return false;
     }
     return true;
   }

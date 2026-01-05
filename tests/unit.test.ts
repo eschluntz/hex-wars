@@ -15,47 +15,40 @@ runner.describe('Unit', () => {
 
   runner.describe('Initialization', () => {
 
-    runner.it('should initialize with correct position and stats', () => {
-      const unit = new Unit('test1', TEST_TEAM, 5, 3, { speed: 4, attack: 6, range: 2 });
+    runner.it('should initialize with correct position and stats from template', () => {
+      const unit = new Unit('test1', TEST_TEAM, 5, 3, 'infantry');
 
       assertEqual(unit.id, 'test1');
       assertEqual(unit.team, TEST_TEAM);
       assertEqual(unit.q, 5);
       assertEqual(unit.r, 3);
-      assertEqual(unit.speed, 4);
-      assertEqual(unit.attack, 6);
-      assertEqual(unit.range, 2);
-      assertEqual(unit.health, 10);
-    });
-
-    runner.it('should use default stats when not specified', () => {
-      const unit = new Unit('test2', TEST_TEAM, 0, 0);
-
-      assertEqual(unit.speed, 4);
-      assertEqual(unit.attack, 5);
+      assertEqual(unit.speed, 3); // infantry speed
       assertEqual(unit.range, 1);
       assertEqual(unit.health, 10);
-      assertEqual(unit.color, '#ffffff');
+      assertEqual(unit.templateId, 'infantry');
     });
 
-    runner.it('should accept custom color', () => {
-      const unit = new Unit('test3', TEST_TEAM, 0, 0, { color: '#ff0000' });
-      assertEqual(unit.color, '#ff0000');
+    runner.it('should create unit with custom stats via withStats', () => {
+      const unit = Unit.withStats('test2', TEST_TEAM, 0, 0, { speed: 10, range: 5 });
+
+      assertEqual(unit.speed, 10);
+      assertEqual(unit.range, 5);
+      assertEqual(unit.health, 10);
     });
 
     runner.it('should start with hasActed as false', () => {
-      const unit = new Unit('test4', TEST_TEAM, 0, 0);
+      const unit = new Unit('test4', TEST_TEAM, 0, 0, 'infantry');
       assertEqual(unit.hasActed, false);
     });
 
-    runner.it('should default canCapture to false', () => {
-      const unit = new Unit('test5', TEST_TEAM, 0, 0);
-      assertEqual(unit.canCapture, false);
+    runner.it('infantry template should have canCapture true', () => {
+      const unit = new Unit('infantry', TEST_TEAM, 0, 0, 'infantry');
+      assertEqual(unit.canCapture, true);
     });
 
-    runner.it('should accept canCapture in stats', () => {
-      const unit = new Unit('infantry', TEST_TEAM, 0, 0, { canCapture: true });
-      assertEqual(unit.canCapture, true);
+    runner.it('tank template should have canCapture false', () => {
+      const unit = new Unit('tank', TEST_TEAM, 0, 0, 'tank');
+      assertEqual(unit.canCapture, false);
     });
 
   });
@@ -63,13 +56,13 @@ runner.describe('Unit', () => {
   runner.describe('isAlive', () => {
 
     runner.it('should return true when health > 0', () => {
-      const unit = new Unit('test', TEST_TEAM, 0, 0);
+      const unit = new Unit('test', TEST_TEAM, 0, 0, 'infantry');
       unit.health = 5;
       assert(unit.isAlive());
     });
 
     runner.it('should return false when health = 0', () => {
-      const unit = new Unit('test', TEST_TEAM, 0, 0);
+      const unit = new Unit('test', TEST_TEAM, 0, 0, 'infantry');
       unit.health = 0;
       assert(!unit.isAlive());
     });
@@ -81,7 +74,7 @@ runner.describe('Unit', () => {
     runner.it('should return correct index for path within speed', () => {
       const map = createTestMap(['GGGGG']);
       const pathfinder = new Pathfinder(map);
-      const unit = new Unit('test', TEST_TEAM, 0, 0, { speed: 4 });
+      const unit = Unit.withStats('test', TEST_TEAM, 0, 0, { speed: 4 });
 
       const result = pathfinder.findPath(0, 0, 4, 0, unit.terrainCosts);
       const reachable = unit.getReachableIndex(result!.path, map);
@@ -92,7 +85,7 @@ runner.describe('Unit', () => {
     runner.it('should stop at speed limit', () => {
       const map = createTestMap(['GGGGGGGG']);
       const pathfinder = new Pathfinder(map);
-      const unit = new Unit('test', TEST_TEAM, 0, 0, { speed: 3 });
+      const unit = Unit.withStats('test', TEST_TEAM, 0, 0, { speed: 3 });
 
       const result = pathfinder.findPath(0, 0, 7, 0, unit.terrainCosts);
       const reachable = unit.getReachableIndex(result!.path, map);
@@ -103,7 +96,7 @@ runner.describe('Unit', () => {
     runner.it('should account for road terrain (0.5 cost)', () => {
       const map = createTestMap(['RRRRRRRR']);
       const pathfinder = new Pathfinder(map);
-      const unit = new Unit('test', TEST_TEAM, 0, 0, { speed: 2 });
+      const unit = Unit.withStats('test', TEST_TEAM, 0, 0, { speed: 2 });
 
       const result = pathfinder.findPath(0, 0, 7, 0, unit.terrainCosts);
       const reachable = unit.getReachableIndex(result!.path, map);
@@ -114,7 +107,7 @@ runner.describe('Unit', () => {
     runner.it('should account for woods terrain (1.5 cost)', () => {
       const map = createTestMap(['FFFFFFFF']);
       const pathfinder = new Pathfinder(map);
-      const unit = new Unit('test', TEST_TEAM, 0, 0, { speed: 3 });
+      const unit = Unit.withStats('test', TEST_TEAM, 0, 0, { speed: 3 });
 
       const result = pathfinder.findPath(0, 0, 7, 0, unit.terrainCosts);
       const reachable = unit.getReachableIndex(result!.path, map);
@@ -125,7 +118,7 @@ runner.describe('Unit', () => {
     runner.it('should handle mixed terrain', () => {
       const map = createTestMap(['RRGGFF']);
       const pathfinder = new Pathfinder(map);
-      const unit = new Unit('test', TEST_TEAM, 0, 0, { speed: 3 });
+      const unit = Unit.withStats('test', TEST_TEAM, 0, 0, { speed: 3 });
 
       const result = pathfinder.findPath(0, 0, 5, 0, unit.terrainCosts);
       const reachable = unit.getReachableIndex(result!.path, map);
@@ -137,7 +130,7 @@ runner.describe('Unit', () => {
     runner.it('should skip occupied tiles when determining reachable', () => {
       const map = createTestMap(['GGGGG']);
       const pathfinder = new Pathfinder(map);
-      const unit = new Unit('test', TEST_TEAM, 0, 0, { speed: 4 });
+      const unit = Unit.withStats('test', TEST_TEAM, 0, 0, { speed: 4 });
 
       const result = pathfinder.findPath(0, 0, 4, 0, unit.terrainCosts);
       const occupied = new Set(['2,0']); // Tile at index 2 is occupied
@@ -151,7 +144,7 @@ runner.describe('Unit', () => {
     runner.it('should stop before occupied tile if not enough movement to pass', () => {
       const map = createTestMap(['GGGGG']);
       const pathfinder = new Pathfinder(map);
-      const unit = new Unit('test', TEST_TEAM, 0, 0, { speed: 2 });
+      const unit = Unit.withStats('test', TEST_TEAM, 0, 0, { speed: 2 });
 
       const result = pathfinder.findPath(0, 0, 4, 0, unit.terrainCosts);
       const occupied = new Set(['2,0']); // Tile at index 2 is occupied
@@ -165,7 +158,7 @@ runner.describe('Unit', () => {
     runner.it('should return 0 for zero speed', () => {
       const map = createTestMap(['GGG']);
       const pathfinder = new Pathfinder(map);
-      const unit = new Unit('test', TEST_TEAM, 0, 0, { speed: 0 });
+      const unit = Unit.withStats('test', TEST_TEAM, 0, 0, { speed: 0 });
 
       const result = pathfinder.findPath(0, 0, 2, 0, unit.terrainCosts);
       const reachable = unit.getReachableIndex(result!.path, map);
@@ -183,14 +176,14 @@ runner.describe('Unit', () => {
         water: 1
       };
 
-      const unit = new Unit('hover', TEST_TEAM, 0, 0, { terrainCosts: hoverCosts });
+      const unit = Unit.withStats('hover', TEST_TEAM, 0, 0, { terrainCosts: hoverCosts });
 
       assertEqual(unit.terrainCosts.water, 1);
       assertEqual(unit.terrainCosts.grass, 1);
     });
 
     runner.it('should use default terrain costs when not specified', () => {
-      const unit = new Unit('normal', TEST_TEAM, 0, 0);
+      const unit = Unit.withStats('normal', TEST_TEAM, 0, 0, {});
 
       assertEqual(unit.terrainCosts.water, Infinity);
       assertEqual(unit.terrainCosts.mountain, Infinity);
@@ -206,7 +199,7 @@ runner.describe('Unit', () => {
         water: 1
       };
 
-      const unit = new Unit('hover', TEST_TEAM, 0, 0, { speed: 4, terrainCosts: hoverCosts });
+      const unit = Unit.withStats('hover', TEST_TEAM, 0, 0, { speed: 4, terrainCosts: hoverCosts });
       const result = pathfinder.findPath(0, 0, 4, 0, unit.terrainCosts);
 
       assert(result !== null, 'Hover unit should find path through water');
@@ -217,7 +210,7 @@ runner.describe('Unit', () => {
       const map = createTestMap(['GWWWG']);
       const pathfinder = new Pathfinder(map);
 
-      const unit = new Unit('normal', TEST_TEAM, 0, 0, { speed: 4 });
+      const unit = Unit.withStats('normal', TEST_TEAM, 0, 0, { speed: 4 });
       const result = pathfinder.findPath(0, 0, 4, 0, unit.terrainCosts);
 
       assert(result === null, 'Normal unit should not find path through water');
@@ -232,7 +225,7 @@ runner.describe('Unit', () => {
         mountain: 2
       };
 
-      const unit = new Unit('climber', TEST_TEAM, 0, 0, { speed: 8, terrainCosts: mountainCosts });
+      const unit = Unit.withStats('climber', TEST_TEAM, 0, 0, { speed: 8, terrainCosts: mountainCosts });
       const result = pathfinder.findPath(0, 0, 4, 0, unit.terrainCosts);
 
       assert(result !== null, 'Mountain unit should find path');
@@ -250,13 +243,13 @@ runner.describe('Unit', () => {
       };
 
       // Normal unit: speed 3, woods cost 1.5 = reaches 2 tiles
-      const normalUnit = new Unit('normal', TEST_TEAM, 0, 0, { speed: 3 });
+      const normalUnit = Unit.withStats('normal', TEST_TEAM, 0, 0, { speed: 3 });
       const normalResult = pathfinder.findPath(0, 0, 4, 0, normalUnit.terrainCosts);
       const normalReachable = normalUnit.getReachableIndex(normalResult!.path, map);
       assertEqual(normalReachable, 2);
 
       // Ranger: speed 3, woods cost 0.5 = reaches all 4 tiles (cost 2)
-      const ranger = new Unit('ranger', TEST_TEAM, 0, 0, { speed: 3, terrainCosts: rangerCosts });
+      const ranger = Unit.withStats('ranger', TEST_TEAM, 0, 0, { speed: 3, terrainCosts: rangerCosts });
       const rangerResult = pathfinder.findPath(0, 0, 4, 0, ranger.terrainCosts);
       const rangerReachable = ranger.getReachableIndex(rangerResult!.path, map);
       assertEqual(rangerReachable, 4);

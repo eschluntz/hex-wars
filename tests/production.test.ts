@@ -9,9 +9,9 @@ import {
   getAllUnitTypes,
   getUnitType,
   getUnlockedUnitTypes,
-  getTemplateStats,
   DEFAULT_UNLOCKED_UNITS,
 } from '../src/unit-templates.js';
+import { Unit } from '../src/unit.js';
 
 const runner = new TestRunner();
 
@@ -34,10 +34,8 @@ runner.describe('Unit Templates', () => {
         assert(typeof template.name === 'string');
         assert(typeof template.cost === 'number' && template.cost > 0);
         assert(typeof template.speed === 'number' && template.speed > 0);
-        assert(typeof template.attack === 'number' && template.attack >= 0);
         assert(typeof template.range === 'number' && template.range >= 0);
-        assert(typeof template.armored === 'boolean');
-        assert(typeof template.armorPiercing === 'boolean');
+        assert(typeof template.flying === 'boolean');
         assert(template.terrainCosts !== undefined);
       }
     });
@@ -57,49 +55,6 @@ runner.describe('Unit Templates', () => {
   // ==========================================================================
   // Template properties (game rules, not balance)
   // ==========================================================================
-
-  runner.describe('template armor/AP properties', () => {
-    runner.it('infantry should not be armored and not have AP', () => {
-      const infantry = getUnitType('infantry');
-      assertEqual(infantry.armored, false);
-      assertEqual(infantry.armorPiercing, false);
-    });
-
-    runner.it('tank should be armored and have AP', () => {
-      const tank = getUnitType('tank');
-      assertEqual(tank.armored, true);
-      assertEqual(tank.armorPiercing, true);
-    });
-
-    runner.it('recon should not be armored and not have AP', () => {
-      const recon = getUnitType('recon');
-      assertEqual(recon.armored, false);
-      assertEqual(recon.armorPiercing, false);
-    });
-  });
-
-  runner.describe('template components', () => {
-    runner.it('infantry should be foot + machineGun + capture', () => {
-      const infantry = getUnitType('infantry');
-      assertEqual(infantry.chassisId, 'foot');
-      assertEqual(infantry.weaponId, 'machineGun');
-      assert(infantry.systemIds.includes('capture'));
-    });
-
-    runner.it('tank should be treads + cannon + armor', () => {
-      const tank = getUnitType('tank');
-      assertEqual(tank.chassisId, 'treads');
-      assertEqual(tank.weaponId, 'cannon');
-      assert(tank.systemIds.includes('armor'));
-    });
-
-    runner.it('recon should be wheels + machineGun (no systems)', () => {
-      const recon = getUnitType('recon');
-      assertEqual(recon.chassisId, 'wheels');
-      assertEqual(recon.weaponId, 'machineGun');
-      assertEqual(recon.systemIds.length, 0);
-    });
-  });
 
   // ==========================================================================
   // Template lookup
@@ -157,25 +112,22 @@ runner.describe('Unit Templates', () => {
   });
 
   // ==========================================================================
-  // Template stats extraction
+  // Unit constructor from templateId
   // ==========================================================================
 
-  runner.describe('getTemplateStats', () => {
-    runner.it('should return all required stats', () => {
+  runner.describe('Unit constructor', () => {
+    runner.it('should create unit with correct template stats', () => {
       const infantry = getUnitType('infantry');
-      const stats = getTemplateStats(infantry);
+      const unit = new Unit('test', 'player', 0, 0, 'infantry');
 
-      assertEqual(stats.speed, infantry.speed);
-      assertEqual(stats.attack, infantry.attack);
-      assertEqual(stats.range, infantry.range);
-      assertEqual(stats.minRange, infantry.minRange);
-      assertEqual(stats.canMoveAndAttack, infantry.canMoveAndAttack);
-      assertEqual(stats.canCapture, infantry.canCapture);
-      assertEqual(stats.canBuild, infantry.canBuild);
-      assertEqual(stats.armored, infantry.armored);
-      assertEqual(stats.armorPiercing, infantry.armorPiercing);
-      assertEqual(stats.flying, infantry.flying);
-      assertEqual(stats.chassisId, infantry.chassisId);
+      assertEqual(unit.speed, infantry.speed);
+      assertEqual(unit.range, infantry.range);
+      assertEqual(unit.minRange, infantry.minRange);
+      assertEqual(unit.canMoveAndAttack, infantry.canMoveAndAttack);
+      assertEqual(unit.canCapture, infantry.canCapture);
+      assertEqual(unit.canBuild, infantry.canBuild);
+      assertEqual(unit.flying, infantry.flying);
+      assertEqual(unit.templateId, infantry.id);
     });
   });
 
@@ -188,12 +140,6 @@ runner.describe('Unit Templates', () => {
       const infantry = getUnitType('infantry');
       const tank = getUnitType('tank');
       assert(infantry.cost < tank.cost);
-    });
-
-    runner.it('tank should have higher attack than infantry', () => {
-      const infantry = getUnitType('infantry');
-      const tank = getUnitType('tank');
-      assert(tank.attack > infantry.attack);
     });
 
     runner.it('recon should be faster than infantry', () => {
@@ -272,46 +218,23 @@ runner.describe('Unit Templates', () => {
   });
 
   runner.describe('transport ability', () => {
-    runner.it('apc should be able to transport foot units', () => {
+    runner.it('apc should be able to transport infantry and mech', () => {
       const apc = getUnitType('apc');
       assert(apc.transportCapacity > 0, 'APC should have transport capacity');
-      assert(apc.transportFilter.includes('foot'), 'APC should transport foot units');
+      assert(apc.transportFilter.includes('infantry'), 'APC should transport infantry');
+      assert(apc.transportFilter.includes('mech'), 'APC should transport mech');
     });
 
-    runner.it('transport copter should be able to transport foot units', () => {
+    runner.it('transport copter should be able to transport infantry and mech', () => {
       const tCopter = getUnitType('transportCopter');
       assert(tCopter.transportCapacity > 0, 'T-Copter should have transport capacity');
-      assert(tCopter.transportFilter.includes('foot'), 'T-Copter should transport foot units');
+      assert(tCopter.transportFilter.includes('infantry'), 'T-Copter should transport infantry');
+      assert(tCopter.transportFilter.includes('mech'), 'T-Copter should transport mech');
     });
 
-    runner.it('transport units should have no attack', () => {
-      assertEqual(getUnitType('apc').attack, 0);
-      assertEqual(getUnitType('transportCopter').attack, 0);
-    });
-  });
-
-  runner.describe('targeting restrictions', () => {
-    runner.it('infantry should not be able to target airplanes', () => {
-      const infantry = getUnitType('infantry');
-      assert(infantry.cannotTarget.includes('airplane'), 'Infantry cannot target airplanes');
-    });
-
-    runner.it('fighter should only target air units', () => {
-      const fighter = getUnitType('fighter');
-      assert(fighter.cannotTarget.includes('foot'));
-      assert(fighter.cannotTarget.includes('wheels'));
-      assert(fighter.cannotTarget.includes('treads'));
-    });
-
-    runner.it('bomber should only target ground units', () => {
-      const bomber = getUnitType('bomber');
-      assert(bomber.cannotTarget.includes('airplane'));
-      assert(bomber.cannotTarget.includes('helicopter'));
-    });
-
-    runner.it('anti-air should target everything', () => {
-      const antiAir = getUnitType('antiAir');
-      assertEqual(antiAir.cannotTarget.length, 0);
+    runner.it('transport units should have zero range (unarmed)', () => {
+      assertEqual(getUnitType('apc').range, 0);
+      assertEqual(getUnitType('transportCopter').range, 0);
     });
   });
 

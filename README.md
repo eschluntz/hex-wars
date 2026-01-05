@@ -19,34 +19,33 @@ A turn-based hex strategy game inspired by Advance Wars. Clean, satisfying tacti
 ## Unit Roster (Advance Wars style)
 
 All 15 unit types available at factories:
-
-| Unit | Type | Cost | Move | Attack | Range | Special |
-|------|------|------|------|--------|-------|---------|
-| Infantry | Foot | $1000 | 3 | 4 | 1 | Capture, climbs mountains (cost 2) |
-| Mech | Foot | $3000 | 2 | 6 | 1 | Capture, AP, mountain specialist (cost 1) |
-| Recon | Wheels | $4000 | 8 | 4 | 1 | Fast scout |
-| Tank | Treads | $7000 | 6 | 7 | 1 | AP, Armored |
-| Md. Tank | Treads | $16000 | 5 | 8 | 1 | AP, Armored |
-| Mega Tank | Treads | $28000 | 4 | 10 | 1 | AP, Armored |
-| Artillery | Treads | $6000 | 5 | 5 | 2-3 | Indirect, no move+attack |
-| Rockets | Wheels | $15000 | 5 | 8 | 3-5 | Indirect, no move+attack |
-| Anti-Air | Treads | $8000 | 6 | 6 | 1 | Targets all (anti-air) |
-| Missiles | Wheels | $12000 | 4 | 9 | 3-5 | Anti-air only, indirect |
-| APC | Treads | $5000 | 6 | 0 | 0 | Transport (1 foot unit) |
-| Fighter | Air | $20000 | 9 | 8 | 1 | Air-to-air only |
-| Bomber | Air | $22000 | 7 | 10 | 1 | Ground only |
-| B-Copter | Air | $9000 | 6 | 6 | 1 | All targets |
-| T-Copter | Air | $5000 | 6 | 0 | 0 | Transport (1 foot unit) |
+| Unit      | Cost    | Move | Attack | Range | Special                        |
+|-----------|---------|------|--------|-------|--------------------------------|
+| Infantry  | $1000   | 3    | 4      | 1     | Capture, climbs mountains      |
+| Mech      | $3000   | 2    | 6      | 1     | Capture, AP, mountain climber  |
+| Recon     | $4000   | 8    | 4      | 1     | Fast scout                     |
+| Tank      | $7000   | 6    | 7      | 1     | AP, Armored                    |
+| Md. Tank  | $16000  | 5    | 8      | 1     | AP, Armored                    |
+| Mega Tank | $28000  | 4    | 10     | 1     | AP, Armored                    |
+| Artillery | $6000   | 5    | 5      | 2-3   | Indirect, no move+attack       |
+| Rockets   | $15000  | 5    | 8      | 3-5   | Indirect, no move+attack       |
+| Anti-Air  | $8000   | 6    | 6      | 1     | Targets all (anti-air)         |
+| Missiles  | $12000  | 4    | 9      | 3-5   | Anti-air only, indirect        |
+| APC       | $5000   | 6    | 0      | 0     | Transport (Infantry/Mech)      |
+| Fighter   | $20000  | 9    | 8      | 1     | Air-to-air only, flying        |
+| Bomber    | $22000  | 7    | 10     | 1     | Ground only, flying            |
+| B-Copter  | $9000   | 6    | 6      | 1     | All targets, flying            |
+| T-Copter  | $5000   | 6    | 0      | 0     | Transport (Infantry/Mech)      |
 
 ### Terrain Movement Costs
 
-| Terrain | Infantry | Mech | Treads | Wheels | Air |
-|---------|----------|------|--------|--------|-----|
-| Plains | 1 | 1 | 1 | 2 | 1 |
-| Woods | 1 | 1 | 2 | 3 | 1 |
-| Mountain | 2 | 1 | — | — | 1 |
-| Road | 1 | 1 | 1 | 1 | 1 |
-| Water | — | — | — | — | 1 |
+| Terrain  | Infantry | Mech | Treads | Wheels | Air |
+|----------|----------|------|--------|--------|-----|
+| Plains   | 1        | 1    | 1      | 2      | 1   |
+| Woods    | 1        | 1    | 2      | 3      | 1   |
+| Mountain | 2        | 1    | —      | —      | 1   |
+| Road     | 1        | 1    | 1      | 1      | 1   |
+| Water    | —        | —    | —      | —      | 1   |
 
 ### Combat System
 
@@ -78,7 +77,7 @@ Capture the enemy's capital to win instantly.
 - Resistance resets if capturing unit leaves or dies
 
 ### Transport Units
-- APC and T-Copter carry 1 foot unit
+- APC and T-Copter carry 1 Infantry or Mech unit
 - Select transport, move, then "Unload" to adjacent passable tile
 - Cargo destroyed if transport is destroyed
 
@@ -121,7 +120,7 @@ hex-dominion/
 │   ├── menu.ts           # Main menu / game over
 │   ├── stats.ts          # Game statistics
 │   └── main.ts           # Game loop and state machine
-├── tests/                # Test suite (242 tests)
+├── tests/                # Test suite (206 tests)
 ├── hex_assets/           # Terrain textures
 ├── unit_assets/          # Unit sprites
 └── index.html
@@ -133,7 +132,7 @@ hex-dominion/
 npm run watch      # Build + serve with auto-rebuild
 npm run build      # One-time build
 npm run typecheck  # Check types
-npm test           # Run unit tests (242 tests)
+npm test           # Run unit tests (206 tests)
 npm run test:e2e   # Run Playwright e2e tests
 ```
 
@@ -152,6 +151,9 @@ The tests automatically start the dev server (`npm run watch`) before running. R
 ## Assets
 - Terrain: https://dgbaumgart.itch.io/hex-and-tile-terrain-sample-set
 - Units: [Advance Wars sprite style](https://awbw.fandom.com/wiki/Units)
+- Advance Wars damage calculation: https://awbw.fandom.com/wiki/Damage_Formula
+
+
 
 ## Roadmap
 
@@ -170,7 +172,7 @@ The tests automatically start the dev server (`npm run watch`) before running. R
 - [x] cities heal
 
 ### Upcoming
-- [ ] balance actually attack values from AW
+- [x] balance actually attack values from AW
 - [ ] make smaller maps
 - [ ] metagame basics
 - [ ] Saving and loading games

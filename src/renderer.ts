@@ -281,7 +281,7 @@ export class Renderer {
     const ctx = this.ctx;
     const size = CONFIG.hexSize * zoom * 0.5;
     const isSelected = this.selectedUnit === unit;
-    const baseColor = unit.color;
+    const baseColor = TEAM_COLORS[unit.team]?.unitColor ?? '#ffffff';
     const hasActed = unit.hasActed;
 
     // Get combat animation visual state
@@ -962,7 +962,7 @@ export class Renderer {
       label: t.name,
       action: `build_${t.id}`,
       cost: t.cost,
-      stats: `ATK:${t.attack} SPD:${t.speed}`,
+      stats: `RNG:${t.range} SPD:${t.speed}`,
       enabled: this.resources.funds >= t.cost,
     }));
 
@@ -1061,22 +1061,19 @@ export class Renderer {
 
     // Basic stats line
     let statsLine = `${label}: <span style="color: ${teamColor}">${u.id.toUpperCase()}</span> (${teamName})`;
-    statsLine += ` | HP: ${u.health}/10 | ATK: ${u.attack} | RNG: ${u.range} | SPD: ${u.speed}`;
+    statsLine += ` | HP: ${u.health}/10 | RNG: ${u.range} | SPD: ${u.speed}`;
     lines.push(statsLine);
 
-    // Armor/AP indicators
+    // Unit traits
     const traits: string[] = [];
-    if (u.armored) {
-      traits.push('<span style="color: #64b5f6">ARMORED</span>');
-    }
-    if (u.armorPiercing) {
-      traits.push('<span style="color: #ffb74d">ARMOR-PIERCING</span>');
-    }
     if (u.canCapture) {
       traits.push('<span style="color: #81c784">CAN CAPTURE</span>');
     }
     if (u.transportCapacity > 0) {
       traits.push(`<span style="color: #2196f3">TRANSPORT (${u.transportCapacity})</span>`);
+    }
+    if (u.flying) {
+      traits.push('<span style="color: #90caf9">FLYING</span>');
     }
 
     if (traits.length > 0) {
@@ -1092,11 +1089,11 @@ export class Renderer {
       } else {
         lines.push(`<span style="color: #2196f3">Cargo: empty (${u.transportCapacity} slots)</span>`);
       }
-      // Show compatible chassis types
+      // Show compatible unit types
       if (u.transportFilter.length > 0) {
         lines.push(`<span style="color: #81c784">Accepts: ${u.transportFilter.join(', ')}</span>`);
       } else {
-        lines.push(`<span style="color: #81c784">Accepts: any chassis</span>`);
+        lines.push(`<span style="color: #81c784">Accepts: any unit</span>`);
       }
     }
 

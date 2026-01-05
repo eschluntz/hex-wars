@@ -3,7 +3,6 @@
 // ============================================================================
 // Handles execution of AI actions during the AI's turn.
 
-import { TEAM_COLORS } from './core.js';
 import { CONFIG } from './config.js';
 import { Unit } from './unit.js';
 import { type AIAction } from './ai/actions.js';
@@ -14,7 +13,7 @@ import { type Pathfinder } from './pathfinder.js';
 import { type GameMap } from './game-map.js';
 import { type ResourceManager } from './resources.js';
 import { type Building } from './building.js';
-import { getTeamTemplate, getTeamTemplates, getTemplateStats } from './unit-templates.js';
+import { getTeamTemplate, getTeamTemplates } from './unit-templates.js';
 import { COMBAT_ANIMATION_DURATION } from './combat-animator.js';
 
 /**
@@ -218,7 +217,7 @@ export class AITurnExecutor {
           currentTeam,
           action.factoryQ,
           action.factoryR,
-          { ...getTemplateStats(template), color: TEAM_COLORS[currentTeam]!.unitColor }
+          template.id
         );
         unit.hasActed = true;
         ops.addUnit(unit);

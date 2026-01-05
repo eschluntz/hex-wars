@@ -2,7 +2,7 @@
 // HEX DOMINION - Main Entry Point
 // ============================================================================
 
-import { HexUtil, TEAM_COLORS, type AxialCoord } from './core.js';
+import { HexUtil, type AxialCoord } from './core.js';
 import { GEN_PARAMS, CONFIG, MAP_CONFIGS, rerollNormalSeed, getNormalSeed } from './config.js';
 import { GameMap } from './game-map.js';
 import { Viewport } from './viewport.js';
@@ -12,11 +12,9 @@ import { Pathfinder } from './pathfinder.js';
 import { Combat } from './combat.js';
 import { type Building, createBuilding } from './building.js';
 import {
-  getTemplate,
   getTeamTemplates,
   getTeamTemplate,
-  getTemplateStats,
-  initTeamTemplates,
+  initTeamUnits,
 } from './unit-templates.js';
 import { ResourceManager } from './resources.js';
 import { GameStats } from './stats.js';
@@ -233,8 +231,8 @@ class Game {
     this.resources.addFunds(TEAMS.ENEMY, 5000);
 
     // Initialize per-team unit templates (with default unlocked units)
-    initTeamTemplates(TEAMS.PLAYER);
-    initTeamTemplates(TEAMS.ENEMY);
+    initTeamUnits(TEAMS.PLAYER);
+    initTeamUnits(TEAMS.ENEMY);
 
     // Setup based on map type
     // Small map gets manual setup with test units; normal map starts with just home bases
@@ -306,41 +304,15 @@ class Game {
     this.map.addBuilding(createBuilding(8, centerR - 1, 'city', TEAMS.ENEMY));
 
     // Spawn one infantry each
-    const infantryTemplate = getTemplate('infantry');
-    const infantryStats = getTemplateStats(infantryTemplate);
-
-    this.units.push(new Unit(`infantry_${this.nextUnitId++}`, TEAMS.PLAYER, 3, centerR, {
-      ...infantryStats,
-      color: TEAM_COLORS[TEAMS.PLAYER]!.unitColor,
-    }));
-
-    this.units.push(new Unit(`infantry_${this.nextUnitId++}`, TEAMS.ENEMY, 6, centerR, {
-      ...infantryStats,
-      color: TEAM_COLORS[TEAMS.ENEMY]!.unitColor,
-    }));
+    this.units.push(new Unit(`infantry_${this.nextUnitId++}`, TEAMS.PLAYER, 3, centerR, 'infantry'));
+    this.units.push(new Unit(`infantry_${this.nextUnitId++}`, TEAMS.ENEMY, 6, centerR, 'infantry'));
 
     // Add copter for enemy (air unit that infantry can't target)
-    const copterTemplate = getTemplate('copter');
-    const copterStats = getTemplateStats(copterTemplate);
-    this.units.push(new Unit(`copter_${this.nextUnitId++}`, TEAMS.ENEMY, 6, centerR - 1, {
-      ...copterStats,
-      color: TEAM_COLORS[TEAMS.ENEMY]!.unitColor,
-    }));
+    this.units.push(new Unit(`copter_${this.nextUnitId++}`, TEAMS.ENEMY, 6, centerR - 1, 'copter'));
 
     // Add vehicles for player
-    const apcTemplate = getTemplate('apc');
-    const apcStats = getTemplateStats(apcTemplate);
-    this.units.push(new Unit(`apc_${this.nextUnitId++}`, TEAMS.PLAYER, 2, centerR + 1, {
-      ...apcStats,
-      color: TEAM_COLORS[TEAMS.PLAYER]!.unitColor,
-    }));
-
-    const tankTemplate = getTemplate('tank');
-    const tankStats = getTemplateStats(tankTemplate);
-    this.units.push(new Unit(`tank_${this.nextUnitId++}`, TEAMS.PLAYER, 2, centerR - 1, {
-      ...tankStats,
-      color: TEAM_COLORS[TEAMS.PLAYER]!.unitColor,
-    }));
+    this.units.push(new Unit(`apc_${this.nextUnitId++}`, TEAMS.PLAYER, 2, centerR + 1, 'apc'));
+    this.units.push(new Unit(`tank_${this.nextUnitId++}`, TEAMS.PLAYER, 2, centerR - 1, 'tank'));
 
     // Terrain defense test setup along top row (row 1)
     // Set up specific terrain types for testing
@@ -349,32 +321,14 @@ class Game {
     this.map.setTile(7, 1, 'mountain');  // 4 stars defense
 
     // Enemy infantry on defensive terrain
-    this.units.push(new Unit(`infantry_city_${this.nextUnitId++}`, TEAMS.ENEMY, 3, 1, {
-      ...infantryStats,
-      color: TEAM_COLORS[TEAMS.ENEMY]!.unitColor,
-    }));
-    this.units.push(new Unit(`infantry_woods_${this.nextUnitId++}`, TEAMS.ENEMY, 5, 1, {
-      ...infantryStats,
-      color: TEAM_COLORS[TEAMS.ENEMY]!.unitColor,
-    }));
-    this.units.push(new Unit(`infantry_mountain_${this.nextUnitId++}`, TEAMS.ENEMY, 7, 1, {
-      ...infantryStats,
-      color: TEAM_COLORS[TEAMS.ENEMY]!.unitColor,
-    }));
+    this.units.push(new Unit(`infantry_city_${this.nextUnitId++}`, TEAMS.ENEMY, 3, 1, 'infantry'));
+    this.units.push(new Unit(`infantry_woods_${this.nextUnitId++}`, TEAMS.ENEMY, 5, 1, 'infantry'));
+    this.units.push(new Unit(`infantry_mountain_${this.nextUnitId++}`, TEAMS.ENEMY, 7, 1, 'infantry'));
 
     // Player infantry adjacent (on grass - 1 star defense)
-    this.units.push(new Unit(`infantry_vs_city_${this.nextUnitId++}`, TEAMS.PLAYER, 2, 1, {
-      ...infantryStats,
-      color: TEAM_COLORS[TEAMS.PLAYER]!.unitColor,
-    }));
-    this.units.push(new Unit(`infantry_vs_woods_${this.nextUnitId++}`, TEAMS.PLAYER, 4, 1, {
-      ...infantryStats,
-      color: TEAM_COLORS[TEAMS.PLAYER]!.unitColor,
-    }));
-    this.units.push(new Unit(`infantry_vs_mountain_${this.nextUnitId++}`, TEAMS.PLAYER, 6, 1, {
-      ...infantryStats,
-      color: TEAM_COLORS[TEAMS.PLAYER]!.unitColor,
-    }));
+    this.units.push(new Unit(`infantry_vs_city_${this.nextUnitId++}`, TEAMS.PLAYER, 2, 1, 'infantry'));
+    this.units.push(new Unit(`infantry_vs_woods_${this.nextUnitId++}`, TEAMS.PLAYER, 4, 1, 'infantry'));
+    this.units.push(new Unit(`infantry_vs_mountain_${this.nextUnitId++}`, TEAMS.PLAYER, 6, 1, 'infantry'));
 
     console.log('Small map setup: capitals, factories, cities + units for testing (enemy has airplane, terrain defense test units at top)');
   }
@@ -949,7 +903,7 @@ class Game {
         this.currentTeam,
         factory.q,
         factory.r,
-        { ...getTemplateStats(template), color: TEAM_COLORS[this.currentTeam]!.unitColor }
+        template.id
       );
       unit.hasActed = true; // New units can't act this turn
       this.units.push(unit);

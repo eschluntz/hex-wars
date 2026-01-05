@@ -4,67 +4,52 @@
 
 import { TestRunner, assert, assertEqual } from './framework.js';
 import { Unit, CARRIED_COORD } from '../src/unit.js';
-import { DEFAULT_TERRAIN_COSTS } from '../src/core.js';
 import { GameStats } from '../src/stats.js';
 
 const runner = new TestRunner();
 
 function createUnit(id: string, team: string, q: number, r: number, overrides: Partial<{
-  chassisId: string;
+  templateId: string;
   transportCapacity: number;
   transportFilter: string[];
-  health: number;
-  attack: number;
-  range: number;
 }> = {}): Unit {
-  return new Unit(id, team, q, r, {
-    speed: 4,
-    attack: overrides.attack ?? 5,
-    range: overrides.range ?? 1,
-    minRange: 0,
-    canMoveAndAttack: true,
-    terrainCosts: DEFAULT_TERRAIN_COSTS,
-    color: '#ff0000',
-    canCapture: false,
-    canBuild: false,
-    armored: false,
-    armorPiercing: false,
-    chassisId: overrides.chassisId ?? 'foot',
+  return Unit.withStats(id, team, q, r, {
+    templateId: overrides.templateId ?? 'infantry',
     transportCapacity: overrides.transportCapacity ?? 0,
     transportFilter: overrides.transportFilter ?? [],
   });
 }
 
 function createCarrier(id: string, team: string, capacity: number, filter: string[] = []): Unit {
-  return createUnit(id, team, 0, 0, {
-    chassisId: 'treads',
+  return Unit.withStats(id, team, 0, 0, {
+    templateId: 'apc',
     transportCapacity: capacity,
     transportFilter: filter,
   });
 }
 
 runner.describe('canLoadUnit', () => {
-  runner.it('should reject unit with wrong chassis type for filtered transport', () => {
-    const carrier = createCarrier('carrier', 'player', 1, ['foot']);
-    const treadsUnit = createUnit('tank', 'player', 0, 0, { chassisId: 'treads' });
+  runner.it('should reject unit with wrong type for filtered transport', () => {
+    const carrier = createCarrier('carrier', 'player', 1, ['infantry', 'mech']);
+    const tankUnit = createUnit('tank', 'player', 0, 0, { templateId: 'tank' });
 
-    assertEqual(carrier.canLoadUnit(treadsUnit), false);
+    assertEqual(carrier.canLoadUnit(tankUnit), false);
   });
 
-  runner.it('should accept unit with matching chassis type for filtered transport', () => {
-    const carrier = createCarrier('carrier', 'player', 1, ['foot']);
-    const footUnit = createUnit('soldier', 'player', 0, 0, { chassisId: 'foot' });
+  runner.it('should accept unit with matching type for filtered transport', () => {
+    const carrier = createCarrier('carrier', 'player', 1, ['infantry', 'mech']);
+    const infantryUnit = createUnit('soldier', 'player', 0, 0, { templateId: 'infantry' });
 
-    assertEqual(carrier.canLoadUnit(footUnit), true);
+    assertEqual(carrier.canLoadUnit(infantryUnit), true);
   });
 
-  runner.it('should accept any chassis when filter is empty', () => {
+  runner.it('should accept any unit type when filter is empty', () => {
     const carrier = createCarrier('carrier', 'player', 2, []);
-    const treadsUnit = createUnit('tank', 'player', 0, 0, { chassisId: 'treads' });
-    const footUnit = createUnit('soldier', 'player', 0, 0, { chassisId: 'foot' });
+    const tankUnit = createUnit('tank', 'player', 0, 0, { templateId: 'tank' });
+    const infantryUnit = createUnit('soldier', 'player', 0, 0, { templateId: 'infantry' });
 
-    assertEqual(carrier.canLoadUnit(treadsUnit), true);
-    assertEqual(carrier.canLoadUnit(footUnit), true);
+    assertEqual(carrier.canLoadUnit(tankUnit), true);
+    assertEqual(carrier.canLoadUnit(infantryUnit), true);
   });
 
   runner.it('should reject loading a transport onto another transport', () => {
@@ -77,7 +62,7 @@ runner.describe('canLoadUnit', () => {
   runner.it('should reject unit already being carried', () => {
     const carrier1 = createCarrier('carrier1', 'player', 2, []);
     const carrier2 = createCarrier('carrier2', 'player', 2, []);
-    const cargo = createUnit('cargo', 'player', 0, 0, { chassisId: 'foot' });
+    const cargo = createUnit('cargo', 'player', 0, 0, { templateId: 'infantry' });
 
     carrier1.loadUnit(cargo);
     assertEqual(carrier2.canLoadUnit(cargo), false);
@@ -85,15 +70,15 @@ runner.describe('canLoadUnit', () => {
 
   runner.it('should reject enemy units', () => {
     const carrier = createCarrier('carrier', 'player', 2, []);
-    const enemy = createUnit('enemy', 'enemy', 0, 0, { chassisId: 'foot' });
+    const enemy = createUnit('enemy', 'enemy', 0, 0, { templateId: 'infantry' });
 
     assertEqual(carrier.canLoadUnit(enemy), false);
   });
 
   runner.it('should reject when at capacity', () => {
     const carrier = createCarrier('carrier', 'player', 1, []);
-    const unit1 = createUnit('unit1', 'player', 0, 0, { chassisId: 'foot' });
-    const unit2 = createUnit('unit2', 'player', 0, 0, { chassisId: 'foot' });
+    const unit1 = createUnit('unit1', 'player', 0, 0, { templateId: 'infantry' });
+    const unit2 = createUnit('unit2', 'player', 0, 0, { templateId: 'infantry' });
 
     carrier.loadUnit(unit1);
     assertEqual(carrier.canLoadUnit(unit2), false);
@@ -103,8 +88,8 @@ runner.describe('canLoadUnit', () => {
 runner.describe('cargo death cascade', () => {
   runner.it('should kill all cargo when carrier dies', () => {
     const carrier = createCarrier('carrier', 'player', 2, []);
-    const cargo1 = createUnit('cargo1', 'player', 0, 0, { chassisId: 'foot' });
-    const cargo2 = createUnit('cargo2', 'player', 0, 0, { chassisId: 'foot' });
+    const cargo1 = createUnit('cargo1', 'player', 0, 0, { templateId: 'infantry' });
+    const cargo2 = createUnit('cargo2', 'player', 0, 0, { templateId: 'infantry' });
 
     carrier.loadUnit(cargo1);
     carrier.loadUnit(cargo2);
@@ -126,8 +111,8 @@ runner.describe('cargo death cascade', () => {
   runner.it('should credit kills for each cargo unit when carrier dies', () => {
     const stats = new GameStats(['player', 'enemy']);
     const carrier = createCarrier('carrier', 'player', 2, []);
-    const cargo1 = createUnit('cargo1', 'player', 0, 0, { chassisId: 'foot' });
-    const cargo2 = createUnit('cargo2', 'player', 0, 0, { chassisId: 'foot' });
+    const cargo1 = createUnit('cargo1', 'player', 0, 0, { templateId: 'infantry' });
+    const cargo2 = createUnit('cargo2', 'player', 0, 0, { templateId: 'infantry' });
 
     carrier.loadUnit(cargo1);
     carrier.loadUnit(cargo2);
@@ -147,7 +132,7 @@ runner.describe('cargo death cascade', () => {
 runner.describe('cargo visibility', () => {
   runner.it('cargo units should have carriedBy set after loading', () => {
     const carrier = createCarrier('carrier', 'player', 1, []);
-    const cargo = createUnit('cargo', 'player', 0, 0, { chassisId: 'foot' });
+    const cargo = createUnit('cargo', 'player', 0, 0, { templateId: 'infantry' });
 
     carrier.loadUnit(cargo);
 
@@ -156,7 +141,7 @@ runner.describe('cargo visibility', () => {
 
   runner.it('cargo units should have invalid coordinates after loading', () => {
     const carrier = createCarrier('carrier', 'player', 1, []);
-    const cargo = createUnit('cargo', 'player', 5, 3, { chassisId: 'foot' });
+    const cargo = createUnit('cargo', 'player', 5, 3, { templateId: 'infantry' });
 
     carrier.loadUnit(cargo);
 
@@ -166,7 +151,7 @@ runner.describe('cargo visibility', () => {
 
   runner.it('carriedBy should be null after unloading', () => {
     const carrier = createCarrier('carrier', 'player', 1, []);
-    const cargo = createUnit('cargo', 'player', 0, 0, { chassisId: 'foot' });
+    const cargo = createUnit('cargo', 'player', 0, 0, { templateId: 'infantry' });
 
     carrier.loadUnit(cargo);
     carrier.unloadUnit(cargo, 1, 1);
@@ -176,9 +161,9 @@ runner.describe('cargo visibility', () => {
 
   runner.it('filtering by carriedBy correctly excludes cargo', () => {
     const carrier = createCarrier('carrier', 'player', 2, []);
-    const cargo1 = createUnit('cargo1', 'player', 0, 0, { chassisId: 'foot' });
-    const cargo2 = createUnit('cargo2', 'player', 0, 0, { chassisId: 'foot' });
-    const freeUnit = createUnit('free', 'player', 1, 1, { chassisId: 'foot' });
+    const cargo1 = createUnit('cargo1', 'player', 0, 0, { templateId: 'infantry' });
+    const cargo2 = createUnit('cargo2', 'player', 0, 0, { templateId: 'infantry' });
+    const freeUnit = createUnit('free', 'player', 1, 1, { templateId: 'infantry' });
 
     carrier.loadUnit(cargo1);
     carrier.loadUnit(cargo2);
@@ -197,7 +182,7 @@ runner.describe('cargo visibility', () => {
 runner.describe('unload behavior', () => {
   runner.it('unloaded unit should have hasActed = true', () => {
     const carrier = createCarrier('carrier', 'player', 1, []);
-    const cargo = createUnit('cargo', 'player', 0, 0, { chassisId: 'foot' });
+    const cargo = createUnit('cargo', 'player', 0, 0, { templateId: 'infantry' });
     cargo.hasActed = false;
 
     carrier.loadUnit(cargo);
@@ -208,7 +193,7 @@ runner.describe('unload behavior', () => {
 
   runner.it('unloaded unit should be at specified position', () => {
     const carrier = createCarrier('carrier', 'player', 1);
-    const cargo = createUnit('cargo', 'player', 0, 0, { chassisId: 'foot' });
+    const cargo = createUnit('cargo', 'player', 0, 0, { templateId: 'infantry' });
 
     carrier.loadUnit(cargo);
     carrier.unloadUnit(cargo, 5, 3);
