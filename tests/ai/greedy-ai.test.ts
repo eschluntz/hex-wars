@@ -15,6 +15,26 @@ import { ResourceManager } from '../../src/resources.js';
 
 const runner = new TestRunner();
 
+// Helper to create a basic UnitTemplate
+function createTemplate(id: string, cost: number, overrides: Partial<UnitTemplate> = {}): UnitTemplate {
+  return {
+    id,
+    name: id.charAt(0).toUpperCase() + id.slice(1),
+    cost,
+    speed: 4,
+    range: 1,
+    minRange: 0,
+    canMoveAndAttack: true,
+    terrainCosts: DEFAULT_TERRAIN_COSTS,
+    flying: false,
+    canCapture: true,
+    canBuild: false,
+    transportCapacity: 0,
+    transportFilter: [],
+    ...overrides,
+  };
+}
+
 // Helper to create a Unit
 function createUnit(
   id: string,
@@ -258,25 +278,10 @@ runner.describe('GreedyAI', () => {
     runner.it('should build units at unoccupied factories', () => {
       const ai = new GreedyAI();
       const factory = createBuilding(0, 0, 'factory', 'enemy');
-      const template: UnitTemplate = {
-        id: 'infantry',
-        name: 'Infantry',
-                cost: 500,
-        speed: 4,
-        range: 1,
-        minRange: 0,
-        canMoveAndAttack: true,
-        terrainCosts: DEFAULT_TERRAIN_COSTS,
-        flying: false,
-        canCapture: true,
-        canBuild: false,
-        transportCapacity: 0,
-        transportFilter: [],
-      };
 
       const state = createMockState({
         buildings: [factory],
-        templates: [template],
+        templates: [createTemplate('infantry', 500)],
         resources: { funds: 1000 },
       });
 
@@ -295,26 +300,11 @@ runner.describe('GreedyAI', () => {
       const ai = new GreedyAI();
       const factory = createBuilding(0, 0, 'factory', 'enemy');
       const occupyingUnit = createUnit('existing', 'enemy', 0, 0);
-      const template: UnitTemplate = {
-        id: 'infantry',
-        name: 'Infantry',
-                cost: 500,
-        speed: 4,
-        range: 1,
-        minRange: 0,
-        canMoveAndAttack: true,
-        terrainCosts: DEFAULT_TERRAIN_COSTS,
-        flying: false,
-        canCapture: true,
-        canBuild: false,
-        transportCapacity: 0,
-        transportFilter: [],
-      };
 
       const state = createMockState({
         units: [occupyingUnit],
         buildings: [factory],
-        templates: [template],
+        templates: [createTemplate('infantry', 500)],
         resources: { funds: 1000 },
       });
 
@@ -327,25 +317,10 @@ runner.describe('GreedyAI', () => {
     runner.it('should not build when cannot afford', () => {
       const ai = new GreedyAI();
       const factory = createBuilding(0, 0, 'factory', 'enemy');
-      const template: UnitTemplate = {
-        id: 'infantry',
-        name: 'Infantry',
-                cost: 500,
-        speed: 4,
-        range: 1,
-        minRange: 0,
-        canMoveAndAttack: true,
-        terrainCosts: DEFAULT_TERRAIN_COSTS,
-        flying: false,
-        canCapture: true,
-        canBuild: false,
-        transportCapacity: 0,
-        transportFilter: [],
-      };
 
       const state = createMockState({
         buildings: [factory],
-        templates: [template],
+        templates: [createTemplate('infantry', 500)],
         resources: { funds: 100 }, // Not enough funds
       });
 

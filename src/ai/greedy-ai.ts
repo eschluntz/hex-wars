@@ -62,6 +62,10 @@ export class GreedyAI implements AIController {
 
     let availableFunds = resources.funds;
 
+    // Count infantry for early-game capture priority
+    const infantryCount = state.units.filter(u => u.team === team && u.isAlive() && u.templateId === 'infantry').length;
+    const needsInfantry = infantryCount < 3;
+
     for (const factory of sortedFactories) {
       // Check if factory hex is occupied
       const unitAtFactory = state.units.find(u => u.q === factory.q && u.r === factory.r && u.isAlive());
@@ -73,8 +77,9 @@ export class GreedyAI implements AIController {
         .sort((a, b) => a.cost - b.cost);
 
       if (affordableTemplates.length > 0) {
-        // Pick a random affordable template (with bias toward variety)
-        const template = pickRandomTemplate(affordableTemplates);
+        // Prioritize infantry if we have fewer than 3, otherwise pick randomly
+        const template = (needsInfantry && affordableTemplates.find(t => t.id === 'infantry'))
+          || pickRandomTemplate(affordableTemplates);
         actions.push({
           type: 'build',
           factoryQ: factory.q,
@@ -121,6 +126,28 @@ export class GreedyAI implements AIController {
       blocked,
       occupied
     );
+
+    // Priority 1.5: Move off friendly factory to not block production
+    if (building && building.type === 'factory' && building.owner === team) {
+      const moveTarget = this.findMoveTarget(state, team, unit, reachable, claimedPositions);
+      if (moveTarget && (moveTarget.q !== unit.q || moveTarget.r !== unit.r)) {
+        actions.push({
+          type: 'move',
+          unitId: unit.id,
+          targetQ: moveTarget.q,
+          targetR: moveTarget.r
+        });
+        claimedPositions.add(`${moveTarget.q},${moveTarget.r}`);
+        // Check if we landed on a capturable building
+        const targetBuilding = state.map.getBuilding(moveTarget.q, moveTarget.r);
+        if (targetBuilding && targetBuilding.owner !== team && unit.canCapture) {
+          actions.push({ type: 'capture', unitId: unit.id });
+        } else {
+          actions.push({ type: 'wait', unitId: unit.id });
+        }
+        return actions;
+      }
+    }
 
     // Priority 2: Move to capture a building if in range
     if (unit.canCapture) {

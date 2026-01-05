@@ -170,11 +170,15 @@ The tests automatically start the dev server (`npm run watch`) before running. R
 - [x] Battle animations
 - [x] movement animations
 - [x] cities heal
+- [x] balance actually attack values from AW
+- [x] basic AI improvements (smarter unit composition, factory blocking)
 
 ### Upcoming
-- [x] balance actually attack values from AW
 - [ ] make smaller maps
 - [ ] metagame basics
 - [ ] Saving and loading games
-- [ ] AI improvements (smarter unit composition, factory blocking)
+- [ ] better AI
+    - [ ] can use transports
+    - [ ] will block opponent factories
+    - [ ] reactive unit composition
 - [ ] Fog of war (maybe)
