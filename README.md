@@ -133,8 +133,21 @@ hex-dominion/
 npm run watch      # Build + serve with auto-rebuild
 npm run build      # One-time build
 npm run typecheck  # Check types
-npm test           # Run tests (242 tests)
+npm test           # Run unit tests (242 tests)
+npm run test:e2e   # Run Playwright e2e tests
 ```
+
+### E2E Tests
+
+End-to-end tests use Playwright to run the game in a real browser. Tests are in `tests/e2e/` and use custom fixtures (`fixtures.ts`) for game-specific helpers:
+
+- `clickHex(page, q, r)` - Click on a hex at axial coordinates
+- `waitForGameState(page, state)` - Wait for game state machine to reach a state
+- `getUnitAt(page, q, r)` - Query unit at a position
+- `getFunds(page, team)` - Get a team's current funds
+- `startSmallMap(page)` - Navigate and start a new small map game
+
+The tests automatically start the dev server (`npm run watch`) before running. Results are available as an HTML report.
 
 ## Assets
 - Terrain: https://dgbaumgart.itch.io/hex-and-tile-terrain-sample-set
@@ -154,9 +167,10 @@ npm test           # Run tests (242 tests)
 - [x] Unit sprites with team coloring
 - [x] Battle animations
 - [x] movement animations
+- [x] cities heal
 
 ### Upcoming
-- [x] cities heal
+- [ ] balance actually attack values from AW
 - [ ] make smaller maps
 - [ ] metagame basics
 - [ ] Saving and loading games

@@ -8,6 +8,7 @@
     "watch": "esbuild src/main.ts --bundle --outfile=dist/bundle.js --watch --servedir=.",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx test.ts",
+    "test:e2e": "playwright test",
     "render-maps": "node --import tsx scripts/render-maps.ts"
   },
   "keywords": [
@@ -18,6 +19,7 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "esbuild": "0.27.1",
     "tsx": "4.21.0",
     "typescript": "5.9.3"

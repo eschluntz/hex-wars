@@ -1375,6 +1375,28 @@ class Game {
     return { attackableTiles, minRangeTiles };
   }
 
+  // --- Testing API ---
+
+  /** Get current game state for testing */
+  getState(): GameState {
+    return this.state;
+  }
+
+  /** Get viewport for coordinate conversion */
+  getViewport(): Viewport {
+    return this.viewport;
+  }
+
+  /** Get unit at position for testing */
+  testGetUnitAt(q: number, r: number): Unit | undefined {
+    return this.getUnitAt(q, r);
+  }
+
+  /** Get funds for a team */
+  getFunds(team: string): number {
+    return this.resources.getResources(team).funds;
+  }
+
   // --- Game loop ---
 
   private computeTeamFacing(): void {
@@ -1442,4 +1464,9 @@ class Game {
   };
 }
 
-new Game();
+const game = new Game();
+
+// Expose game instance for testing
+if (typeof window !== 'undefined') {
+  (window as any).game = game;
+}
