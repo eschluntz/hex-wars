@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { HexUtil, type AxialCoord } from './core.js';
-import { GEN_PARAMS, CONFIG, MAP_CONFIGS, rerollNormalSeed, getNormalSeed } from './config.js';
+import { GEN_PARAMS, CONFIG, MAP_CONFIGS, rerollNormalSeed, getNormalSeed, type MapConfig } from './config.js';
 import { GameMap } from './game-map.js';
 import { Viewport } from './viewport.js';
 import { Renderer } from './renderer.js';
@@ -23,7 +23,7 @@ import { InputHandler } from './input.js';
 import { AnimationController } from './animation.js';
 import { type Player, type PlayerConfig } from './player.js';
 import { createAI } from './ai/registry.js';
-import { loadTextures } from './textures.js';
+import { loadTextures, clearTileTextureCache } from './textures.js';
 import { CombatAnimator, COUNTER_ATTACK_HEALTH_DELAY } from './combat-animator.js';
 import { AITurnExecutor, type AIGameOperations } from './ai-turn-executor.js';
 import { CampaignUI } from './campaign-ui.js';
@@ -36,7 +36,12 @@ import {
   completeCell,
   loseReinforcement,
   isCampaignOver,
+  getCampaignBattleSeed,
+  getCampaignCellPreset,
 } from './campaign-state.js';
+import { presetToMapConfig } from './map-presets.js';
+import { MapLabController } from './map-lab.js';
+import { validateMap } from './map-validation.js';
 
 const TEAMS = {
   PLAYER: 'player',
@@ -88,6 +93,9 @@ class Game {
   private debugWinBtn: HTMLButtonElement | null = null;
   private debugLoseBtn: HTMLButtonElement | null = null;
 
+  // Map Lab
+  private mapLabController: MapLabController | null = null;
+
   constructor() {
     this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
     this.ctx = this.canvas.getContext('2d')!;
@@ -120,7 +128,20 @@ class Game {
     this.setupInputHandler();
     this.resize();
     window.addEventListener('resize', () => this.resize());
+
+    // Initialize Map Lab if ?maplab query param is present
+    if (MapLabController.isEnabled()) {
+      this.initMapLab();
+    }
+
     this.loop();
+  }
+
+  private initMapLab(): void {
+    this.mapLabController = new MapLabController({
+      onGenerateMap: (config) => this.startNewGameWithConfig(config)
+    });
+    this.mapLabController.init();
   }
 
   private setupInputHandler(): void {
@@ -218,6 +239,7 @@ class Game {
   }
 
   private startNewGame(mapType: string = 'normal', playerConfigs?: PlayerConfig[], skipCenterViewport: boolean = false): void {
+    clearTileTextureCache();
     this.currentMapType = mapType;
     this.currentPlayerConfigs = playerConfigs ?? [
       { id: TEAMS.PLAYER, name: 'Player', type: 'human' },
@@ -293,6 +315,86 @@ class Game {
 
     // Show turn announcement and trigger AI if needed
     this.startTurn();
+  }
+
+  /**
+   * Start a new game with a specific MapConfig (used by Map Lab and campaign)
+   */
+  private startNewGameWithConfig(config: MapConfig, playerConfigs?: PlayerConfig[], skipCenterViewport: boolean = false): void {
+    clearTileTextureCache();
+    this.currentMapType = 'custom';
+    this.currentPlayerConfigs = playerConfigs ?? [
+      { id: TEAMS.PLAYER, name: 'Player', type: 'human' },
+      { id: TEAMS.ENEMY, name: 'Enemy AI', type: 'ai', aiType: 'greedy' }
+    ];
+
+    this.map = new GameMap(config);
+    this.viewport = new Viewport(this.canvas);
+    this.inputHandler.updateViewport(this.viewport);
+    this.pathfinder = new Pathfinder(this.map);
+    this.renderer = new Renderer(this.canvas, this.map, this.viewport);
+    this.resources = new ResourceManager([TEAMS.PLAYER, TEAMS.ENEMY]);
+    this.gameStats = new GameStats([TEAMS.PLAYER, TEAMS.ENEMY]);
+    this.animationController = new AnimationController(
+      this.renderer,
+      this.viewport,
+      () => this.inputHandler.isSpacebarHeld()
+    );
+    this.combatAnimator = new CombatAnimator();
+    this.renderer.setCombatAnimator(this.combatAnimator);
+    this.aiTurnExecutor = new AITurnExecutor(
+      this.animationController,
+      this.pathfinder,
+      this.map,
+      this.resources
+    );
+
+    // Reset game state
+    this.units = [];
+    this.state = { type: 'idle' };
+    this.lastPreviewHex = null;
+    this.currentTeam = TEAMS.PLAYER;
+    this.turnNumber = 1;
+    this.nextUnitId = 1;
+    this.gameOverData = null;
+    this.isAITurnInProgress = false;
+
+    // Initialize players
+    this.players = this.initializePlayers(this.currentPlayerConfigs);
+
+    // Give starting resources
+    this.resources.addFunds(TEAMS.PLAYER, 5000);
+    this.resources.addFunds(TEAMS.ENEMY, 5000);
+
+    // Initialize per-team unit templates (with default unlocked units)
+    initTeamUnits(TEAMS.PLAYER);
+    initTeamUnits(TEAMS.ENEMY);
+
+    // Determine team facing direction based on building positions
+    this.computeTeamFacing();
+
+    // Collect initial income for player (first turn)
+    this.collectIncome(TEAMS.PLAYER);
+
+    if (!skipCenterViewport) {
+      this.centerViewportForConfig(config);
+    }
+    this.gamePhase = 'playing';
+
+    // Show UI elements during game
+    const infoEl = document.getElementById('coords');
+    const hudEl = document.getElementById('hud');
+    if (infoEl) infoEl.style.display = 'block';
+    if (hudEl) hudEl.style.display = 'block';
+
+    // Show turn announcement and trigger AI if needed
+    this.startTurn();
+  }
+
+  private centerViewportForConfig(config: MapConfig): void {
+    const centerQ = Math.floor(config.width / 2);
+    const centerR = Math.floor(config.height / 2);
+    this.viewport.centerOn(centerQ, centerR);
   }
 
   private initializePlayers(configs: PlayerConfig[]): Player[] {
@@ -642,7 +744,7 @@ class Game {
       this.executeAITurn();
     } else {
       // Player turn: automatically cycle to first unit
-      this.cycleToNextActive();
+      this.cycleToNextActive(true);
     }
   }
 
@@ -732,14 +834,42 @@ class Game {
     // Hide campaign UI
     this.campaignUI.hide();
 
-    // Start a normal map battle
-    // TODO: In the future, cell type could influence map generation
+    // Get the preset and seed for this cell
+    const campaignSeed = this.campaignState!.campaignSeed;
+    const preset = getCampaignCellPreset(cell, campaignSeed);
+    const baseSeed = getCampaignBattleSeed(cell.id, campaignSeed);
+
+    console.log(`Cell ${cell.id}: preset=${preset.name}, seed=${baseSeed}`);
+
+    // Generate map with validation, retry with different salt if invalid
+    let mapConfig: MapConfig;
+    let attempts = 0;
+    const maxAttempts = 10;
+
+    while (attempts < maxAttempts) {
+      const seed = baseSeed + attempts;
+      mapConfig = presetToMapConfig(preset, seed);
+      const testMap = new GameMap(mapConfig);
+      const validation = validateMap(testMap);
+
+      if (validation.valid) {
+        console.log(`Map valid on attempt ${attempts + 1}`);
+        break;
+      }
+
+      console.log(`Map invalid on attempt ${attempts + 1}, retrying...`);
+      attempts++;
+    }
+
+    // Use the last attempt even if invalid (better than no map)
+    mapConfig = presetToMapConfig(preset, baseSeed + attempts);
+
     const playerConfigs: PlayerConfig[] = [
       { id: TEAMS.PLAYER, name: 'Player', type: 'human' },
       { id: TEAMS.ENEMY, name: 'Enemy AI', type: 'ai', aiType: 'greedy' }
     ];
 
-    this.startNewGame('normal', playerConfigs);
+    this.startNewGameWithConfig(mapConfig, playerConfigs);
 
     // Override player's available units with campaign unlocks
     if (this.campaignState) {
@@ -845,7 +975,7 @@ class Game {
     return this.units.filter(u => u.team === this.currentTeam && u.isAlive() && u.carriedBy === null).length;
   }
 
-  private cycleToNextActive(): void {
+  private cycleToNextActive(autoTriggered: boolean = false): void {
     // If a unit is selected, move to current tile (show action menu)
     if (this.state.type === 'selected') {
       const unit = this.state.unit;
@@ -876,6 +1006,11 @@ class Game {
     }
 
     // No active units - find available factory (no unit blocking it)
+    // Skip auto-opening factory on turn 1 so player can orient themselves first
+    if (autoTriggered && this.turnNumber === 1) {
+      return;
+    }
+
     const factories = this.map.getAllBuildings().filter(
       b => b.type === 'factory' && b.owner === this.currentTeam
     );

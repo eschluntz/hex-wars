@@ -171,6 +171,9 @@ export class GameMap {
 
     // Step 1: Generate clusters using Mitchell's Best-Candidate algorithm
     // This naturally fills corners and gaps by always picking the point farthest from existing clusters
+    // Use dynamic margin based on map size (at least 1, at most 5)
+    const margin = Math.max(1, Math.min(5, Math.floor(Math.min(width, height) * 0.15)));
+
     while (true) {
       const numCandidates = clusterCfg.candidatesPerCluster;
       let bestQ = 0, bestR = 0;
@@ -178,9 +181,9 @@ export class GameMap {
 
       // Generate candidates and pick the one farthest from all existing clusters
       for (let i = 0; i < numCandidates; i++) {
-        const r = rng.nextInt(5, height - 5);
+        const r = rng.nextInt(margin, height - margin);
         const rOffset = Math.floor(r / 2);
-        const q = rng.nextInt(-rOffset + 5, width - rOffset - 5);
+        const q = rng.nextInt(-rOffset + margin, width - rOffset - margin);
 
         if (!this.isValidBuildingTile(q, r)) continue;
 
@@ -205,7 +208,9 @@ export class GameMap {
       }
 
       // Stop if best candidate doesn't meet minimum distance requirement
-      if (bestMinDist < clusterCfg.minDistance) break;
+      // But always try to get at least 2 clusters for home bases
+      if (bestMinDist < clusterCfg.minDistance && clusters.length >= 2) break;
+      if (bestMinDist === 0) break; // No valid candidates found at all
 
       // Generate buildings in this cluster
       const numBuildings = rng.nextInt(clusterCfg.buildingsMin, clusterCfg.buildingsMax);
@@ -254,8 +259,44 @@ export class GameMap {
       }
     }
 
-    // Step 3: Place buildings in clusters (all neutral initially)
-    for (const cluster of clusters) {
+    // Step 3: Place buildings in home clusters with identical composition
+    const playerCluster = clusters[playerClusterIdx]!;
+    const enemyCluster = clusters[enemyClusterIdx]!;
+
+    // Use the same building count for both home clusters (minimum of the two)
+    const homeClusterSize = Math.min(playerCluster.buildings.length, enemyCluster.buildings.length);
+
+    // Trim both clusters to the same size
+    playerCluster.buildings = playerCluster.buildings.slice(0, homeClusterSize);
+    enemyCluster.buildings = enemyCluster.buildings.slice(0, homeClusterSize);
+
+    // Place home cluster buildings with fixed pattern: capital, factory, then cities
+    for (const { cluster, owner } of [
+      { cluster: playerCluster, owner: 'player' },
+      { cluster: enemyCluster, owner: 'enemy' }
+    ]) {
+      for (let i = 0; i < cluster.buildings.length; i++) {
+        const pos = cluster.buildings[i]!;
+        let buildingType: BuildingType;
+
+        if (i === 0) {
+          buildingType = 'capital';
+        } else if (i === 1) {
+          buildingType = 'factory';
+        } else {
+          buildingType = 'city';
+        }
+
+        const building = createBuilding(pos.q, pos.r, buildingType, owner);
+        this.buildings.set(getBuildingKey(pos.q, pos.r), building);
+      }
+    }
+
+    // Step 4: Place buildings in non-home clusters (all neutral)
+    for (let clusterIdx = 0; clusterIdx < clusters.length; clusterIdx++) {
+      if (clusterIdx === playerClusterIdx || clusterIdx === enemyClusterIdx) continue;
+
+      const cluster = clusters[clusterIdx]!;
       for (let i = 0; i < cluster.buildings.length; i++) {
         const pos = cluster.buildings[i]!;
 
@@ -268,15 +309,10 @@ export class GameMap {
           buildingType = 'factory';
         }
 
-        // All buildings start neutral - ownership assigned after
         const building = createBuilding(pos.q, pos.r, buildingType, null);
         this.buildings.set(getBuildingKey(pos.q, pos.r), building);
       }
     }
-
-    // Step 4: Assign home cluster buildings to players (2 cities + 1 factory each)
-    this.assignHomeClusterBuildings(clusters[playerClusterIdx]!, 'player');
-    this.assignHomeClusterBuildings(clusters[enemyClusterIdx]!, 'enemy');
 
     // Step 5: Generate random singleton buildings (all neutral)
     let singletonsPlaced = 0;
@@ -325,55 +361,6 @@ export class GameMap {
       if (dist < minDist) return true;
     }
     return false;
-  }
-
-  private assignHomeClusterBuildings(cluster: { centerQ: number; centerR: number; buildings: Array<{ q: number; r: number }> }, owner: string): void {
-    // Find buildings in this cluster and assign 1 capital + 1 city + 1 factory to owner
-    let capitalAssigned = false;
-    let citiesAssigned = 0;
-    let factoriesAssigned = 0;
-
-    for (const pos of cluster.buildings) {
-      const building = this.buildings.get(getBuildingKey(pos.q, pos.r));
-      if (!building) continue;
-
-      // Convert first city to capital
-      if (building.type === 'city' && !capitalAssigned) {
-        building.type = 'capital';
-        building.owner = owner;
-        capitalAssigned = true;
-      } else if (building.type === 'city' && citiesAssigned < 1) {
-        building.owner = owner;
-        citiesAssigned++;
-      } else if (building.type === 'factory' && factoriesAssigned < 1) {
-        building.owner = owner;
-        factoriesAssigned++;
-      }
-    }
-
-    // If we didn't find enough cities/factories, assign any remaining slots to whatever we have
-    if (!capitalAssigned || citiesAssigned < 1 || factoriesAssigned < 1) {
-      for (const pos of cluster.buildings) {
-        const building = this.buildings.get(getBuildingKey(pos.q, pos.r));
-        if (!building || building.owner === owner) continue;
-
-        // Fill capital slot first (convert any building to capital)
-        if (!capitalAssigned) {
-          building.type = 'capital';
-          building.owner = owner;
-          capitalAssigned = true;
-        } else {
-          // Fill remaining slots with any building type
-          const needsMore = (citiesAssigned + factoriesAssigned) < 2;
-          if (needsMore) {
-            building.owner = owner;
-            if (building.type === 'city') citiesAssigned++;
-            else if (building.type === 'factory') factoriesAssigned++;
-            else citiesAssigned++; // Count labs toward the total
-          }
-        }
-      }
-    }
   }
 
   getCapital(owner: string): Building | undefined {

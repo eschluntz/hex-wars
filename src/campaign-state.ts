@@ -2,6 +2,8 @@
 // HEX DOMINION - Campaign State Management
 // ============================================================================
 
+import { MAP_PRESETS, REGULAR_PRESETS, type MapPreset } from './map-presets.js';
+
 export type CellType = 'unit' | 'upgrade' | 'special' | 'boss' | 'fortress';
 
 export interface CampaignCell {
@@ -20,6 +22,7 @@ export interface CampaignState {
   completedCells: Set<string>;  // Cell IDs
   unlockedUnits: Set<string>;   // Unit template IDs
   reinforcements: number;       // Lives remaining
+  campaignSeed: number;         // Base seed for the entire campaign
 }
 
 export interface CampaignGrid {
@@ -37,6 +40,7 @@ export function createInitialCampaignState(grid: CampaignGrid): CampaignState {
     completedCells: new Set(grid.startingCells),
     unlockedUnits: new Set(grid.startingUnits),
     reinforcements: grid.startingReinforcements,
+    campaignSeed: Math.floor(Math.random() * 1000000),
   };
 }
 
@@ -188,4 +192,48 @@ export function getFortressProgress(
   const needed = Math.ceil(total * 0.5);
 
   return { completed, needed, total };
+}
+
+// ============================================================================
+// SEED AND PRESET DERIVATION
+// ============================================================================
+
+/**
+ * Simple hash function for strings
+ * djb2 algorithm - fast and well-distributed for string hashing
+ */
+function hashString(str: string): number {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash) ^ str.charCodeAt(i);
+  }
+  return hash >>> 0; // Convert to unsigned 32-bit integer
+}
+
+/**
+ * Derive a deterministic seed for a campaign battle from the cell ID and campaign seed.
+ * This ensures replaying the same cell always produces the same map.
+ */
+export function getCampaignBattleSeed(cellId: string, campaignSeed: number): number {
+  return (hashString(cellId) ^ campaignSeed) >>> 0;
+}
+
+/**
+ * Get the map preset for a campaign cell based on its type.
+ * Regular cells get a random preset from the pool, fortress/boss get fixed presets.
+ */
+export function getCampaignCellPreset(cell: CampaignCell, campaignSeed: number): MapPreset {
+  if (cell.type === 'boss') {
+    return MAP_PRESETS['boss']!;
+  }
+
+  if (cell.type === 'fortress') {
+    return MAP_PRESETS['fortress']!;
+  }
+
+  // Regular cells: pick from the pool deterministically based on cell seed
+  const seed = getCampaignBattleSeed(cell.id, campaignSeed);
+  const presetIndex = seed % REGULAR_PRESETS.length;
+  const presetName = REGULAR_PRESETS[presetIndex]!;
+  return MAP_PRESETS[presetName]!;
 }

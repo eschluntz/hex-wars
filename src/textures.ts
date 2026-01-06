@@ -139,6 +139,11 @@ const textures: Map<string, HTMLImageElement> = new Map();
 // Cache for which texture variant each tile uses (keyed by "q,r")
 const tileTextureCache: Map<string, string> = new Map();
 
+// Clear tile texture cache (must be called when map changes)
+export function clearTileTextureCache(): void {
+  tileTextureCache.clear();
+}
+
 // Promise that resolves when all textures are loaded
 let loadPromise: Promise<void> | null = null;
 

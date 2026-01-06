@@ -584,6 +584,178 @@
       100% { transform: scale(1); }
     }
     .completing { animation: campaign-complete-pop 0.3s ease; }
+
+    /* Map Lab Overlay */
+    #map-lab-overlay {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 320px;
+      background: rgba(10, 12, 16, 0.95);
+      border: 1px solid #2a3040;
+      border-radius: 8px;
+      padding: 16px;
+      z-index: 200;
+      display: none;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      color: #c8d0e0;
+      font-size: 13px;
+      backdrop-filter: blur(10px);
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+    }
+    #map-lab-overlay.visible {
+      display: block;
+    }
+    .maplab-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      border-bottom: 1px solid #2a3040;
+      padding-bottom: 12px;
+    }
+    .maplab-title {
+      font-size: 16px;
+      font-weight: bold;
+      color: #6495ED;
+      letter-spacing: 1px;
+    }
+    .maplab-badge {
+      font-size: 10px;
+      background: #6495ED30;
+      color: #6495ED;
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+    .maplab-section {
+      margin-bottom: 16px;
+    }
+    .maplab-section-title {
+      font-size: 11px;
+      font-weight: bold;
+      text-transform: uppercase;
+      color: #5a6070;
+      margin-bottom: 8px;
+      letter-spacing: 0.5px;
+    }
+    .maplab-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .maplab-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .maplab-label {
+      min-width: 60px;
+      color: #8890a0;
+    }
+    .maplab-select, .maplab-input {
+      flex: 1;
+      background: #1a1e28;
+      border: 1px solid #3a4050;
+      border-radius: 4px;
+      padding: 6px 10px;
+      color: #c8d0e0;
+      font-size: 13px;
+    }
+    .maplab-select:focus, .maplab-input:focus {
+      outline: none;
+      border-color: #6495ED;
+    }
+    .maplab-input {
+      width: 100px;
+      font-family: 'Courier New', monospace;
+    }
+    .maplab-btn {
+      padding: 8px 16px;
+      border: 1px solid #6495ED50;
+      border-radius: 4px;
+      background: #6495ED20;
+      color: #6495ED;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .maplab-btn:hover {
+      background: #6495ED40;
+      border-color: #6495ED;
+    }
+    #maplab-preset-info {
+      font-size: 11px;
+      color: #5a6070;
+      margin-top: 4px;
+    }
+    .maplab-validation-checks {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .maplab-check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background: #1a1e28;
+    }
+    .maplab-check.passed { background: rgba(34, 197, 94, 0.1); }
+    .maplab-check.failed { background: rgba(239, 68, 68, 0.15); }
+    .maplab-check-icon {
+      font-size: 14px;
+      width: 16px;
+      text-align: center;
+    }
+    .maplab-check.passed .maplab-check-icon { color: #22c55e; }
+    .maplab-check.failed .maplab-check-icon { color: #ef4444; }
+    .maplab-check-name {
+      flex: 1;
+      color: #8890a0;
+    }
+    .maplab-check-detail {
+      font-size: 11px;
+      color: #5a6070;
+      font-family: 'Courier New', monospace;
+    }
+    .maplab-warnings {
+      margin-top: 8px;
+    }
+    .maplab-warning {
+      font-size: 11px;
+      color: #f97316;
+      padding: 4px 0;
+    }
+    .maplab-stat-group {
+      margin-bottom: 12px;
+    }
+    .maplab-stat-title {
+      font-size: 11px;
+      font-weight: bold;
+      color: #6495ED;
+      margin-bottom: 4px;
+    }
+    .maplab-stat {
+      font-size: 12px;
+      color: #8890a0;
+      padding: 2px 0;
+    }
+    .maplab-shortcuts {
+      font-size: 11px;
+      color: #5a6070;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #2a3040;
+    }
+    .maplab-shortcuts kbd {
+      background: #1a1e28;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: inherit;
+      color: #6495ED;
+    }
   </style>
 </head>
 <body>
@@ -668,6 +840,54 @@
   <div id="debug-controls">
     <button id="btn-debug-win">Win</button>
     <button id="btn-debug-lose">Lose</button>
+  </div>
+
+  <!-- Map Lab Overlay (shown when ?maplab is in URL) -->
+  <div id="map-lab-overlay">
+    <div class="maplab-header">
+      <span class="maplab-title">MAP LAB</span>
+      <span class="maplab-badge">DEV</span>
+    </div>
+
+    <div class="maplab-section">
+      <div class="maplab-section-title">Configuration</div>
+      <div class="maplab-controls">
+        <div class="maplab-row">
+          <span class="maplab-label">Preset</span>
+          <select id="maplab-preset" class="maplab-select">
+            <option value="tiny">Tiny (10x8)</option>
+            <option value="standard" selected>Standard (20x16)</option>
+            <option value="archipelago">Archipelago (20x16)</option>
+            <option value="highlands">Highlands (20x16)</option>
+            <option value="forest">Forest (20x16)</option>
+            <option value="corridor">Corridor (30x10)</option>
+            <option value="tall">Tall (10x30)</option>
+            <option value="fortress">Fortress (40x40)</option>
+            <option value="boss">Boss (50x40)</option>
+          </select>
+        </div>
+        <div id="maplab-preset-info">20x16 - Balanced terrain</div>
+        <div class="maplab-row">
+          <span class="maplab-label">Seed</span>
+          <input type="number" id="maplab-seed" class="maplab-input" value="12345">
+          <button id="maplab-reroll" class="maplab-btn">Reroll</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="maplab-section">
+      <div class="maplab-section-title">Validation</div>
+      <div id="maplab-validation"></div>
+    </div>
+
+    <div class="maplab-section">
+      <div class="maplab-section-title">Statistics</div>
+      <div id="maplab-stats"></div>
+    </div>
+
+    <div class="maplab-shortcuts">
+      <kbd>R</kbd> Reroll &nbsp;·&nbsp; <kbd>1-9</kbd> Select preset
+    </div>
   </div>
 
   <script src="dist/bundle.js"></script>
