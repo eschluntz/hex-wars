@@ -2,7 +2,7 @@
 // HEX DOMINION - Map Lab Controller
 // ============================================================================
 
-import { MAP_PRESETS, getPresetNames, presetToMapConfig, type MapPreset } from './map-presets.js';
+import { MAP_PRESETS, getPresetNames, presetToMapConfig } from './map-presets.js';
 import { validateMap, getMapStats, type ValidationResult, type MapStats } from './map-validation.js';
 import { GameMap } from './game-map.js';
 import { type MapConfig } from './config.js';
@@ -46,7 +46,7 @@ export class MapLabController {
    */
   init(): void {
     this.overlay = document.getElementById('map-lab-overlay');
-    if (!this.overlay) return;
+    if (!this.overlay) throw new Error('map-lab-overlay element not found');
 
     // Hide main menu when Map Lab is active
     const mainMenu = document.getElementById('main-menu');
@@ -109,8 +109,7 @@ export class MapLabController {
   }
 
   private generateMap(): void {
-    const preset = MAP_PRESETS[this.state.preset];
-    if (!preset) return;
+    const preset = MAP_PRESETS[this.state.preset]!;
 
     const config = presetToMapConfig(preset, this.state.seed);
 
@@ -153,8 +152,8 @@ export class MapLabController {
   }
 
   private updateValidationDisplay(): void {
-    const container = document.getElementById('maplab-validation');
-    if (!container || !this.state.validation) return;
+    if (!this.state.validation) return;
+    const container = document.getElementById('maplab-validation')!;
 
     const { critical, warnings } = this.state.validation;
 
@@ -184,8 +183,8 @@ export class MapLabController {
   }
 
   private updateStatsDisplay(): void {
-    const container = document.getElementById('maplab-stats');
-    if (!container || !this.state.stats) return;
+    if (!this.state.stats) return;
+    const container = document.getElementById('maplab-stats')!;
 
     const { totalTiles, tileCounts, totalBuildings, playerBuildings, enemyBuildings, neutralBuildings, pathLength } = this.state.stats;
 

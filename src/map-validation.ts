@@ -28,6 +28,32 @@ const PATH_TERRAIN_COSTS: TerrainCosts = {
   building: 1
 };
 
+function countByType(tiles: Array<{ type: TileType }>): Record<TileType, number> {
+  const counts: Partial<Record<TileType, number>> = {};
+  for (const tile of tiles) {
+    counts[tile.type] = (counts[tile.type] ?? 0) + 1;
+  }
+  return counts as Record<TileType, number>;
+}
+
+function findCapitalPath(map: GameMap): { path: Array<{ q: number; r: number }>; length: number } | null {
+  const playerCapital = map.getCapital('player');
+  const enemyCapital = map.getCapital('enemy');
+
+  if (!playerCapital || !enemyCapital) return null;
+
+  const pathfinder = new Pathfinder(map);
+  const pathResult = pathfinder.findPath(
+    playerCapital.q, playerCapital.r,
+    enemyCapital.q, enemyCapital.r,
+    PATH_TERRAIN_COSTS
+  );
+
+  if (!pathResult || pathResult.path.length === 0) return null;
+
+  return { path: pathResult.path, length: pathResult.path.length };
+}
+
 /**
  * Validate a generated map for playability
  */
@@ -35,23 +61,21 @@ export function validateMap(map: GameMap): ValidationResult {
   const critical: CriticalCheck[] = [];
   const warnings: string[] = [];
 
-  // Critical check 1: Player has at least 1 capital
   const playerCapital = map.getCapital('player');
+  const enemyCapital = map.getCapital('enemy');
+
   critical.push({
     name: 'Player has capital',
     passed: playerCapital !== undefined,
     detail: playerCapital ? `at (${playerCapital.q}, ${playerCapital.r})` : 'missing'
   });
 
-  // Critical check 2: Enemy has at least 1 capital
-  const enemyCapital = map.getCapital('enemy');
   critical.push({
     name: 'Enemy has capital',
     passed: enemyCapital !== undefined,
     detail: enemyCapital ? `at (${enemyCapital.q}, ${enemyCapital.r})` : 'missing'
   });
 
-  // Critical check 3: Player has at least 1 factory
   const playerFactories = map.getBuildingsByType('factory').filter(b => b.owner === 'player');
   critical.push({
     name: 'Player has factory',
@@ -59,7 +83,6 @@ export function validateMap(map: GameMap): ValidationResult {
     detail: playerFactories.length > 0 ? `${playerFactories.length} factory(ies)` : 'missing'
   });
 
-  // Critical check 4: Enemy has at least 1 factory
   const enemyFactories = map.getBuildingsByType('factory').filter(b => b.owner === 'enemy');
   critical.push({
     name: 'Enemy has factory',
@@ -67,41 +90,22 @@ export function validateMap(map: GameMap): ValidationResult {
     detail: enemyFactories.length > 0 ? `${enemyFactories.length} factory(ies)` : 'missing'
   });
 
-  // Critical check 5: Path exists between capitals (if both exist)
-  if (playerCapital && enemyCapital) {
-    const pathfinder = new Pathfinder(map);
-    const pathResult = pathfinder.findPath(
-      playerCapital.q, playerCapital.r,
-      enemyCapital.q, enemyCapital.r,
-      PATH_TERRAIN_COSTS
-    );
-
-    const pathExists = pathResult !== null && pathResult.path.length > 0;
-    critical.push({
-      name: 'Path between capitals',
-      passed: pathExists,
-      detail: pathExists ? `${pathResult!.path.length} tiles` : 'no path found'
-    });
-  } else {
-    critical.push({
-      name: 'Path between capitals',
-      passed: false,
-      detail: 'cannot check (missing capitals)'
-    });
-  }
+  const capitalPath = findCapitalPath(map);
+  critical.push({
+    name: 'Path between capitals',
+    passed: capitalPath !== null,
+    detail: capitalPath ? `${capitalPath.length} tiles` : (playerCapital && enemyCapital ? 'no path found' : 'cannot check (missing capitals)')
+  });
 
   // Warnings (non-critical issues)
-  const allBuildings = map.getAllBuildings();
-  const totalBuildings = allBuildings.length;
-
+  const totalBuildings = map.getAllBuildings().length;
   if (totalBuildings < 6) {
     warnings.push(`Low building count: ${totalBuildings} (expected at least 6)`);
   }
 
-  // Check terrain distribution
   const tiles = map.getAllTiles();
-  const tileCount = tiles.length;
   const tileCounts = countByType(tiles);
+  const tileCount = tiles.length;
 
   const waterPercent = (tileCounts.water ?? 0) / tileCount;
   const mountainPercent = (tileCounts.mountain ?? 0) / tileCount;
@@ -113,21 +117,11 @@ export function validateMap(map: GameMap): ValidationResult {
     warnings.push(`Very high mountain coverage: ${(mountainPercent * 100).toFixed(1)}%`);
   }
 
-  const allCriticalPassed = critical.every(c => c.passed);
-
   return {
-    valid: allCriticalPassed,
+    valid: critical.every(c => c.passed),
     critical,
     warnings
   };
-}
-
-function countByType(tiles: Array<{ type: TileType }>): Record<TileType, number> {
-  const counts: Partial<Record<TileType, number>> = {};
-  for (const tile of tiles) {
-    counts[tile.type] = (counts[tile.type] ?? 0) + 1;
-  }
-  return counts as Record<TileType, number>;
 }
 
 /**
@@ -136,37 +130,18 @@ function countByType(tiles: Array<{ type: TileType }>): Record<TileType, number>
 export function getMapStats(map: GameMap): MapStats {
   const tiles = map.getAllTiles();
   const buildings = map.getAllBuildings();
-
   const tileCounts = countByType(tiles);
 
-  const playerBuildings = buildings.filter(b => b.owner === 'player');
-  const enemyBuildings = buildings.filter(b => b.owner === 'enemy');
-  const neutralBuildings = buildings.filter(b => b.owner === null);
-
-  const playerCapital = map.getCapital('player');
-  const enemyCapital = map.getCapital('enemy');
-
-  let pathLength: number | null = null;
-  if (playerCapital && enemyCapital) {
-    const pathfinder = new Pathfinder(map);
-    const pathResult = pathfinder.findPath(
-      playerCapital.q, playerCapital.r,
-      enemyCapital.q, enemyCapital.r,
-      PATH_TERRAIN_COSTS
-    );
-    if (pathResult) {
-      pathLength = pathResult.path.length;
-    }
-  }
+  const capitalPath = findCapitalPath(map);
 
   return {
     totalTiles: tiles.length,
     tileCounts,
     totalBuildings: buildings.length,
-    playerBuildings: playerBuildings.length,
-    enemyBuildings: enemyBuildings.length,
-    neutralBuildings: neutralBuildings.length,
-    pathLength
+    playerBuildings: buildings.filter(b => b.owner === 'player').length,
+    enemyBuildings: buildings.filter(b => b.owner === 'enemy').length,
+    neutralBuildings: buildings.filter(b => b.owner === null).length,
+    pathLength: capitalPath?.length ?? null
   };
 }
 

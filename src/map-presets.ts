@@ -284,13 +284,6 @@ export function presetToMapConfig(preset: MapPreset, seed: number): MapConfig {
 }
 
 /**
- * Get a preset by name
- */
-export function getPreset(name: string): MapPreset | undefined {
-  return MAP_PRESETS[name];
-}
-
-/**
  * Get all preset names
  */
 export function getPresetNames(): string[] {

@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { HexUtil, type AxialCoord } from './core.js';
-import { GEN_PARAMS, CONFIG, MAP_CONFIGS, rerollNormalSeed, getNormalSeed, type MapConfig } from './config.js';
+import { CONFIG, MAP_CONFIGS, rerollNormalSeed, type MapConfig } from './config.js';
 import { GameMap } from './game-map.js';
 import { Viewport } from './viewport.js';
 import { Renderer } from './renderer.js';
@@ -239,90 +239,31 @@ class Game {
   }
 
   private startNewGame(mapType: string = 'normal', playerConfigs?: PlayerConfig[], skipCenterViewport: boolean = false): void {
-    clearTileTextureCache();
+    const mapConfig = MAP_CONFIGS[mapType]!;
     this.currentMapType = mapType;
-    this.currentPlayerConfigs = playerConfigs ?? [
-      { id: TEAMS.PLAYER, name: 'Player', type: 'human' },
-      { id: TEAMS.ENEMY, name: 'Enemy AI', type: 'ai', aiType: 'greedy' }
-    ];
-    const mapConfig = MAP_CONFIGS[mapType];
 
-    this.map = new GameMap(mapConfig);
-    this.viewport = new Viewport(this.canvas);
-    this.inputHandler.updateViewport(this.viewport);
-    this.pathfinder = new Pathfinder(this.map);
-    this.renderer = new Renderer(this.canvas, this.map, this.viewport);
-    this.resources = new ResourceManager([TEAMS.PLAYER, TEAMS.ENEMY]);
-    this.gameStats = new GameStats([TEAMS.PLAYER, TEAMS.ENEMY]);
-    this.animationController = new AnimationController(
-      this.renderer,
-      this.viewport,
-      () => this.inputHandler.isSpacebarHeld()
-    );
-    this.combatAnimator = new CombatAnimator();
-    this.renderer.setCombatAnimator(this.combatAnimator);
-    this.aiTurnExecutor = new AITurnExecutor(
-      this.animationController,
-      this.pathfinder,
-      this.map,
-      this.resources
-    );
+    this.initializeGame(mapConfig, playerConfigs);
 
-    // Reset game state
-    this.units = [];
-    this.state = { type: 'idle' };
-    this.lastPreviewHex = null;
-    this.currentTeam = TEAMS.PLAYER;
-    this.turnNumber = 1;
-    this.nextUnitId = 1;
-    this.gameOverData = null;
-    this.isAITurnInProgress = false;
-
-    // Initialize players
-    this.players = this.initializePlayers(this.currentPlayerConfigs);
-
-    // Give starting resources
-    this.resources.addFunds(TEAMS.PLAYER, 5000);
-    this.resources.addFunds(TEAMS.ENEMY, 5000);
-
-    // Initialize per-team unit templates (with default unlocked units)
-    initTeamUnits(TEAMS.PLAYER);
-    initTeamUnits(TEAMS.ENEMY);
-
-    // Setup based on map type
-    // Small map gets manual setup with test units; normal map starts with just home bases
+    // Small map gets manual setup with test units
     if (mapType === 'small') {
       this.setupSmallMap();
     }
-    // Normal map: no starting units, just owned buildings from map generation
 
-    // Determine team facing direction based on building positions
-    this.computeTeamFacing();
-
-    // Collect initial income for player (first turn)
-    this.collectIncome(TEAMS.PLAYER);
-
-    if (!skipCenterViewport) {
-      this.centerViewport();
-    }
-    this.gamePhase = 'playing';
-
-    // Show UI elements during game
-    const infoEl = document.getElementById('coords');
-    const hudEl = document.getElementById('hud');
-    if (infoEl) infoEl.style.display = 'block';
-    if (hudEl) hudEl.style.display = 'block';
-
-    // Show turn announcement and trigger AI if needed
-    this.startTurn();
+    this.finalizeGameStart(mapConfig, skipCenterViewport);
   }
 
   /**
    * Start a new game with a specific MapConfig (used by Map Lab and campaign)
    */
   private startNewGameWithConfig(config: MapConfig, playerConfigs?: PlayerConfig[], skipCenterViewport: boolean = false): void {
-    clearTileTextureCache();
     this.currentMapType = 'custom';
+
+    this.initializeGame(config, playerConfigs);
+    this.finalizeGameStart(config, skipCenterViewport);
+  }
+
+  private initializeGame(config: MapConfig, playerConfigs?: PlayerConfig[]): void {
+    clearTileTextureCache();
     this.currentPlayerConfigs = playerConfigs ?? [
       { id: TEAMS.PLAYER, name: 'Player', type: 'human' },
       { id: TEAMS.ENEMY, name: 'Enemy AI', type: 'ai', aiType: 'greedy' }
@@ -369,32 +310,24 @@ class Game {
     // Initialize per-team unit templates (with default unlocked units)
     initTeamUnits(TEAMS.PLAYER);
     initTeamUnits(TEAMS.ENEMY);
+  }
 
-    // Determine team facing direction based on building positions
+  private finalizeGameStart(config: MapConfig, skipCenterViewport: boolean): void {
     this.computeTeamFacing();
-
-    // Collect initial income for player (first turn)
     this.collectIncome(TEAMS.PLAYER);
 
     if (!skipCenterViewport) {
-      this.centerViewportForConfig(config);
+      const centerQ = Math.floor(config.width / 2);
+      const centerR = Math.floor(config.height / 2);
+      this.viewport.centerOn(centerQ, centerR);
     }
     this.gamePhase = 'playing';
 
     // Show UI elements during game
-    const infoEl = document.getElementById('coords');
-    const hudEl = document.getElementById('hud');
-    if (infoEl) infoEl.style.display = 'block';
-    if (hudEl) hudEl.style.display = 'block';
+    document.getElementById('coords')!.style.display = 'block';
+    document.getElementById('hud')!.style.display = 'block';
 
-    // Show turn announcement and trigger AI if needed
     this.startTurn();
-  }
-
-  private centerViewportForConfig(config: MapConfig): void {
-    const centerQ = Math.floor(config.width / 2);
-    const centerR = Math.floor(config.height / 2);
-    this.viewport.centerOn(centerQ, centerR);
   }
 
   private initializePlayers(configs: PlayerConfig[]): Player[] {
@@ -1692,13 +1625,6 @@ class Game {
         }
       }
     }
-  }
-
-  private centerViewport(): void {
-    const cfg = MAP_CONFIGS[this.currentMapType];
-    const centerQ = Math.floor((cfg?.width ?? GEN_PARAMS.mapWidth) / 2);
-    const centerR = Math.floor((cfg?.height ?? GEN_PARAMS.mapHeight) / 2);
-    this.viewport.centerOn(centerQ, centerR);
   }
 
   private loop = (): void => {
