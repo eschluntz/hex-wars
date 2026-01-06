@@ -5,6 +5,7 @@
 import { GameMap } from './game-map.js';
 import { Pathfinder } from './pathfinder.js';
 import { TILE_TYPES, type TerrainCosts, type TileType } from './core.js';
+import { type MapConstraints } from './config.js';
 
 export interface ValidationResult {
   valid: boolean;
@@ -57,7 +58,7 @@ function findCapitalPath(map: GameMap): { path: Array<{ q: number; r: number }>;
 /**
  * Validate a generated map for playability
  */
-export function validateMap(map: GameMap): ValidationResult {
+export function validateMap(map: GameMap, constraints?: MapConstraints): ValidationResult {
   const critical: CriticalCheck[] = [];
   const warnings: string[] = [];
 
@@ -97,18 +98,52 @@ export function validateMap(map: GameMap): ValidationResult {
     detail: capitalPath ? `${capitalPath.length} tiles` : (playerCapital && enemyCapital ? 'no path found' : 'cannot check (missing capitals)')
   });
 
-  // Warnings (non-critical issues)
-  const totalBuildings = map.getAllBuildings().length;
-  if (totalBuildings < 6) {
-    warnings.push(`Low building count: ${totalBuildings} (expected at least 6)`);
-  }
-
+  // Terrain percentage checks
   const tiles = map.getAllTiles();
   const tileCounts = countByType(tiles);
   const tileCount = tiles.length;
 
   const waterPercent = (tileCounts.water ?? 0) / tileCount;
   const mountainPercent = (tileCounts.mountain ?? 0) / tileCount;
+
+  // Constraint-based critical checks
+  if (constraints?.minWaterPercent !== undefined) {
+    critical.push({
+      name: 'Min water coverage',
+      passed: waterPercent >= constraints.minWaterPercent,
+      detail: `${(waterPercent * 100).toFixed(1)}% (need ${(constraints.minWaterPercent * 100).toFixed(0)}%+)`
+    });
+  }
+
+  if (constraints?.maxWaterPercent !== undefined) {
+    critical.push({
+      name: 'Max water coverage',
+      passed: waterPercent <= constraints.maxWaterPercent,
+      detail: `${(waterPercent * 100).toFixed(1)}% (max ${(constraints.maxWaterPercent * 100).toFixed(0)}%)`
+    });
+  }
+
+  if (constraints?.minMountainPercent !== undefined) {
+    critical.push({
+      name: 'Min mountain coverage',
+      passed: mountainPercent >= constraints.minMountainPercent,
+      detail: `${(mountainPercent * 100).toFixed(1)}% (need ${(constraints.minMountainPercent * 100).toFixed(0)}%+)`
+    });
+  }
+
+  if (constraints?.maxMountainPercent !== undefined) {
+    critical.push({
+      name: 'Max mountain coverage',
+      passed: mountainPercent <= constraints.maxMountainPercent,
+      detail: `${(mountainPercent * 100).toFixed(1)}% (max ${(constraints.maxMountainPercent * 100).toFixed(0)}%)`
+    });
+  }
+
+  // Warnings (non-critical issues)
+  const totalBuildings = map.getAllBuildings().length;
+  if (totalBuildings < 6) {
+    warnings.push(`Low building count: ${totalBuildings} (expected at least 6)`);
+  }
 
   if (waterPercent > 0.5) {
     warnings.push(`Very high water coverage: ${(waterPercent * 100).toFixed(1)}%`);

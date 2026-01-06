@@ -783,14 +783,14 @@ class Game {
       const seed = baseSeed + attempts;
       mapConfig = presetToMapConfig(preset, seed);
       const testMap = new GameMap(mapConfig);
-      const validation = validateMap(testMap);
+      const validation = validateMap(testMap, mapConfig.constraints);
 
       if (validation.valid) {
         console.log(`Map valid on attempt ${attempts + 1}`);
         break;
       }
 
-      console.log(`Map invalid on attempt ${attempts + 1}, retrying...`);
+      console.log(`Map invalid on attempt ${attempts + 1}: ${validation.critical.filter(c => !c.passed).map(c => c.name).join(', ')}`);
       attempts++;
     }
 

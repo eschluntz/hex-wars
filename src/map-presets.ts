@@ -2,7 +2,7 @@
 // HEX DOMINION - Map Presets
 // ============================================================================
 
-import { MapConfig } from './config.js';
+import { MapConfig, MapConstraints } from './config.js';
 
 export interface MapPreset {
   name: string;
@@ -11,6 +11,7 @@ export interface MapPreset {
   height: number;
   terrain: NonNullable<MapConfig['terrain']>;
   clusters: NonNullable<MapConfig['clusters']>;
+  constraints?: MapConstraints;
 }
 
 // ============================================================================
@@ -93,20 +94,23 @@ export const MAP_PRESETS: Record<string, MapPreset> = {
       candidatesPerCluster: 50,
       singletonCount: 3,
       singletonMinDistance: 2
+    },
+    constraints: {
+      minWaterPercent: 0.4
     }
   },
 
-  // Highlands (20x16) - Mountain ridges
+  // Highlands (20x16) - Scattered mountains
   highlands: {
     name: 'Highlands',
-    description: 'Many mountains with ridge valleys',
+    description: 'Scattered mountain peaks',
     width: 20,
     height: 16,
     terrain: {
-      altitudeScale: 0.08,
-      altitudeOctaves: 4,
+      altitudeScale: 0.18,
+      altitudeOctaves: 3,
       waterThreshold: -0.25,
-      mountainThreshold: 0.15,
+      mountainThreshold: 0.08,
       vegScale: 0.1,
       vegOctaves: 3,
       forestThreshold: 0.2
@@ -279,7 +283,8 @@ export function presetToMapConfig(preset: MapPreset, seed: number): MapConfig {
     height: preset.height,
     seed,
     terrain: preset.terrain,
-    clusters: preset.clusters
+    clusters: preset.clusters,
+    constraints: preset.constraints
   };
 }
 

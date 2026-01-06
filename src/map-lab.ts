@@ -115,7 +115,7 @@ export class MapLabController {
 
     // Generate map and validate
     const map = new GameMap(config);
-    this.state.validation = validateMap(map);
+    this.state.validation = validateMap(map, config.constraints);
     this.state.stats = getMapStats(map);
 
     // Notify the game to use this config

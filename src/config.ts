@@ -8,6 +8,13 @@ export const CONFIG = {
   backgroundColor: '#1a1a2e'
 } as const;
 
+export interface MapConstraints {
+  minWaterPercent?: number;
+  maxWaterPercent?: number;
+  minMountainPercent?: number;
+  maxMountainPercent?: number;
+}
+
 export interface MapConfig {
   name: string;
   description: string;
@@ -34,6 +41,8 @@ export interface MapConfig {
     singletonCount: number;     // Random standalone buildings
     singletonMinDistance: number; // Min distance from clusters for singletons
   } | null;
+  // Validation constraints (reject maps that don't meet these)
+  constraints?: MapConstraints;
 }
 
 export const MAP_CONFIGS: Record<string, MapConfig> = {
