@@ -228,10 +228,16 @@ The tests automatically start the dev server (`npm run watch`) before running. R
 
 ### Upcoming
 - [ ] upgrade system
-- [ ] enemy difficulty progression
+  - [ ] persistent, stacking, small upgrades, like +5% income, +5% damage for infantry
+  - [ ] Bigger "powers", more inline with advance wars COs. +1 move to vehicles, +1 range to ranged weapons, start with 3 extra infantry, etc. The player should have a limited number of "slots" for these bigger powers. initially only 1 slot, and after each boss, the number of slots increases by 1.
+  - [ ] we need a way for the player to see all their upgrades, and configure which powers are activated.
+  - [ ] these all need to actually get wired through to combat.
+- [ ] enemy difficulty progression. available units, bonuses, better AIs.
 - [ ] Saving and loading games
 - [ ] better AI
     - [ ] can use transports
     - [ ] will block opponent factories
     - [ ] reactive unit composition
+    - [ ] something better than greedy algo?
 - [ ] Fog of war (maybe)
+- [ ] plot / story elements lol? end campaign screen, winning campaign screen.
