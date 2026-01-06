@@ -258,7 +258,9 @@ export const MAP_PRESETS: Record<string, MapPreset> = {
 };
 
 // Presets available for regular campaign cells (randomly selected)
+// 'tiny' appears twice for 2x weighting since it's the only small size
 export const REGULAR_PRESETS = [
+  'tiny',
   'tiny',
   'standard',
   'archipelago',

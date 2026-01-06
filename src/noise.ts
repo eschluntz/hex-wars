@@ -93,4 +93,8 @@ export class SeededRandom {
   nextInt(min: number, max: number): number {
     return Math.floor(this.next() * (max - min + 1)) + min;
   }
+
+  pick<T>(arr: T[]): T {
+    return arr[Math.floor(this.next() * arr.length)]!;
+  }
 }

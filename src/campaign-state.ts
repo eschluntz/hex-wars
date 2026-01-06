@@ -35,12 +35,12 @@ export interface CampaignGrid {
 /**
  * Create a fresh campaign state from a grid configuration
  */
-export function createInitialCampaignState(grid: CampaignGrid): CampaignState {
+export function createInitialCampaignState(grid: CampaignGrid, seed: number): CampaignState {
   return {
     completedCells: new Set(grid.startingCells),
     unlockedUnits: new Set(grid.startingUnits),
     reinforcements: grid.startingReinforcements,
-    campaignSeed: Math.floor(Math.random() * 1000000),
+    campaignSeed: seed,
   };
 }
 
@@ -54,6 +54,35 @@ function getNeighborPositions(row: number, col: number): Array<{ row: number; co
     { row, col: col - 1 },  // left
     { row, col: col + 1 },  // right
   ];
+}
+
+/**
+ * Check if a position is within a fortress's span
+ */
+function isPositionInFortress(row: number, col: number, fortress: CampaignCell): boolean {
+  const width = fortress.width ?? 2;
+  const height = fortress.height ?? 2;
+  return row >= fortress.row && row < fortress.row + height &&
+         col >= fortress.col && col < fortress.col + width;
+}
+
+/**
+ * Find a cell at a position, accounting for multi-tile cells (fortresses)
+ */
+function findCellAtPosition(row: number, col: number, grid: CampaignGrid): CampaignCell | undefined {
+  // First check for exact match
+  const exact = grid.cells.find(c => c.row === row && c.col === col);
+  if (exact) return exact;
+
+  // Check if position is within a fortress
+  const fortress = grid.cells.find(c => c.type === 'fortress' && isPositionInFortress(row, col, c));
+  if (fortress) return fortress;
+
+  // Check if position is in a boss row (bosses span full row)
+  const boss = grid.cells.find(c => c.type === 'boss' && c.row === row);
+  if (boss) return boss;
+
+  return undefined;
 }
 
 /**
@@ -71,27 +100,34 @@ export function isCellAvailable(
 
   if (cell.type === 'boss') {
     // Boss cells: available when ANY cell in the row below is completed
+    // For fortresses, check if they span into the row below
     const rowBelow = cell.row - 1;
-    const cellsInRowBelow = grid.cells.filter(c => c.row === rowBelow);
+    const cellsInRowBelow = grid.cells.filter(c => {
+      if (c.type === 'fortress') {
+        const height = c.height ?? 2;
+        return c.row <= rowBelow && rowBelow < c.row + height;
+      }
+      return c.row === rowBelow;
+    });
     return cellsInRowBelow.some(c => state.completedCells.has(c.id));
   }
 
   if (cell.type === 'fortress') {
-    // Fortress (2x2): available when 50%+ of perimeter cells are completed
+    // Fortress (2x2): available when ANY adjacent cell is completed
     const perimeterPositions = getFortressPerimeter(cell);
-    const perimeterCells = perimeterPositions
-      .map(pos => grid.cells.find(c => c.row === pos.row && c.col === pos.col))
-      .filter((c): c is CampaignCell => c !== undefined);
-
-    const completedCount = perimeterCells.filter(c => state.completedCells.has(c.id)).length;
-    const needed = Math.ceil(perimeterCells.length * 0.5);
-    return completedCount >= needed;
+    for (const pos of perimeterPositions) {
+      const neighbor = findCellAtPosition(pos.row, pos.col, grid);
+      if (neighbor && state.completedCells.has(neighbor.id)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // Normal cells: available when an adjacent (orthogonal) cell is completed
   const neighbors = getNeighborPositions(cell.row, cell.col);
   for (const pos of neighbors) {
-    const neighbor = grid.cells.find(c => c.row === pos.row && c.col === pos.col);
+    const neighbor = findCellAtPosition(pos.row, pos.col, grid);
     if (neighbor && state.completedCells.has(neighbor.id)) {
       return true;
     }
@@ -174,26 +210,6 @@ export function isCampaignOver(state: CampaignState): boolean {
   return state.reinforcements <= 0;
 }
 
-/**
- * Get info about fortress unlock progress
- */
-export function getFortressProgress(
-  fortress: CampaignCell,
-  state: CampaignState,
-  grid: CampaignGrid
-): { completed: number; needed: number; total: number } {
-  const perimeterPositions = getFortressPerimeter(fortress);
-  const perimeterCells = perimeterPositions
-    .map(pos => grid.cells.find(c => c.row === pos.row && c.col === pos.col))
-    .filter((c): c is CampaignCell => c !== undefined);
-
-  const completed = perimeterCells.filter(c => state.completedCells.has(c.id)).length;
-  const total = perimeterCells.length;
-  const needed = Math.ceil(total * 0.5);
-
-  return { completed, needed, total };
-}
-
 // ============================================================================
 // SEED AND PRESET DERIVATION
 // ============================================================================
@@ -218,6 +234,15 @@ export function getCampaignBattleSeed(cellId: string, campaignSeed: number): num
   return (hashString(cellId) ^ campaignSeed) >>> 0;
 }
 
+// Cells that border the starting cells (Infantry at 0,2 and Tank at 0,3)
+// These should always use tiny maps for an easier start
+const STARTER_BORDER_CELLS = new Set([
+  '0,1',  // left of Infantry
+  '0,4',  // right of Tank
+  '1,2',  // above Infantry
+  '1,3',  // above Tank
+]);
+
 /**
  * Get the map preset for a campaign cell based on its type.
  * Regular cells get a random preset from the pool, fortress/boss get fixed presets.
@@ -229,6 +254,11 @@ export function getCampaignCellPreset(cell: CampaignCell, campaignSeed: number):
 
   if (cell.type === 'fortress') {
     return MAP_PRESETS['fortress']!;
+  }
+
+  // Starter border cells always get tiny maps
+  if (STARTER_BORDER_CELLS.has(`${cell.row},${cell.col}`)) {
+    return MAP_PRESETS['tiny']!;
   }
 
   // Regular cells: pick from the pool deterministically based on cell seed

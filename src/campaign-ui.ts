@@ -3,7 +3,7 @@
 // ============================================================================
 
 import type { CampaignCell, CampaignGrid, CampaignState } from './campaign-state.js';
-import { isCellAvailable, getFortressProgress } from './campaign-state.js';
+import { isCellAvailable } from './campaign-state.js';
 
 const ICONS: Record<string, string> = {
   unit: '⬡',
@@ -195,9 +195,9 @@ export class CampaignUI {
       rowEl.appendChild(cellEl);
     }
 
-    // Fortress (spans cols 3-4, rows 1-2)
+    // Fortress (spans 2 cols starting at fortress.col, rows 1-2)
     const fortressEl = this.createFortressElement(fortress, state, grid);
-    fortressEl.style.gridColumn = '3 / span 2';
+    fortressEl.style.gridColumn = `${fortress.col + 1} / span 2`;  // CSS grid is 1-indexed
     fortressEl.style.gridRow = '1 / span 2';
     rowEl.appendChild(fortressEl);
 
@@ -225,21 +225,15 @@ export class CampaignUI {
   private createFortressElement(fortress: CampaignCell, state: CampaignState, grid: CampaignGrid): HTMLElement {
     const isCompleted = state.completedCells.has(fortress.id);
     const isAvailable = !isCompleted && isCellAvailable(fortress, state, grid);
-    const progress = getFortressProgress(fortress, state, grid);
 
     const fortressEl = document.createElement('div');
     fortressEl.className = `campaign-fortress-cell ${isCompleted ? 'completed' : isAvailable ? 'available' : 'locked'}`;
-
-    const reqText = isCompleted
-      ? '✓ Conquered'
-      : `Surround: <span class="${progress.completed >= progress.needed ? 'filled' : ''}">${progress.completed}</span>/${progress.needed}`;
 
     fortressEl.innerHTML = `
       <div class="fortress-tag">Fortress</div>
       <span class="fortress-icon">${ICONS.fortress}</span>
       <span class="fortress-name">${fortress.name}</span>
       <span class="fortress-reward">🎁 ${fortress.reward || 'Reward'}</span>
-      <span class="fortress-req">${reqText}</span>
     `;
 
     if (isAvailable) {

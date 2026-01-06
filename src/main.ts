@@ -741,8 +741,9 @@ class Game {
   // --- Campaign Methods ---
 
   private startCampaign(): void {
-    this.campaignGrid = createCampaignGrid();
-    this.campaignState = createInitialCampaignState(this.campaignGrid);
+    const campaignSeed = Math.floor(Math.random() * 1000000);
+    this.campaignGrid = createCampaignGrid(campaignSeed);
+    this.campaignState = createInitialCampaignState(this.campaignGrid, campaignSeed);
     this.activeCampaignCell = null;
     this.gamePhase = 'campaign';
 
