@@ -62,6 +62,26 @@ All 15 unit types available at factories:
 - Terrain: grass, woods, mountain, water, road
 - Building clusters connected by roads
 
+### Map Presets
+
+Maps are generated from presets that control size, terrain distribution, and building placement:
+
+| Preset      | Size   | Description                              |
+|-------------|--------|------------------------------------------|
+| Tiny        | 10x8   | Blitz battles, very fast                 |
+| Standard    | 20x16  | Balanced terrain, medium battle          |
+| Archipelago | 20x16  | Island chains (40%+ water required)      |
+| Highlands   | 20x16  | Scattered mountain peaks                 |
+| Forest      | 20x16  | Dense woodland terrain                   |
+| Corridor    | 30x10  | Long narrow battlefield                  |
+| Tall        | 10x30  | Vertical battlefield                     |
+| Fortress    | 40x40  | Large square map, many buildings         |
+| Boss        | 50x40  | Full size epic battle                    |
+
+Presets can specify **validation constraints** (e.g., minimum water percentage for Archipelago). Maps that fail validation are regenerated with a different seed.
+
+**Map Lab**: Add `?maplab` to the URL to access the map testing interface for previewing presets and seeds.
+
 ### Buildings
 - **Cities** (🏙️): Generate $1000 funds per turn
 - **Factories** (🏭): Produce new units
@@ -91,17 +111,29 @@ Capture the enemy's capital to win instantly.
 ### Campaign Mode
 Roguelike progression through a grid of battles:
 
-- **6-column grid** with normal cells, boss barriers, and 2x2 fortresses
+- **6-column, 13-row grid** with normal cells, boss barriers, and 2x2 fortresses
 - **3 reinforcements** (lives) - lose one per lost battle, campaign ends at zero
-- **Cell types**:
-  - 🔵 **Unit** - Unlock a new unit type
-  - 🔴 **Upgrade** - Stat bonuses
-  - 🟠 **Special** - Unique abilities
-  - 🟣 **Boss** - Spans full row, unlocks when any cell below is completed
-  - 🟡 **Fortress** - 2x2 block, unlocks when 50%+ of perimeter cells are completed
-- **Adjacency unlocking** - Complete a cell to unlock orthogonally adjacent cells
-- Win a battle → cell turns green, adjacent cells unlock
-- Lose a battle → lose a reinforcement, cell stays available to retry
+- **Start** with Infantry and Tank unlocked at the center of row 0
+
+**Cell types:**
+- ⬡ **Unit** - Unlock a new unit type for your factories
+- ▲ **Upgrade** - Stat bonuses (not yet implemented)
+- ★ **Special** - Unique abilities (not yet implemented)
+- 👑 **Boss** - Spans full row, uses Boss map preset
+- 🏰 **Fortress** - 2x2 block, uses Fortress map preset, position randomized per campaign
+
+**Unlock rules:**
+- **Normal cells**: Unlock when any orthogonally adjacent cell is completed
+- **Boss cells**: Unlock when any cell in the row below is completed (including fortresses that span into that row)
+- **Fortress cells**: Unlock when any adjacent cell is completed (cells touching any part of the 2x2 block)
+- Completing a cell unlocks all adjacent cells (bosses unlock the full row above, fortresses unlock all touching cells)
+
+**Map selection:**
+- Boss battles use the **Boss** preset (50x40)
+- Fortress battles use the **Fortress** preset (40x40)
+- The 4 cells bordering the starting cells always use **Tiny** maps
+- Other cells randomly select from available presets (Tiny weighted 2x)
+- Same cell always generates the same map (deterministic from campaign seed)
 
 ### Controls
 - **Click** to select unit, click destination to move
@@ -191,9 +223,12 @@ The tests automatically start the dev server (`npm run watch`) before running. R
 - [x] balance actually attack values from AW
 - [x] basic AI improvements (smarter unit composition, factory blocking)
 - [x] Campaign mode (roguelike progression grid)
+- [x] Map presets with varied terrain (9 presets from Tiny to Boss)
+- [x] Campaign map selection (preset per cell type, deterministic seeds)
 
 ### Upcoming
-- [ ] make smaller maps
+- [ ] upgrade system
+- [ ] enemy difficulty progression
 - [ ] Saving and loading games
 - [ ] better AI
     - [ ] can use transports
