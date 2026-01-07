@@ -6,6 +6,7 @@ import { MAP_PRESETS, REGULAR_PRESETS, type MapPreset } from './map-presets.js';
 import {
   REWARD_TO_UPGRADE,
   REWARD_TO_POWER,
+  STACKING_UPGRADES,
   computeCampaignModifiers,
   type CampaignModifiers,
 } from './upgrades.js';
@@ -283,6 +284,7 @@ export function completeCell(
   const newCompletionsPerRow = new Map(state.completionsPerRow);
   let newPowerSlots = state.powerSlots;
   let newBossesDefeated = state.bossesDefeated;
+  let newReinforcements = state.reinforcements;
 
   // Helper to unlock a power by name and auto-equip if slots available
   function unlockPower(powerName: string): void {
@@ -324,6 +326,13 @@ export function completeCell(
       if (upgradeId && !newAcquiredUpgrades.includes(upgradeId)) {
         newAcquiredUpgrades.push(upgradeId);
         console.log(`Acquired upgrade: ${cell.name} (${upgradeId})`);
+
+        // Check for special upgrade types
+        const upgrade = STACKING_UPGRADES[upgradeId];
+        if (upgrade?.type === 'reinforcement') {
+          newReinforcements += upgrade.value;
+          console.log(`Gained ${upgrade.value} reinforcement(s)! Total: ${newReinforcements}`);
+        }
       }
     }
 
@@ -350,6 +359,7 @@ export function completeCell(
     completedCells: newCompleted,
     unlockedUnits: newUnlockedUnits,
     completionsPerRow: newCompletionsPerRow,
+    reinforcements: newReinforcements,
     acquiredUpgrades: newAcquiredUpgrades,
     unlockedPowers: newUnlockedPowers,
     activePowers: newActivePowers,

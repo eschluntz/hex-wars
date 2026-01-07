@@ -410,8 +410,8 @@ export class CampaignUI {
 
     cellEl.className = `campaign-cell ${cell.type} ${stateClass}`;
 
-    // Show "???" for fogged/row-locked cells
-    const displayLabel = isRevealed && !isRowLocked ? cell.name : '???';
+    // Show "???" for fogged cells, but show actual text for revealed cells (even if row-locked)
+    const displayLabel = isRevealed ? cell.name : '???';
 
     cellEl.innerHTML = `
       <span class="cell-icon">${ICONS[cell.type]}</span>
@@ -456,9 +456,9 @@ export class CampaignUI {
 
     fortressEl.className = `campaign-fortress-cell ${stateClass}`;
 
-    // Show "???" for fogged/row-locked fortresses
-    const displayName = isRevealed && !isRowLocked ? fortress.name : '???';
-    const displayReward = isRevealed && !isRowLocked ? `★ ${fortress.reward}` : '';
+    // Show "???" for fogged fortresses, but show actual text for revealed ones (even if row-locked)
+    const displayName = isRevealed ? fortress.name : '???';
+    const displayReward = isRevealed ? `★ ${fortress.reward}` : '';
 
     fortressEl.innerHTML = `
       <div class="fortress-tag">Fortress</div>

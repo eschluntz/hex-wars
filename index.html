@@ -439,23 +439,24 @@
     .campaign-fortress-cell.row-locked {
       background: var(--bg-dark);
       border-color: var(--border);
-      opacity: 0.4;
+      opacity: 0.5;
       pointer-events: none;
-    }
-    .campaign-cell.row-locked .cell-icon,
-    .campaign-cell.row-locked .cell-label,
-    .campaign-fortress-cell.row-locked .fortress-icon,
-    .campaign-fortress-cell.row-locked .fortress-name,
-    .campaign-fortress-cell.row-locked .fortress-reward,
-    .campaign-fortress-cell.row-locked .fortress-tag {
-      display: none;
+      position: relative;
     }
     .campaign-cell.row-locked::after,
     .campaign-fortress-cell.row-locked::after {
-      content: '✕';
-      font-size: 1.8rem;
-      color: var(--red);
-      opacity: 0.7;
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        -45deg,
+        transparent,
+        transparent 6px,
+        rgba(239, 68, 68, 0.5) 6px,
+        rgba(239, 68, 68, 0.5) 10px
+      );
+      border-radius: 6px;
+      pointer-events: none;
     }
 
     /* Boss cell */

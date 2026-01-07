@@ -10,7 +10,8 @@ export type UpgradeType =
   | 'attack'
   | 'defense'
   | 'income'
-  | 'cost';
+  | 'cost'
+  | 'reinforcement';
 
 export interface StackingUpgrade {
   id: string;
@@ -31,99 +32,99 @@ export const TREAD_UNITS = ['tank', 'mediumTank', 'heavyTank', 'apc', 'artillery
 
 // Registry of all stacking upgrades
 export const STACKING_UPGRADES: Record<string, StackingUpgrade> = {
-  // +5% damage for specific unit types
-  'atk_5_infantry': {
-    id: 'atk_5_infantry',
-    name: '+5% DMG Infantry',
-    description: '+5% damage for infantry units',
+  // +10% damage for specific unit types
+  'atk_10_infantry': {
+    id: 'atk_10_infantry',
+    name: '+10% DMG Infantry',
+    description: '+10% damage for infantry units',
     type: 'attack',
-    value: 5,
+    value: 10,
     unitFilter: INFANTRY_UNITS,
   },
-  'atk_5_vehicle': {
-    id: 'atk_5_vehicle',
-    name: '+5% DMG Armor',
-    description: '+5% damage for direct fire vehicles',
+  'atk_10_vehicle': {
+    id: 'atk_10_vehicle',
+    name: '+10% DMG Armor',
+    description: '+10% damage for direct fire vehicles',
     type: 'attack',
-    value: 5,
+    value: 10,
     unitFilter: VEHICLE_UNITS,
   },
-  'atk_5_indirect': {
-    id: 'atk_5_indirect',
-    name: '+5% DMG Indirect',
-    description: '+5% damage for indirect fire',
+  'atk_10_indirect': {
+    id: 'atk_10_indirect',
+    name: '+10% DMG Indirect',
+    description: '+10% damage for indirect fire',
     type: 'attack',
-    value: 5,
+    value: 10,
     unitFilter: INDIRECT_UNITS,
   },
-  'atk_5_air': {
-    id: 'atk_5_air',
-    name: '+5% DMG Air',
-    description: '+5% damage for air units',
+  'atk_10_air': {
+    id: 'atk_10_air',
+    name: '+10% DMG Air',
+    description: '+10% damage for air units',
     type: 'attack',
-    value: 5,
+    value: 10,
     unitFilter: AIR_UNITS,
   },
 
-  // +1% damage for all units
-  'atk_1_all': {
-    id: 'atk_1_all',
-    name: '+1% DMG All',
-    description: '+1% damage for all units',
+  // +5% damage for all units
+  'atk_5_all': {
+    id: 'atk_5_all',
+    name: '+5% DMG All',
+    description: '+5% damage for all units',
     type: 'attack',
-    value: 1,
+    value: 5,
   },
 
-  // +5 defense for specific unit types
-  'def_5_infantry': {
-    id: 'def_5_infantry',
-    name: '+5 DEF Infantry',
-    description: 'Infantry take 5% less damage',
+  // +10 defense for specific unit types
+  'def_10_infantry': {
+    id: 'def_10_infantry',
+    name: '+10 DEF Infantry',
+    description: 'Infantry take 10% less damage',
     type: 'defense',
-    value: 5,
+    value: 10,
     unitFilter: INFANTRY_UNITS,
   },
-  'def_5_vehicle': {
-    id: 'def_5_vehicle',
-    name: '+5 DEF Armor',
-    description: 'Direct fire vehicles take 5% less damage',
+  'def_10_vehicle': {
+    id: 'def_10_vehicle',
+    name: '+10 DEF Armor',
+    description: 'Direct fire vehicles take 10% less damage',
     type: 'defense',
-    value: 5,
+    value: 10,
     unitFilter: VEHICLE_UNITS,
   },
-  'def_5_indirect': {
-    id: 'def_5_indirect',
-    name: '+5 DEF Indirect',
-    description: 'Indirect units take 5% less damage',
+  'def_10_indirect': {
+    id: 'def_10_indirect',
+    name: '+10 DEF Indirect',
+    description: 'Indirect units take 10% less damage',
     type: 'defense',
-    value: 5,
+    value: 10,
     unitFilter: INDIRECT_UNITS,
   },
-  'def_5_air': {
-    id: 'def_5_air',
-    name: '+5 DEF Air',
-    description: 'Air units take 5% less damage',
+  'def_10_air': {
+    id: 'def_10_air',
+    name: '+10 DEF Air',
+    description: 'Air units take 10% less damage',
     type: 'defense',
-    value: 5,
+    value: 10,
     unitFilter: AIR_UNITS,
   },
 
-  // +1 defense for all units
-  'def_1_all': {
-    id: 'def_1_all',
-    name: '+1 DEF All',
-    description: 'All units take 1% less damage',
+  // +5 defense for all units
+  'def_5_all': {
+    id: 'def_5_all',
+    name: '+5 DEF All',
+    description: 'All units take 5% less damage',
     type: 'defense',
-    value: 1,
+    value: 5,
   },
 
-  // +5% revenue from cities
-  'income_5': {
-    id: 'income_5',
-    name: '+5% Revenue',
-    description: '+5% funds from buildings',
+  // +10% revenue from cities
+  'income_10': {
+    id: 'income_10',
+    name: '+10% Revenue',
+    description: '+10% funds from buildings',
     type: 'income',
-    value: 5,
+    value: 10,
   },
 
   // -10% cost reduction for specific unit types
@@ -158,6 +159,15 @@ export const STACKING_UPGRADES: Record<string, StackingUpgrade> = {
     type: 'cost',
     value: 10,
     unitFilter: AIR_UNITS,
+  },
+
+  // +1 reinforcement (extra life)
+  'reinforcement_1': {
+    id: 'reinforcement_1',
+    name: '+1 Life',
+    description: 'Gain an extra reinforcement',
+    type: 'reinforcement',
+    value: 1,
   },
 };
 

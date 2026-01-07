@@ -283,7 +283,7 @@ The tests automatically start the dev server (`npm run watch`) before running. R
       - show what enemy upgrades/powers are active (right now none, but this will change once i add difficulty scaling)
       - preview of the map (low res, mainly to give a sense of scale) [only if easy]
       - "attack" button and "cancel" button that closes the modal.
-- [ ] More roguelike feel
+- [x] More roguelike feel
 - [ ] Enemy difficulty progression (available units, bonuses, better AIs)
 - [ ] Saving and loading games
 - [ ] Better AI

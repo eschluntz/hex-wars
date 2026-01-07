@@ -358,7 +358,7 @@ runner.describe('Campaign System', () => {
       const grid = createCampaignGrid(12345);
 
       // Check a few normal rows (not boss rows, not row 0)
-      for (const row of [1, 5, 9]) {
+      for (const row of [1, 2, 3, 7, 8, 9, 13, 14, 15]) {
         // Get all cells in this row (including fortress coverage)
         const directCells = grid.cells.filter(c => c.row === row && c.type !== 'boss');
         const fortressCovers = grid.cells.filter(c =>
