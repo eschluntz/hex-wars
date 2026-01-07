@@ -257,6 +257,73 @@ export const MAP_PRESETS: Record<string, MapPreset> = {
   }
 };
 
+// Flavor text for battle info modal (~5 variants per preset)
+export const MAP_FLAVOR_TEXT: Record<string, string[]> = {
+  tiny: [
+    "A quick skirmish awaits. Strike fast before the enemy can dig in.",
+    "This contested outpost changes hands frequently. Make it ours.",
+    "Small battlefield, big stakes. Every unit counts here.",
+    "Intelligence reports light resistance. A swift victory is within reach.",
+    "The enemy's forward position. Take it before reinforcements arrive.",
+  ],
+  standard: [
+    "A balanced battlefield with room to maneuver. Choose your approach wisely.",
+    "Standard engagement zone. Expect a fair fight on open ground.",
+    "Mixed terrain offers multiple paths to victory. Adapt your strategy.",
+    "The enemy has established a defensive perimeter. Probe for weaknesses.",
+    "Reconnaissance shows varied terrain. Combined arms will be essential.",
+  ],
+  archipelago: [
+    "Island chains dot these waters. Air power will be crucial for rapid deployment.",
+    "The seas divide this battlefield. Control the air or be stranded.",
+    "Scattered islands limit ground movement. Helicopters can turn the tide.",
+    "Naval chokepoints create natural defenses. Plan your island-hopping carefully.",
+    "Water dominates this region. Infantry will need air transport to advance.",
+  ],
+  highlands: [
+    "Mountain peaks offer strong defensive positions. Navigate around or push through.",
+    "The high ground is everything here. Secure the peaks to control the battle.",
+    "Rocky terrain will slow vehicles. Infantry and mechs excel in these mountains.",
+    "The enemy holds fortified mountain passes. Expect a grueling assault.",
+    "Elevation changes create natural bottlenecks. Use indirect fire to your advantage.",
+  ],
+  forest: [
+    "Dense woodland provides excellent cover. Use it wisely, but watch your mobility.",
+    "These forest reserves slow wheeled vehicles. Tread carefully through the trees.",
+    "The canopy hides friend and foe alike. Close-quarters combat is inevitable.",
+    "Woods offer defensive bonuses but limit sight lines. Plan your advances.",
+    "Forest fighting favors infantry. Vehicles will struggle in this terrain.",
+  ],
+  corridor: [
+    "A narrow front forces head-to-head combat. There's no room for flanking here.",
+    "The long corridor creates a brutal meat grinder. Bring your heavy hitters.",
+    "Limited width means every hex matters. Artillery dominates this battlefield.",
+    "A stretched supply line awaits. Secure forward positions as you advance.",
+    "No room to maneuver. This will be a war of attrition.",
+  ],
+  tall: [
+    "The vertical battlefield stretches north to south. Control the center or be split.",
+    "A long march awaits your forces. Pace your advance carefully.",
+    "The enemy waits at the far end. Every hex forward is hard-won.",
+    "Extended battle lines require coordination. Don't let your flanks collapse.",
+    "Distance is your enemy here. Move fast or be picked apart.",
+  ],
+  fortress: [
+    "A massive stronghold sprawls before you. This will be a war of attrition.",
+    "The enemy has dug in deep. Expect fierce resistance at every turn.",
+    "Urban warfare at its finest. Clear building by building if you must.",
+    "Multiple factory districts mean endless reinforcements. Cut their production.",
+    "A city-sized battlefield. Economy wins wars this large.",
+  ],
+  boss: [
+    "The enemy commander awaits. Their full force stands between you and victory.",
+    "This is it. The decisive battle that will turn the tide of war.",
+    "Elite enemy forces guard this position. Bring everything you have.",
+    "The enemy's main army masses here. Break them and the campaign is won.",
+    "A legendary battlefield. Heroes are forged in battles like this.",
+  ],
+};
+
 // Presets available for regular campaign cells (randomly selected)
 // 'tiny' appears twice for 2x weighting since it's the only small size
 export const REGULAR_PRESETS = [

@@ -6,7 +6,7 @@ import type { CampaignCell } from './campaign-state.js';
 import { getCampaignCellPreset, getCampaignBattleSeed } from './campaign-state.js';
 import { POWERS, STACKING_UPGRADES, REWARD_TO_UPGRADE, REWARD_TO_POWER } from './upgrades.js';
 import { UNIT_TYPES, DEFAULT_UNLOCKED_UNITS } from './unit-templates.js';
-import { presetToMapConfig } from './map-presets.js';
+import { presetToMapConfig, MAP_FLAVOR_TEXT } from './map-presets.js';
 import { GameMap } from './game-map.js';
 import { HexUtil } from './core.js';
 import { getUnitTexture } from './textures.js';
@@ -48,6 +48,8 @@ export class BattleInfoModal {
     const reward = this.formatRewardDescription(cell);
     const enemyHtml = this.formatEnemyInfo();
     const mapPreview = this.renderMapPreview(cell, campaignSeed);
+    const preset = getCampaignCellPreset(cell, campaignSeed);
+    const flavorText = this.getFlavorText(preset.name.toLowerCase(), cell.id, campaignSeed);
 
     // For unit cells, we'll add the unit sprite after building the HTML
     const unitIconPlaceholder = cell.type === 'unit' ? '<div id="unit-icon-container"></div>' : '';
@@ -71,6 +73,7 @@ export class BattleInfoModal {
         <div class="battle-modal-section">
           <h3>Battlefield Preview</h3>
           <div class="battle-modal-preview" id="battle-modal-preview-container"></div>
+          <div class="battle-modal-flavor">${flavorText}</div>
         </div>
 
         <div class="battle-modal-section">
@@ -153,6 +156,17 @@ export class BattleInfoModal {
       case 'fortress': return 'Fortress Assault';
       default: return type;
     }
+  }
+
+  private getFlavorText(presetName: string, cellId: string, campaignSeed: number): string {
+    const texts = MAP_FLAVOR_TEXT[presetName]!;
+    // Deterministic selection based on cell id and campaign seed
+    let hash = campaignSeed;
+    for (let i = 0; i < cellId.length; i++) {
+      hash = ((hash << 5) - hash + cellId.charCodeAt(i)) | 0;
+    }
+    const index = Math.abs(hash) % texts.length;
+    return texts[index]!;
   }
 
   private formatRewardDescription(cell: CampaignCell): { html: string; unitFilter?: string[] } {
