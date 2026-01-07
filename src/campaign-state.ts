@@ -3,6 +3,12 @@
 // ============================================================================
 
 import { MAP_PRESETS, REGULAR_PRESETS, type MapPreset } from './map-presets.js';
+import {
+  REWARD_TO_UPGRADE,
+  REWARD_TO_POWER,
+  computeCampaignModifiers,
+  type CampaignModifiers,
+} from './upgrades.js';
 
 export type CellType = 'unit' | 'upgrade' | 'special' | 'boss' | 'fortress';
 
@@ -23,6 +29,13 @@ export interface CampaignState {
   unlockedUnits: Set<string>;   // Unit template IDs
   reinforcements: number;       // Lives remaining
   campaignSeed: number;         // Base seed for the entire campaign
+
+  // Upgrade system
+  acquiredUpgrades: string[];   // IDs of stacking upgrades earned
+  unlockedPowers: string[];     // IDs of powers unlocked
+  activePowers: string[];       // IDs of powers currently equipped
+  powerSlots: number;           // Number of power slots (starts at 1, +1 per boss)
+  bossesDefeated: number;       // Number of bosses defeated
 }
 
 export interface CampaignGrid {
@@ -41,6 +54,11 @@ export function createInitialCampaignState(grid: CampaignGrid, seed: number): Ca
     unlockedUnits: new Set(grid.startingUnits),
     reinforcements: grid.startingReinforcements,
     campaignSeed: seed,
+    acquiredUpgrades: [],
+    unlockedPowers: [],
+    activePowers: [],
+    powerSlots: 1,
+    bossesDefeated: 0,
   };
 }
 
@@ -181,16 +199,113 @@ export function completeCell(
   // Apply any rewards from the cell
   const cell = grid.cells.find(c => c.id === cellId);
   const newUnlockedUnits = new Set(state.unlockedUnits);
+  const newAcquiredUpgrades = [...state.acquiredUpgrades];
+  const newUnlockedPowers = [...state.unlockedPowers];
+  const newActivePowers = [...state.activePowers];
+  let newPowerSlots = state.powerSlots;
+  let newBossesDefeated = state.bossesDefeated;
 
-  if (cell?.type === 'unit' && cell.reward) {
-    newUnlockedUnits.add(cell.reward);
+  if (cell) {
+    // Unit unlock
+    if (cell.type === 'unit' && cell.reward) {
+      newUnlockedUnits.add(cell.reward);
+    }
+
+    // Upgrade acquisition (upgrade cells)
+    if (cell.type === 'upgrade') {
+      const upgradeId = REWARD_TO_UPGRADE[cell.name];
+      if (upgradeId && !newAcquiredUpgrades.includes(upgradeId)) {
+        newAcquiredUpgrades.push(upgradeId);
+        console.log(`Acquired upgrade: ${cell.name} (${upgradeId})`);
+      }
+    }
+
+    // Power unlock (special cells)
+    if (cell.type === 'special') {
+      const powerId = REWARD_TO_POWER[cell.name];
+      if (powerId && !newUnlockedPowers.includes(powerId)) {
+        newUnlockedPowers.push(powerId);
+        console.log(`Unlocked power: ${cell.name} (${powerId})`);
+
+        // Auto-equip if we have empty slots
+        if (newActivePowers.length < newPowerSlots) {
+          newActivePowers.push(powerId);
+          console.log(`Auto-equipped power: ${powerId}`);
+        }
+      }
+    }
+
+    // Boss defeated: +1 power slot
+    if (cell.type === 'boss') {
+      newBossesDefeated++;
+      newPowerSlots++;
+      console.log(`Boss defeated! Power slots: ${newPowerSlots}`);
+    }
+
+    // Fortress: treat as a boss for power slot purposes
+    if (cell.type === 'fortress') {
+      // Fortresses don't give power slots, but could give special rewards
+      // For now, just log completion
+      console.log(`Fortress conquered: ${cell.name}`);
+    }
   }
 
   return {
     ...state,
     completedCells: newCompleted,
     unlockedUnits: newUnlockedUnits,
+    acquiredUpgrades: newAcquiredUpgrades,
+    unlockedPowers: newUnlockedPowers,
+    activePowers: newActivePowers,
+    powerSlots: newPowerSlots,
+    bossesDefeated: newBossesDefeated,
   };
+}
+
+/**
+ * Equip a power (add to active powers)
+ */
+export function equipPower(powerId: string, state: CampaignState): CampaignState {
+  // Check if power is unlocked
+  if (!state.unlockedPowers.includes(powerId)) {
+    return state;
+  }
+
+  // Check if already equipped
+  if (state.activePowers.includes(powerId)) {
+    return state;
+  }
+
+  // Check if we have room
+  if (state.activePowers.length >= state.powerSlots) {
+    return state;
+  }
+
+  return {
+    ...state,
+    activePowers: [...state.activePowers, powerId],
+  };
+}
+
+/**
+ * Unequip a power (remove from active powers)
+ */
+export function unequipPower(powerId: string, state: CampaignState): CampaignState {
+  if (!state.activePowers.includes(powerId)) {
+    return state;
+  }
+
+  return {
+    ...state,
+    activePowers: state.activePowers.filter(id => id !== powerId),
+  };
+}
+
+/**
+ * Get computed campaign modifiers from acquired upgrades and active powers
+ */
+export function getCampaignModifiers(state: CampaignState): CampaignModifiers {
+  return computeCampaignModifiers(state.acquiredUpgrades, state.activePowers);
 }
 
 /**

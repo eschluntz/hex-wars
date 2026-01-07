@@ -4,6 +4,7 @@
 
 import type { CampaignCell, CampaignGrid } from './campaign-state.js';
 import { SeededRandom } from './noise.js';
+import { STACKING_UPGRADES, POWERS } from './upgrades.js';
 
 /**
  * Campaign grid layout: 6 columns, 13 rows with boss barriers and fortress blocks
@@ -21,7 +22,20 @@ import { SeededRandom } from './noise.js';
  *   Row 12: Final Boss
  */
 
+// Unit unlocks by tier (row ranges)
+const TIER_1_UNITS = ['recon', 'apc', 'artillery'];  // Rows 0-1
+const TIER_2_UNITS = ['antiAir', 'rockets'];  // Rows 2-4
+const TIER_3_UNITS = ['mediumTank', 'fighter', 'bomber', 'copter'];  // Rows 5-8
+const TIER_4_UNITS = ['heavyTank', 'missiles', 'transportCopter'];  // Rows 9+
+
+// All upgrade IDs from the registry
+const ALL_UPGRADES = Object.keys(STACKING_UPGRADES);
+
+// All power IDs from the registry
+const ALL_POWERS = Object.keys(POWERS);
+
 let cellIdCounter = 0;
+
 function makeCell(
   row: number,
   col: number,
@@ -57,78 +71,101 @@ function makeFortress(
   };
 }
 
-// Cell definitions for fortress rows - indexed by column
-// Each fortress section has 8 cells (4 per row, excluding fortress columns)
-interface FortressSectionCells {
-  row0: Array<{ type: CampaignCell['type']; name: string; reward: string }>;
-  row1: Array<{ type: CampaignCell['type']; name: string; reward: string }>;
+/**
+ * Pick a random item from a pool, preferring unused items
+ */
+function pickFromPool<T extends { name: string }>(
+  allItems: string[],
+  registry: Record<string, T>,
+  used: Set<string>,
+  rng: SeededRandom
+): T {
+  const available = allItems.filter(id => !used.has(id));
+  const pool = available.length > 0 ? available : allItems;
+  const id = rng.pick(pool);
+  used.add(id);
+  return registry[id]!;
 }
 
-const FORTRESS_SECTION_1: FortressSectionCells = {
-  row0: [
-    { type: 'special', name: 'Quick Deploy', reward: '' },
-    { type: 'upgrade', name: 'Treads', reward: '' },
-    { type: 'unit', name: 'Rockets', reward: 'rockets' },
-    { type: 'special', name: 'Ambush', reward: '' },
-  ],
-  row1: [
-    { type: 'special', name: 'First Strike', reward: '' },
-    { type: 'upgrade', name: 'Ammo+', reward: '' },
-    { type: 'upgrade', name: '+15% Air', reward: '' },
-    { type: 'unit', name: 'Anti-Air', reward: 'antiAir' },
-  ],
-};
+function makeRandomUpgradeCell(row: number, col: number, rng: SeededRandom, used: Set<string>): CampaignCell {
+  const upgrade = pickFromPool(ALL_UPGRADES, STACKING_UPGRADES, used, rng);
+  return makeCell(row, col, 'upgrade', upgrade.name, '');
+}
 
-const FORTRESS_SECTION_2: FortressSectionCells = {
-  row0: [
-    { type: 'special', name: 'Air Drop', reward: '' },
-    { type: 'unit', name: 'Hvy Tank', reward: 'heavyTank' },
-    { type: 'upgrade', name: '+10% All', reward: '' },
-    { type: 'special', name: 'Airstrike', reward: '' },
-  ],
-  row1: [
-    { type: 'upgrade', name: 'Fuel+', reward: '' },
-    { type: 'special', name: 'Entrench', reward: '' },
-    { type: 'unit', name: 'Missiles', reward: 'missiles' },
-    { type: 'unit', name: 'B-Copter', reward: 'copter' },
-  ],
-};
+function makeRandomPowerCell(row: number, col: number, rng: SeededRandom, used: Set<string>): CampaignCell {
+  const power = pickFromPool(ALL_POWERS, POWERS, used, rng);
+  return makeCell(row, col, 'special', power.name, '');
+}
 
-const FORTRESS_SECTION_3: FortressSectionCells = {
-  row0: [
-    { type: 'upgrade', name: 'Economy+', reward: '' },
-    { type: 'special', name: 'Veterancy', reward: '' },
-    { type: 'upgrade', name: '+15% All', reward: '' },
-    { type: 'upgrade', name: 'Ultimate Power', reward: '' },
-  ],
-  row1: [
-    { type: 'special', name: 'EMP', reward: '' },
-    { type: 'upgrade', name: 'Elite', reward: '' },
-    { type: 'upgrade', name: 'Final Strike', reward: '' },
-    { type: 'special', name: '???', reward: '' },
-  ],
-};
+/**
+ * Creates a unit unlock cell
+ */
+function makeUnitCell(
+  row: number,
+  col: number,
+  unitId: string
+): CampaignCell {
+  // Get display name from unit ID
+  const displayNames: Record<string, string> = {
+    infantry: 'Infantry',
+    mech: 'Mech',
+    recon: 'Recon',
+    tank: 'Tank',
+    mediumTank: 'Md Tank',
+    heavyTank: 'Hvy Tank',
+    apc: 'APC',
+    artillery: 'Artillery',
+    rockets: 'Rockets',
+    antiAir: 'Anti-Air',
+    missiles: 'Missiles',
+    fighter: 'Fighter',
+    bomber: 'Bomber',
+    copter: 'B-Copter',
+    transportCopter: 'T-Copter',
+  };
+  return makeCell(row, col, 'unit', displayNames[unitId] ?? unitId, unitId);
+}
 
-function addFortressSectionCells(
-  cells: CampaignCell[],
-  baseRow: number,
-  fortressCol: number,
-  section: FortressSectionCells
-): void {
-  // Generate cells for columns not occupied by fortress (which spans fortressCol and fortressCol+1)
-  let cellIdx = 0;
-  for (let col = 0; col < 6; col++) {
-    if (col === fortressCol || col === fortressCol + 1) continue;
-    cells.push(makeCell(baseRow, col, section.row0[cellIdx]!.type, section.row0[cellIdx]!.name, section.row0[cellIdx]!.reward));
-    cellIdx++;
+/**
+ * Generates a row of cells with a mix of types
+ */
+function generateRow(
+  row: number,
+  rng: SeededRandom,
+  unitPool: string[],
+  usedUpgrades: Set<string>,
+  usedPowers: Set<string>,
+  usedUnits: Set<string>,
+  skipCols: number[] = []
+): CampaignCell[] {
+  const cells: CampaignCell[] = [];
+
+  // Determine cell types for this row (roughly 2 units, 2 upgrades, 2 powers per row)
+  // But randomize the distribution
+  const availableCols = [0, 1, 2, 3, 4, 5].filter(c => !skipCols.includes(c));
+  rng.shuffle(availableCols);
+
+  // Get available units from pool
+  const availableUnits = unitPool.filter(u => !usedUnits.has(u));
+
+  for (let i = 0; i < availableCols.length; i++) {
+    const col = availableCols[i]!;
+
+    // Decide cell type based on position in shuffled order
+    // First 1-2 are units (if available), next 2-3 are upgrades, rest are powers
+    if (i < 2 && availableUnits.length > 0) {
+      const unitId = rng.pick(availableUnits);
+      availableUnits.splice(availableUnits.indexOf(unitId), 1);
+      usedUnits.add(unitId);
+      cells.push(makeUnitCell(row, col, unitId));
+    } else if (i < 4) {
+      cells.push(makeRandomUpgradeCell(row, col, rng, usedUpgrades));
+    } else {
+      cells.push(makeRandomPowerCell(row, col, rng, usedPowers));
+    }
   }
 
-  cellIdx = 0;
-  for (let col = 0; col < 6; col++) {
-    if (col === fortressCol || col === fortressCol + 1) continue;
-    cells.push(makeCell(baseRow + 1, col, section.row1[cellIdx]!.type, section.row1[cellIdx]!.name, section.row1[cellIdx]!.reward));
-    cellIdx++;
-  }
+  return cells;
 }
 
 function createCampaignCells(seed: number): CampaignCell[] {
@@ -136,61 +173,67 @@ function createCampaignCells(seed: number): CampaignCell[] {
   const cells: CampaignCell[] = [];
   const rng = new SeededRandom(seed);
 
-  // Fortress 1 (rows 2-3): only cols 0 or 4 to avoid bordering starting cells
-  const fortress1Col = rng.pick([0, 4]);
-  // Fortress 2 and 3: any column 0-4
+  const usedUpgrades = new Set<string>();
+  const usedPowers = new Set<string>();
+  const usedUnits = new Set<string>();
+
+  // Fortress positions (randomized)
+  const fortress1Col = rng.pick([0, 4]);  // Avoid starting cells
   const fortress2Col = rng.pick([0, 1, 2, 3, 4]);
   const fortress3Col = rng.pick([0, 1, 2, 3, 4]);
 
   // Row 0 (bottom - starting row)
-  cells.push(makeCell(0, 0, 'unit', 'Recon', 'recon'));
-  cells.push(makeCell(0, 1, 'upgrade', '+5% Atk', ''));
-  cells.push(makeCell(0, 2, 'unit', 'Infantry', 'infantry'));
-  cells.push(makeCell(0, 3, 'unit', 'Tank', 'tank'));
-  cells.push(makeCell(0, 4, 'upgrade', '+1 Vision', ''));
-  cells.push(makeCell(0, 5, 'unit', 'Mech', 'mech'));
+  // Fixed: Infantry and Tank are starting units, rest randomized
+  cells.push(makeUnitCell(0, 2, 'infantry'));
+  cells.push(makeUnitCell(0, 3, 'tank'));
+  usedUnits.add('infantry');
+  usedUnits.add('tank');
 
-  // Row 1
-  cells.push(makeCell(1, 0, 'upgrade', '+1 Move', ''));
-  cells.push(makeCell(1, 1, 'unit', 'APC', 'apc'));
-  cells.push(makeCell(1, 2, 'special', 'Resupply', ''));
-  cells.push(makeCell(1, 3, 'upgrade', '+10% Def', ''));
-  cells.push(makeCell(1, 4, 'unit', 'Artillery', 'artillery'));
-  cells.push(makeCell(1, 5, 'upgrade', 'Capture+', ''));
+  // Fill remaining spots with tier 1 content
+  const row0Remaining = [0, 1, 4, 5];
+  rng.shuffle(row0Remaining);
+
+  // Add mech as third starting unit option
+  cells.push(makeUnitCell(0, row0Remaining[0]!, 'mech'));
+  usedUnits.add('mech');
+
+  // Rest are upgrades/powers
+  cells.push(makeRandomUpgradeCell(0, row0Remaining[1]!, rng, usedUpgrades));
+  cells.push(makeRandomUpgradeCell(0, row0Remaining[2]!, rng, usedUpgrades));
+  cells.push(makeRandomPowerCell(0, row0Remaining[3]!, rng, usedPowers));
+
+  // Row 1: Mix of tier 1 units and upgrades/powers
+  cells.push(...generateRow(1, rng, TIER_1_UNITS, usedUpgrades, usedPowers, usedUnits));
 
   // Rows 2-3: Fortress section 1
-  addFortressSectionCells(cells, 2, fortress1Col, FORTRESS_SECTION_1);
-  cells.push(makeFortress(2, fortress1Col, 'Steel Bastion', 'heavyTank'));
+  const fortress1SkipCols = [fortress1Col, fortress1Col + 1];
+  cells.push(...generateRow(2, rng, TIER_2_UNITS, usedUpgrades, usedPowers, usedUnits, fortress1SkipCols));
+  cells.push(...generateRow(3, rng, TIER_2_UNITS, usedUpgrades, usedPowers, usedUnits, fortress1SkipCols));
+  cells.push(makeFortress(2, fortress1Col, 'Steel Bastion', ''));
 
   // Row 4: Boss
-  cells.push(makeCell(4, 0, 'boss', 'General Steelheart', 'mediumTank'));
+  cells.push(makeCell(4, 0, 'boss', 'General Steelheart', ''));
 
-  // Row 5
-  cells.push(makeCell(5, 0, 'unit', 'Med Tank', 'mediumTank'));
-  cells.push(makeCell(5, 1, 'special', 'Blitz', ''));
-  cells.push(makeCell(5, 2, 'upgrade', 'Armor+', ''));
-  cells.push(makeCell(5, 3, 'unit', 'Fighter', 'fighter'));
-  cells.push(makeCell(5, 4, 'unit', 'Bomber', 'bomber'));
-  cells.push(makeCell(5, 5, 'upgrade', '+2 Air Move', ''));
+  // Row 5: After first boss, tier 3 units
+  cells.push(...generateRow(5, rng, TIER_3_UNITS, usedUpgrades, usedPowers, usedUnits));
 
   // Rows 6-7: Fortress section 2
-  addFortressSectionCells(cells, 6, fortress2Col, FORTRESS_SECTION_2);
-  cells.push(makeFortress(6, fortress2Col, 'Sky Citadel', 'heavyTank'));
+  const fortress2SkipCols = [fortress2Col, fortress2Col + 1];
+  cells.push(...generateRow(6, rng, TIER_3_UNITS, usedUpgrades, usedPowers, usedUnits, fortress2SkipCols));
+  cells.push(...generateRow(7, rng, TIER_3_UNITS, usedUpgrades, usedPowers, usedUnits, fortress2SkipCols));
+  cells.push(makeFortress(6, fortress2Col, 'Sky Citadel', ''));
 
   // Row 8: Boss
-  cells.push(makeCell(8, 0, 'boss', 'Admiral Darkwave', 'mediumTank'));
+  cells.push(makeCell(8, 0, 'boss', 'Admiral Darkwave', ''));
 
-  // Row 9
-  cells.push(makeCell(9, 0, 'unit', 'T-Copter', 'transportCopter'));
-  cells.push(makeCell(9, 1, 'special', 'Sonar', ''));
-  cells.push(makeCell(9, 2, 'upgrade', '+20% Naval', ''));
-  cells.push(makeCell(9, 3, 'upgrade', 'Elite Strike', ''));
-  cells.push(makeCell(9, 4, 'upgrade', '+2 Range', ''));
-  cells.push(makeCell(9, 5, 'special', 'Fortress', ''));
+  // Row 9: After second boss, tier 4 units
+  cells.push(...generateRow(9, rng, TIER_4_UNITS, usedUpgrades, usedPowers, usedUnits));
 
   // Rows 10-11: Fortress section 3
-  addFortressSectionCells(cells, 10, fortress3Col, FORTRESS_SECTION_3);
-  cells.push(makeFortress(10, fortress3Col, 'Omega Base', 'heavyTank'));
+  const fortress3SkipCols = [fortress3Col, fortress3Col + 1];
+  cells.push(...generateRow(10, rng, TIER_4_UNITS, usedUpgrades, usedPowers, usedUnits, fortress3SkipCols));
+  cells.push(...generateRow(11, rng, TIER_4_UNITS, usedUpgrades, usedPowers, usedUnits, fortress3SkipCols));
+  cells.push(makeFortress(10, fortress3Col, 'Omega Base', ''));
 
   // Row 12: Final Boss
   cells.push(makeCell(12, 0, 'boss', 'Supreme Commander', ''));
@@ -201,7 +244,7 @@ function createCampaignCells(seed: number): CampaignCell[] {
 export function createCampaignGrid(seed: number): CampaignGrid {
   const cells = createCampaignCells(seed);
 
-  // Find the starting cells (row 0, cols 2-3)
+  // Find the starting cells (row 0, cols 2-3 - Infantry and Tank)
   const startingCells = cells
     .filter(c => c.row === 0 && (c.col === 2 || c.col === 3))
     .map(c => c.id);

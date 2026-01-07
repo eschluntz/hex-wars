@@ -153,4 +153,12 @@ export class Unit {
     unit.r = r;
     unit.hasActed = true;
   }
+
+  /**
+   * Apply stat bonuses from campaign upgrades
+   */
+  applyStatBonuses(moveBonus: number, rangeBonus: number): void {
+    this.speed += moveBonus;
+    this.range += rangeBonus;
+  }
 }

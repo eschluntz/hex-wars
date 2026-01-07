@@ -336,6 +336,8 @@
       background: var(--bg-panel);
       border: 1px solid var(--border);
       border-radius: 8px;
+      width: calc(6 * var(--cell-size) + 5 * var(--gap) + 4rem + 2px);
+      box-sizing: border-box;
     }
 
     .campaign-grid {
@@ -584,6 +586,179 @@
       100% { transform: scale(1); }
     }
     .completing { animation: campaign-complete-pop 0.3s ease; }
+
+    /* Powers Panel */
+    .campaign-powers-panel {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      width: calc(6 * var(--cell-size) + 5 * var(--gap) + 4rem + 2px);
+      box-sizing: border-box;
+    }
+    .powers-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+    .powers-title {
+      font-size: 0.9rem;
+      font-weight: bold;
+      color: var(--purple);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    .powers-slots {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+    .powers-active-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .power-slot {
+      flex: 1;
+      padding: 0.5rem;
+      border-radius: 6px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+    .power-slot.empty {
+      background: var(--bg-dark);
+      border: 2px dashed var(--border);
+    }
+    .power-slot.filled {
+      background: var(--purple-dim);
+      border: 2px solid var(--purple);
+    }
+    .power-slot.filled:hover {
+      background: var(--purple);
+    }
+    .power-name {
+      font-size: 0.7rem;
+      color: var(--text);
+      text-transform: uppercase;
+    }
+    .power-empty {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+    }
+    .power-unequip {
+      font-size: 0.8rem;
+      color: var(--red);
+      font-weight: bold;
+    }
+    .powers-collection-label {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+    }
+    .powers-collection {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .power-card {
+      padding: 0.4rem 0.75rem;
+      background: var(--bg-dark);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+    .power-card.can-equip {
+      cursor: pointer;
+      border-color: var(--purple);
+      color: var(--text);
+    }
+    .power-card.can-equip:hover {
+      background: var(--purple-dim);
+    }
+
+    /* Upgrades Panel */
+    .campaign-upgrades-panel {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      width: calc(6 * var(--cell-size) + 5 * var(--gap) + 4rem + 2px);
+      box-sizing: border-box;
+    }
+    .upgrades-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+    .upgrades-title {
+      font-size: 0.9rem;
+      font-weight: bold;
+      color: var(--red);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    .upgrades-count {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+    .upgrades-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+    .upgrade-item {
+      padding: 0.3rem 0.6rem;
+      background: var(--red-dim);
+      border: 1px solid var(--red);
+      border-radius: 4px;
+    }
+    .upgrade-name {
+      font-size: 0.6rem;
+      color: var(--text);
+      text-transform: uppercase;
+    }
+    .upgrades-empty {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      font-style: italic;
+    }
+
+    /* Info Box (inside powers panel) */
+    .powers-info-box {
+      margin-top: 0.75rem;
+      padding: 0.5rem;
+      background: var(--bg-dark);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      height: 4em;
+      display: flex;
+      align-items: flex-start;
+      overflow: hidden;
+    }
+    .info-text {
+      font-size: 0.75rem;
+      color: var(--text);
+      line-height: 1.4;
+    }
+    .info-text strong {
+      color: #fff;
+    }
+    .info-placeholder {
+      color: var(--text-dim);
+      font-style: italic;
+    }
 
     /* Map Lab Overlay */
     #map-lab-overlay {

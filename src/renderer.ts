@@ -40,6 +40,7 @@ export interface UnloadTargets {
 export interface ProductionMenu {
   factory: Building;
   templates: UnitTemplate[];
+  costOverrides?: Record<string, number>;  // templateId -> discounted cost
 }
 
 export interface AttackRangeOverlay {
@@ -958,13 +959,16 @@ export class Renderer {
   }
 
   private drawProductionMenu(menu: ProductionMenu, zoom: number): void {
-    const items: PopupMenuItem[] = menu.templates.map(t => ({
-      label: t.name,
-      action: `build_${t.id}`,
-      cost: t.cost,
-      stats: `RNG:${t.range} SPD:${t.speed}`,
-      enabled: this.resources.funds >= t.cost,
-    }));
+    const items: PopupMenuItem[] = menu.templates.map(t => {
+      const cost = menu.costOverrides?.[t.id] ?? t.cost;
+      return {
+        label: t.name,
+        action: `build_${t.id}`,
+        cost,
+        stats: `RNG:${t.range} SPD:${t.speed}`,
+        enabled: this.resources.funds >= cost,
+      };
+    });
 
     items.push({
       label: 'Cancel',

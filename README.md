@@ -114,12 +114,13 @@ Roguelike progression through a grid of battles:
 - **6-column, 13-row grid** with normal cells, boss barriers, and 2x2 fortresses
 - **3 reinforcements** (lives) - lose one per lost battle, campaign ends at zero
 - **Start** with Infantry and Tank unlocked at the center of row 0
+- **Randomized rewards** - upgrades and powers are randomly distributed each campaign
 
 **Cell types:**
 - ⬡ **Unit** - Unlock a new unit type for your factories
-- ▲ **Upgrade** - Stat bonuses (not yet implemented)
-- ★ **Special** - Unique abilities (not yet implemented)
-- 👑 **Boss** - Spans full row, uses Boss map preset
+- ▲ **Upgrade** - Stacking stat bonuses (damage, defense, income, cost reduction)
+- ★ **Power** - Equippable abilities (movement, range, bonus units, terrain modifiers)
+- 👑 **Boss** - Spans full row, uses Boss map preset, grants +1 power slot
 - 🏰 **Fortress** - 2x2 block, uses Fortress map preset, position randomized per campaign
 
 **Unlock rules:**
@@ -134,6 +135,37 @@ Roguelike progression through a grid of battles:
 - The 4 cells bordering the starting cells always use **Tiny** maps
 - Other cells randomly select from available presets (Tiny weighted 2x)
 - Same cell always generates the same map (deterministic from campaign seed)
+
+### Upgrade System
+
+Campaign mode features a roguelike upgrade system with two types of rewards:
+
+**Stacking Upgrades** - Small persistent bonuses that accumulate:
+| Upgrade | Effect |
+|---------|--------|
+| +5% Damage (unit type) | +5% damage for infantry, vehicles, indirect, or air |
+| +1% Damage (all) | +1% damage for all units |
+| -5% Damage Taken (unit type) | Specific units take 5% less damage |
+| -1% Damage Taken (all) | All units take 1% less damage |
+| +5% Revenue | +5% funds from buildings |
+| -10% Cost (unit type) | Specific unit types cost 10% less to build |
+
+**Powers** - Larger abilities equipped into limited slots:
+| Power | Effect |
+|-------|--------|
+| Infantry March / Motor Pool / Air Superiority | +1 movement for specific unit types |
+| Blitz | +1 movement for all units |
+| Extended Range | +1 range for indirect fire units |
+| Infantry/Armored/Artillery/Air Assault | +20% damage for specific unit types |
+| Reinforcements | Start each battle with 3 infantry |
+| Tank Reserve | Start each battle with 1 Md Tank |
+| All-Terrain Tires | Wheeled units drive on grass/woods like roads |
+
+**Power Slots:**
+- Start with 1 power slot
+- Gain +1 slot for each boss defeated
+- Equip/unequip powers from the campaign UI
+- Only equipped powers are active in battle
 
 ### Controls
 - **Click** to select unit, click destination to move
@@ -167,8 +199,9 @@ hex-dominion/
 │   ├── menu.ts           # Main menu / game over
 │   ├── stats.ts          # Game statistics
 │   ├── campaign-state.ts # Campaign state and cell availability
-│   ├── campaign-config.ts# Campaign grid layout
-│   ├── campaign-ui.ts    # Campaign HTML UI
+│   ├── campaign-config.ts# Campaign grid layout and reward distribution
+│   ├── campaign-ui.ts    # Campaign HTML UI (grid, powers, upgrades panels)
+│   ├── upgrades.ts       # Upgrade/power definitions and modifiers
 │   └── main.ts           # Game loop and state machine
 ├── tests/                # Test suite (206 tests)
 ├── hex_assets/           # Terrain textures
@@ -203,8 +236,6 @@ The tests automatically start the dev server (`npm run watch`) before running. R
 - Units: [Advance Wars sprite style](https://awbw.fandom.com/wiki/Units)
 - Advance Wars damage calculation: https://awbw.fandom.com/wiki/Damage_Formula
 
-
-
 ## Roadmap
 
 ### Completed
@@ -218,26 +249,32 @@ The tests automatically start the dev server (`npm run watch`) before running. R
 - [x] AI opponent (builds, captures, fights)
 - [x] Unit sprites with team coloring
 - [x] Battle animations
-- [x] movement animations
-- [x] cities heal
-- [x] balance actually attack values from AW
-- [x] basic AI improvements (smarter unit composition, factory blocking)
+- [x] Movement animations
+- [x] Cities heal units
+- [x] Balanced attack values from AW
+- [x] Basic AI improvements (smarter unit composition, factory blocking)
 - [x] Campaign mode (roguelike progression grid)
 - [x] Map presets with varied terrain (9 presets from Tiny to Boss)
 - [x] Campaign map selection (preset per cell type, deterministic seeds)
+- [x] Upgrade system
+  - [x] Stacking upgrades (damage, defense, income, cost reduction)
+  - [x] Equippable powers with limited slots (+1 per boss)
+  - [x] Powers UI panel with equip/unequip
+  - [x] Upgrades panel showing acquired bonuses
+  - [x] Combat integration (AV/DV modifiers)
+  - [x] Income multiplier from upgrades
+  - [x] Cost reduction in factory menu
+  - [x] Movement/range bonuses from powers
+  - [x] Bonus unit spawning at battle start
+  - [x] Terrain modification power (All-Terrain Tires)
+  - [x] Randomized reward distribution per campaign
 
 ### Upcoming
-- [ ] upgrade system
-  - [ ] persistent, stacking, small upgrades, like +5% income, +5% damage for infantry
-  - [ ] Bigger "powers", more inline with advance wars COs. +1 move to vehicles, +1 range to ranged weapons, start with 3 extra infantry, etc. The player should have a limited number of "slots" for these bigger powers. initially only 1 slot, and after each boss, the number of slots increases by 1.
-  - [ ] we need a way for the player to see all their upgrades, and configure which powers are activated.
-  - [ ] these all need to actually get wired through to combat.
-- [ ] enemy difficulty progression. available units, bonuses, better AIs.
+- [ ] Enemy difficulty progression (available units, bonuses, better AIs)
 - [ ] Saving and loading games
-- [ ] better AI
-    - [ ] can use transports
-    - [ ] will block opponent factories
-    - [ ] reactive unit composition
-    - [ ] something better than greedy algo?
+- [ ] Better AI
+    - [ ] Can use transports
+    - [ ] Reactive unit composition
+    - [ ] Something better than greedy algo?
 - [ ] Fog of war (maybe)
-- [ ] plot / story elements lol? end campaign screen, winning campaign screen.
+- [ ] Story elements (end campaign screen, winning campaign screen)

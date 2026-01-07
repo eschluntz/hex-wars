@@ -39,7 +39,7 @@ export class ResourceManager {
     return this.resources.get(team)!.funds >= amount;
   }
 
-  collectIncome(team: string, buildings: Building[]): { funds: number } {
+  collectIncome(team: string, buildings: Building[], incomeMultiplier: number = 1.0): { funds: number } {
     let totalFunds = 0;
 
     for (const building of buildings) {
@@ -48,6 +48,9 @@ export class ResourceManager {
         totalFunds += income.funds;
       }
     }
+
+    // Apply income multiplier (from campaign upgrades)
+    totalFunds = Math.floor(totalFunds * incomeMultiplier);
 
     this.addFunds(team, totalFunds);
 

@@ -38,7 +38,20 @@ import {
   isCampaignOver,
   getCampaignBattleSeed,
   getCampaignCellPreset,
+  getCampaignModifiers,
+  equipPower,
+  unequipPower,
 } from './campaign-state.js';
+import {
+  type CampaignModifiers,
+  getAttackerAV,
+  getDefenderDV,
+  getMoveBonus,
+  getRangeBonus,
+  getCostReduction,
+  POWERS,
+  WHEELS_UNITS,
+} from './upgrades.js';
 import { presetToMapConfig } from './map-presets.js';
 import { MapLabController } from './map-lab.js';
 import { validateMap } from './map-validation.js';
@@ -92,6 +105,7 @@ class Game {
   private activeCampaignCell: CampaignCell | null = null;
   private debugWinBtn: HTMLButtonElement | null = null;
   private debugLoseBtn: HTMLButtonElement | null = null;
+  private campaignModifiers: CampaignModifiers | null = null;
 
   // Map Lab
   private mapLabController: MapLabController | null = null;
@@ -103,6 +117,8 @@ class Game {
     this.campaignUI = new CampaignUI({
       onCellClick: (cell) => this.handleCampaignCellClick(cell),
       onBackClick: () => this.returnToMainMenu(),
+      onEquipPower: (powerId) => this.handleEquipPower(powerId),
+      onUnequipPower: (powerId) => this.handleUnequipPower(powerId),
     });
     this.htmlMenuController = new HTMLMenuController({
       onStartGame: (mapType, playerConfigs) => this.startNewGame(mapType, playerConfigs),
@@ -403,9 +419,14 @@ class Game {
 
   private collectIncome(team: string): void {
     const buildings = this.map.getAllBuildings();
-    const income = this.resources.collectIncome(team, buildings);
+    // Apply income multiplier for player team if in campaign
+    let incomeMultiplier = 1.0;
+    if (team === TEAMS.PLAYER && this.campaignModifiers) {
+      incomeMultiplier = this.campaignModifiers.incomeMultiplier;
+    }
+    const income = this.resources.collectIncome(team, buildings, incomeMultiplier);
     if (income.funds > 0) {
-      console.log(`${team} collected: $${income.funds} funds`);
+      console.log(`${team} collected: $${income.funds} funds${incomeMultiplier > 1 ? ` (x${incomeMultiplier.toFixed(2)})` : ''}`);
     }
     // Record income in stats
     this.gameStats.recordIncome(team, income.funds, 0);
@@ -476,6 +497,37 @@ class Game {
 
   private getUnitById(id: string): Unit | undefined {
     return this.units.find(u => u.id === id && u.isAlive());
+  }
+
+  /**
+   * Create a unit with campaign bonuses applied (if in campaign)
+   */
+  private createUnitWithBonuses(team: string, q: number, r: number, templateId: string): Unit {
+    const unit = new Unit(
+      `${templateId}_${this.nextUnitId++}`,
+      team,
+      q,
+      r,
+      templateId
+    );
+
+    // Apply campaign bonuses to player units
+    if (team === TEAMS.PLAYER && this.campaignModifiers) {
+      const moveBonus = getMoveBonus(templateId, this.campaignModifiers);
+      const rangeBonus = getRangeBonus(templateId, this.campaignModifiers);
+      unit.applyStatBonuses(moveBonus, rangeBonus);
+
+      // Apply terrain_wheels power: wheeled units treat grass/woods like roads
+      if (this.campaignModifiers.hasTerrainWheels && WHEELS_UNITS.includes(templateId)) {
+        unit.terrainCosts = {
+          ...unit.terrainCosts,
+          grass: 1,
+          woods: 1,
+        };
+      }
+    }
+
+    return unit;
   }
 
   private getPathCost(path: AxialCoord[], terrainCosts: import('./core.js').TerrainCosts): number {
@@ -619,9 +671,24 @@ class Game {
       this.renderer.actionMenu = null;
       this.renderer.attackTargets = null;
       this.renderer.unloadTargets = null;
+
+      // Compute cost overrides for player in campaign
+      const templates = getTeamTemplates(this.currentTeam);
+      let costOverrides: Record<string, number> | undefined;
+      if (this.currentTeam === TEAMS.PLAYER && this.campaignModifiers) {
+        costOverrides = {};
+        for (const t of templates) {
+          const reduction = getCostReduction(t.id, this.campaignModifiers);
+          if (reduction > 0) {
+            costOverrides[t.id] = Math.floor(t.cost * (100 - reduction) / 100);
+          }
+        }
+      }
+
       this.renderer.productionMenu = {
         factory: newState.factory,
-        templates: getTeamTemplates(this.currentTeam)
+        templates,
+        costOverrides,
       };
       this.renderer.menuHighlightIndex = 0;
     }
@@ -808,10 +875,65 @@ class Game {
     // Override player's available units with campaign unlocks
     if (this.campaignState) {
       initTeamUnits(TEAMS.PLAYER, Array.from(this.campaignState.unlockedUnits));
+      // Compute campaign modifiers for combat bonuses
+      this.campaignModifiers = getCampaignModifiers(this.campaignState);
+      console.log('Campaign modifiers:', this.campaignModifiers);
+
+      // Apply power effects at battle start
+      this.applyBattleStartPowers();
     }
 
     // Show debug controls during battle
     this.showDebugControls(true);
+  }
+
+  /**
+   * Apply power effects at the start of a campaign battle
+   */
+  private applyBattleStartPowers(): void {
+    if (!this.campaignState) return;
+
+    for (const powerId of this.campaignState.activePowers) {
+      const power = POWERS[powerId];
+      if (!power) continue;
+
+      if (power.effect.type === 'bonus_unit') {
+        this.spawnBonusUnits(power.effect.unitType, power.effect.count);
+      }
+      // Other power effects can be handled here or during gameplay
+    }
+  }
+
+  /**
+   * Spawn bonus units near the player's capital
+   */
+  private spawnBonusUnits(unitType: string, count: number): void {
+    const capital = this.map.getCapital(TEAMS.PLAYER);
+    if (!capital) return;
+
+    // Get empty hexes around capital
+    const neighbors = HexUtil.getNeighbors(capital.q, capital.r);
+    const emptyHexes = neighbors.filter(hex => {
+      const tile = this.map.getTile(hex.q, hex.r);
+      if (!tile) return false;
+      // Check if hex is empty
+      return !this.getUnitAt(hex.q, hex.r);
+    });
+
+    // Spawn units
+    let spawned = 0;
+    for (const hex of emptyHexes) {
+      if (spawned >= count) break;
+
+      const unit = this.createUnitWithBonuses(TEAMS.PLAYER, hex.q, hex.r, unitType);
+      this.units.push(unit);
+      console.log(`Bonus ${unitType} spawned at (${hex.q}, ${hex.r})`);
+      spawned++;
+    }
+
+    if (spawned < count) {
+      console.log(`Could only spawn ${spawned}/${count} bonus units (not enough space)`);
+    }
   }
 
   private handleDebugWin(): void {
@@ -886,8 +1008,25 @@ class Game {
     this.campaignState = null;
     this.campaignGrid = null;
     this.activeCampaignCell = null;
+    this.campaignModifiers = null;
     this.campaignUI.hide();
     this.showDebugControls(false);
+  }
+
+  private handleEquipPower(powerId: string): void {
+    if (!this.campaignState || !this.campaignGrid) return;
+
+    this.campaignState = equipPower(powerId, this.campaignState);
+    this.campaignUI.render(this.campaignGrid, this.campaignState);
+    console.log(`Equipped power: ${powerId}`);
+  }
+
+  private handleUnequipPower(powerId: string): void {
+    if (!this.campaignState || !this.campaignGrid) return;
+
+    this.campaignState = unequipPower(powerId, this.campaignState);
+    this.campaignUI.render(this.campaignGrid, this.campaignState);
+    console.log(`Unequipped power: ${powerId}`);
   }
 
   private showDebugControls(visible: boolean): void {
@@ -1127,25 +1266,28 @@ class Game {
       if (!template) return;
       const factory = this.state.factory;
 
-      if (!this.resources.canAfford(this.currentTeam, template.cost)) {
-        console.log(`Cannot afford ${template.name} ($${template.cost})`);
+      // Apply cost reduction for player in campaign
+      let cost = template.cost;
+      if (this.currentTeam === TEAMS.PLAYER && this.campaignModifiers) {
+        const reduction = getCostReduction(templateId, this.campaignModifiers);
+        if (reduction > 0) {
+          cost = Math.floor(cost * (100 - reduction) / 100);
+        }
+      }
+
+      if (!this.resources.canAfford(this.currentTeam, cost)) {
+        console.log(`Cannot afford ${template.name} ($${cost})`);
         return;
       }
 
       // Spend funds and create unit
-      this.resources.spendFunds(this.currentTeam, template.cost);
+      this.resources.spendFunds(this.currentTeam, cost);
 
-      const unit = new Unit(
-        `${template.id}_${this.nextUnitId++}`,
-        this.currentTeam,
-        factory.q,
-        factory.r,
-        template.id
-      );
+      const unit = this.createUnitWithBonuses(this.currentTeam, factory.q, factory.r, template.id);
       unit.hasActed = true; // New units can't act this turn
       this.units.push(unit);
 
-      console.log(`Built ${template.name} at (${factory.q}, ${factory.r}) for $${template.cost}`);
+      console.log(`Built ${template.name} at (${factory.q}, ${factory.r}) for $${cost}`);
       this.setState({ type: 'idle' });
     }
   }
@@ -1285,11 +1427,40 @@ class Game {
     const attackerHealthBefore = attacker.health;
     const defenderHealthBefore = defender.health;
 
-    // Execute combat with terrain defense
+    // Compute AV/DV based on campaign modifiers (if in campaign) and team
+    let attackerAV = 100;
+    let defenderDV = 100;
+    let defenderAV = 100;
+    let attackerDV = 100;
+
+    if (this.campaignModifiers) {
+      // Player attacking enemy
+      if (attacker.team === TEAMS.PLAYER) {
+        attackerAV = getAttackerAV(attacker.templateId!, this.campaignModifiers);
+      }
+      // Player defending against enemy
+      if (defender.team === TEAMS.PLAYER) {
+        defenderDV = getDefenderDV(defender.templateId!, this.campaignModifiers);
+      }
+      // Defender counter-attacking player
+      if (defender.team === TEAMS.PLAYER) {
+        defenderAV = getAttackerAV(defender.templateId!, this.campaignModifiers);
+      }
+      // Attacker defending against counter-attack
+      if (attacker.team === TEAMS.PLAYER) {
+        attackerDV = getDefenderDV(attacker.templateId!, this.campaignModifiers);
+      }
+    }
+
+    // Execute combat with terrain defense and campaign modifiers
     const result = Combat.execute(
       attacker, defender, undefined, undefined,
       this.map.getTerrainDefenseStars(defender.q, defender.r),
-      this.map.getTerrainDefenseStars(attacker.q, attacker.r)
+      this.map.getTerrainDefenseStars(attacker.q, attacker.r),
+      attackerAV,
+      defenderDV,
+      defenderAV,
+      attackerDV
     );
 
     // Trigger attack animation

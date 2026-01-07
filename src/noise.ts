@@ -97,4 +97,11 @@ export class SeededRandom {
   pick<T>(arr: T[]): T {
     return arr[Math.floor(this.next() * arr.length)]!;
   }
+
+  shuffle<T>(arr: T[]): void {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(this.next() * (i + 1));
+      [arr[i], arr[j]] = [arr[j]!, arr[i]!];
+    }
+  }
 }

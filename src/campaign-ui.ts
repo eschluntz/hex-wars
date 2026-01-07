@@ -4,6 +4,7 @@
 
 import type { CampaignCell, CampaignGrid, CampaignState } from './campaign-state.js';
 import { isCellAvailable } from './campaign-state.js';
+import { POWERS, STACKING_UPGRADES } from './upgrades.js';
 
 const ICONS: Record<string, string> = {
   unit: '⬡',
@@ -16,6 +17,8 @@ const ICONS: Record<string, string> = {
 export interface CampaignUICallbacks {
   onCellClick: (cell: CampaignCell) => void;
   onBackClick: () => void;
+  onEquipPower?: (powerId: string) => void;
+  onUnequipPower?: (powerId: string) => void;
 }
 
 export class CampaignUI {
@@ -23,6 +26,9 @@ export class CampaignUI {
   private gridContainer: HTMLElement;
   private heartsContainer: HTMLElement;
   private backBtn: HTMLElement;
+  private powersPanel: HTMLElement | null = null;
+  private upgradesPanel: HTMLElement | null = null;
+  private infoBox: HTMLElement | null = null;
   private callbacks: CampaignUICallbacks;
 
   constructor(callbacks: CampaignUICallbacks) {
@@ -33,6 +39,49 @@ export class CampaignUI {
     this.backBtn = document.getElementById('campaign-back-btn')!;
 
     this.backBtn.addEventListener('click', () => this.callbacks.onBackClick());
+
+    // Create panels (will be filled on render)
+    this.createPowersPanelContainer();
+    this.createUpgradesPanelContainer();
+    this.createInfoBox();
+  }
+
+  private createPowersPanelContainer(): void {
+    // Insert after the grid container
+    const container = document.querySelector('.campaign-grid-container');
+    if (!container) return;
+
+    this.powersPanel = document.createElement('div');
+    this.powersPanel.className = 'campaign-powers-panel';
+    container.parentElement?.insertBefore(this.powersPanel, container.nextSibling);
+  }
+
+  private createUpgradesPanelContainer(): void {
+    // Insert after powers panel
+    if (!this.powersPanel) return;
+
+    this.upgradesPanel = document.createElement('div');
+    this.upgradesPanel.className = 'campaign-upgrades-panel';
+    this.powersPanel.parentElement?.insertBefore(this.upgradesPanel, this.powersPanel.nextSibling);
+  }
+
+  private createInfoBox(): void {
+    // Will be added inside powers panel during render
+    this.infoBox = document.createElement('div');
+    this.infoBox.className = 'powers-info-box';
+    this.infoBox.innerHTML = '<span class="info-text info-placeholder">Hover for details</span>';
+  }
+
+  private setInfoText(text: string): void {
+    if (this.infoBox) {
+      this.infoBox.innerHTML = `<span class="info-text">${text}</span>`;
+    }
+  }
+
+  private clearInfoText(): void {
+    if (this.infoBox) {
+      this.infoBox.innerHTML = '<span class="info-text info-placeholder">Hover for details</span>';
+    }
   }
 
   show(): void {
@@ -46,6 +95,132 @@ export class CampaignUI {
   render(grid: CampaignGrid, state: CampaignState): void {
     this.renderHearts(state.reinforcements);
     this.renderGrid(grid, state);
+    this.renderPowersPanel(state);
+    this.renderUpgradesPanel(state);
+  }
+
+  private renderPowersPanel(state: CampaignState): void {
+    if (!this.powersPanel) return;
+
+    this.powersPanel.innerHTML = '';
+
+    // Header with slot count
+    const header = document.createElement('div');
+    header.className = 'powers-header';
+    header.innerHTML = `
+      <span class="powers-title">Powers</span>
+      <span class="powers-slots">Slots: ${state.activePowers.length}/${state.powerSlots}</span>
+    `;
+    this.powersPanel.appendChild(header);
+
+    // Active powers row
+    const activeRow = document.createElement('div');
+    activeRow.className = 'powers-active-row';
+
+    for (let i = 0; i < state.powerSlots; i++) {
+      const slot = document.createElement('div');
+      const powerId = state.activePowers[i];
+
+      if (powerId) {
+        const power = POWERS[powerId]!;
+        slot.className = 'power-slot filled';
+        slot.innerHTML = `
+          <span class="power-name">${power.name}</span>
+          <span class="power-unequip">×</span>
+        `;
+        slot.addEventListener('mouseenter', () => this.setInfoText(`<strong>${power.name}</strong>: ${power.description}`));
+        slot.addEventListener('mouseleave', () => this.clearInfoText());
+        slot.addEventListener('click', () => {
+          this.callbacks.onUnequipPower?.(powerId);
+        });
+      } else {
+        slot.className = 'power-slot empty';
+        slot.innerHTML = '<span class="power-empty">Empty</span>';
+      }
+      activeRow.appendChild(slot);
+    }
+    this.powersPanel.appendChild(activeRow);
+
+    // Unlocked powers (not yet equipped)
+    const unequippedPowers = state.unlockedPowers.filter(
+      id => !state.activePowers.includes(id)
+    );
+
+    if (unequippedPowers.length > 0) {
+      const collectionLabel = document.createElement('div');
+      collectionLabel.className = 'powers-collection-label';
+      collectionLabel.textContent = 'Available:';
+      this.powersPanel.appendChild(collectionLabel);
+      const collection = document.createElement('div');
+      collection.className = 'powers-collection';
+
+      for (const powerId of unequippedPowers) {
+        const power = POWERS[powerId]!;
+        const card = document.createElement('div');
+        card.className = 'power-card';
+        card.innerHTML = `<span class="power-name">${power.name}</span>`;
+
+        card.addEventListener('mouseenter', () => this.setInfoText(`<strong>${power.name}</strong>: ${power.description}`));
+        card.addEventListener('mouseleave', () => this.clearInfoText());
+
+        // Can equip if there's room
+        if (state.activePowers.length < state.powerSlots) {
+          card.classList.add('can-equip');
+          card.addEventListener('click', () => {
+            this.callbacks.onEquipPower?.(powerId);
+          });
+        }
+
+        collection.appendChild(card);
+      }
+      this.powersPanel.appendChild(collection);
+    }
+
+    // Add info box inside powers panel
+    if (this.infoBox) {
+      this.clearInfoText();
+      this.powersPanel.appendChild(this.infoBox);
+    }
+  }
+
+  private renderUpgradesPanel(state: CampaignState): void {
+    if (!this.upgradesPanel) return;
+
+    this.upgradesPanel.innerHTML = '';
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'upgrades-header';
+    header.innerHTML = `
+      <span class="upgrades-title">Upgrades</span>
+      <span class="upgrades-count">${state.acquiredUpgrades.length} acquired</span>
+    `;
+    this.upgradesPanel.appendChild(header);
+
+    // Upgrades list
+    const list = document.createElement('div');
+    list.className = 'upgrades-list';
+
+    if (state.acquiredUpgrades.length === 0) {
+      const emptyText = document.createElement('div');
+      emptyText.className = 'upgrades-empty';
+      emptyText.textContent = 'No upgrades yet';
+      list.appendChild(emptyText);
+    } else {
+      for (const upgradeId of state.acquiredUpgrades) {
+        const upgrade = STACKING_UPGRADES[upgradeId];
+        if (!upgrade) continue;
+
+        const item = document.createElement('div');
+        item.className = 'upgrade-item';
+        item.innerHTML = `<span class="upgrade-name">${upgrade.name}</span>`;
+        item.addEventListener('mouseenter', () => this.setInfoText(`<strong>${upgrade.name}</strong>: ${upgrade.description}`));
+        item.addEventListener('mouseleave', () => this.clearInfoText());
+        list.appendChild(item);
+      }
+    }
+
+    this.upgradesPanel.appendChild(list);
   }
 
   private renderHearts(reinforcements: number): void {
