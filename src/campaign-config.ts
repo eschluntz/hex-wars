@@ -107,23 +107,23 @@ function makeUnitCell(
 ): CampaignCell {
   // Get display name from unit ID
   const displayNames: Record<string, string> = {
-    infantry: 'Infantry',
-    mech: 'Mech',
-    recon: 'Recon',
-    tank: 'Tank',
-    mediumTank: 'Md Tank',
-    heavyTank: 'Hvy Tank',
-    apc: 'APC',
-    artillery: 'Artillery',
-    rockets: 'Rockets',
-    antiAir: 'Anti-Air',
-    missiles: 'Missiles',
-    fighter: 'Fighter',
-    bomber: 'Bomber',
-    copter: 'B-Copter',
-    transportCopter: 'T-Copter',
+    infantry: 'Unlock Infantry',
+    mech: 'Unlock Mech',
+    recon: 'Unlock Recon',
+    tank: 'Unlock Tank',
+    mediumTank: 'Unlock Md Tank',
+    heavyTank: 'Unlock Mega Tank',
+    apc: 'Unlock APC',
+    artillery: 'Unlock Artillery',
+    rockets: 'Unlock Rockets',
+    antiAir: 'Unlock Anti-Air',
+    missiles: 'Unlock Missiles',
+    fighter: 'Unlock Fighter',
+    bomber: 'Unlock Bomber',
+    copter: 'Unlock B-Copter',
+    transportCopter: 'Unlock T-Copter',
   };
-  return makeCell(row, col, 'unit', displayNames[unitId] ?? unitId, unitId);
+  return makeCell(row, col, 'unit', displayNames[unitId]!, unitId);
 }
 
 /**
@@ -177,6 +177,14 @@ function createCampaignCells(seed: number): CampaignCell[] {
   const usedPowers = new Set<string>();
   const usedUnits = new Set<string>();
 
+  // Pre-assign powers to fortresses and bosses (6 total, prioritized)
+  const fortressPower1 = pickFromPool(ALL_POWERS, POWERS, usedPowers, rng);
+  const fortressPower2 = pickFromPool(ALL_POWERS, POWERS, usedPowers, rng);
+  const fortressPower3 = pickFromPool(ALL_POWERS, POWERS, usedPowers, rng);
+  const bossPower1 = pickFromPool(ALL_POWERS, POWERS, usedPowers, rng);
+  const bossPower2 = pickFromPool(ALL_POWERS, POWERS, usedPowers, rng);
+  const bossPower3 = pickFromPool(ALL_POWERS, POWERS, usedPowers, rng);
+
   // Fortress positions (randomized)
   const fortress1Col = rng.pick([0, 4]);  // Avoid starting cells
   const fortress2Col = rng.pick([0, 1, 2, 3, 4]);
@@ -209,10 +217,10 @@ function createCampaignCells(seed: number): CampaignCell[] {
   const fortress1SkipCols = [fortress1Col, fortress1Col + 1];
   cells.push(...generateRow(2, rng, TIER_2_UNITS, usedUpgrades, usedPowers, usedUnits, fortress1SkipCols));
   cells.push(...generateRow(3, rng, TIER_2_UNITS, usedUpgrades, usedPowers, usedUnits, fortress1SkipCols));
-  cells.push(makeFortress(2, fortress1Col, 'Steel Bastion', ''));
+  cells.push(makeFortress(2, fortress1Col, 'Steel Bastion', fortressPower1.name));
 
   // Row 4: Boss
-  cells.push(makeCell(4, 0, 'boss', 'General Steelheart', ''));
+  cells.push(makeCell(4, 0, 'boss', 'General Steelheart', bossPower1.name));
 
   // Row 5: After first boss, tier 3 units
   cells.push(...generateRow(5, rng, TIER_3_UNITS, usedUpgrades, usedPowers, usedUnits));
@@ -221,10 +229,10 @@ function createCampaignCells(seed: number): CampaignCell[] {
   const fortress2SkipCols = [fortress2Col, fortress2Col + 1];
   cells.push(...generateRow(6, rng, TIER_3_UNITS, usedUpgrades, usedPowers, usedUnits, fortress2SkipCols));
   cells.push(...generateRow(7, rng, TIER_3_UNITS, usedUpgrades, usedPowers, usedUnits, fortress2SkipCols));
-  cells.push(makeFortress(6, fortress2Col, 'Sky Citadel', ''));
+  cells.push(makeFortress(6, fortress2Col, 'Sky Citadel', fortressPower2.name));
 
   // Row 8: Boss
-  cells.push(makeCell(8, 0, 'boss', 'Admiral Darkwave', ''));
+  cells.push(makeCell(8, 0, 'boss', 'Admiral Darkwave', bossPower2.name));
 
   // Row 9: After second boss, tier 4 units
   cells.push(...generateRow(9, rng, TIER_4_UNITS, usedUpgrades, usedPowers, usedUnits));
@@ -233,10 +241,10 @@ function createCampaignCells(seed: number): CampaignCell[] {
   const fortress3SkipCols = [fortress3Col, fortress3Col + 1];
   cells.push(...generateRow(10, rng, TIER_4_UNITS, usedUpgrades, usedPowers, usedUnits, fortress3SkipCols));
   cells.push(...generateRow(11, rng, TIER_4_UNITS, usedUpgrades, usedPowers, usedUnits, fortress3SkipCols));
-  cells.push(makeFortress(10, fortress3Col, 'Omega Base', ''));
+  cells.push(makeFortress(10, fortress3Col, 'Omega Base', fortressPower3.name));
 
   // Row 12: Final Boss
-  cells.push(makeCell(12, 0, 'boss', 'Supreme Commander', ''));
+  cells.push(makeCell(12, 0, 'boss', 'Supreme Commander', bossPower3.name));
 
   return cells;
 }

@@ -205,13 +205,25 @@ export function completeCell(
   let newPowerSlots = state.powerSlots;
   let newBossesDefeated = state.bossesDefeated;
 
+  // Helper to unlock a power by name and auto-equip if slots available
+  function unlockPower(powerName: string): void {
+    const powerId = REWARD_TO_POWER[powerName];
+    if (!powerId || newUnlockedPowers.includes(powerId)) return;
+    newUnlockedPowers.push(powerId);
+    console.log(`Unlocked power: ${powerName} (${powerId})`);
+    if (newActivePowers.length < newPowerSlots) {
+      newActivePowers.push(powerId);
+      console.log(`Auto-equipped power: ${powerId}`);
+    }
+  }
+
   if (cell) {
     // Unit unlock
     if (cell.type === 'unit' && cell.reward) {
       newUnlockedUnits.add(cell.reward);
     }
 
-    // Upgrade acquisition (upgrade cells)
+    // Upgrade acquisition
     if (cell.type === 'upgrade') {
       const upgradeId = REWARD_TO_UPGRADE[cell.name];
       if (upgradeId && !newAcquiredUpgrades.includes(upgradeId)) {
@@ -220,33 +232,21 @@ export function completeCell(
       }
     }
 
-    // Power unlock (special cells)
+    // Power unlock (special cells use name, boss/fortress use reward)
     if (cell.type === 'special') {
-      const powerId = REWARD_TO_POWER[cell.name];
-      if (powerId && !newUnlockedPowers.includes(powerId)) {
-        newUnlockedPowers.push(powerId);
-        console.log(`Unlocked power: ${cell.name} (${powerId})`);
-
-        // Auto-equip if we have empty slots
-        if (newActivePowers.length < newPowerSlots) {
-          newActivePowers.push(powerId);
-          console.log(`Auto-equipped power: ${powerId}`);
-        }
-      }
+      unlockPower(cell.name);
     }
 
-    // Boss defeated: +1 power slot
     if (cell.type === 'boss') {
       newBossesDefeated++;
       newPowerSlots++;
       console.log(`Boss defeated! Power slots: ${newPowerSlots}`);
+      unlockPower(cell.reward);
     }
 
-    // Fortress: treat as a boss for power slot purposes
     if (cell.type === 'fortress') {
-      // Fortresses don't give power slots, but could give special rewards
-      // For now, just log completion
       console.log(`Fortress conquered: ${cell.name}`);
+      unlockPower(cell.reward);
     }
   }
 

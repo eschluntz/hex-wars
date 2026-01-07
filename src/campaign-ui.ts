@@ -321,7 +321,7 @@ export class CampaignUI {
       <span class="boss-icon">${ICONS.boss}</span>
       <div class="boss-info">
         <span class="boss-name">${boss.name}</span>
-        <span class="boss-reward">🎁 ${boss.reward || 'Victory'}</span>
+        <span class="boss-reward">★ ${boss.reward}</span>
       </div>
     `;
 
@@ -408,7 +408,7 @@ export class CampaignUI {
       <div class="fortress-tag">Fortress</div>
       <span class="fortress-icon">${ICONS.fortress}</span>
       <span class="fortress-name">${fortress.name}</span>
-      <span class="fortress-reward">🎁 ${fortress.reward || 'Reward'}</span>
+      <span class="fortress-reward">★ ${fortress.reward}</span>
     `;
 
     if (isAvailable) {

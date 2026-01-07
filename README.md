@@ -143,21 +143,27 @@ Campaign mode features a roguelike upgrade system with two types of rewards:
 **Stacking Upgrades** - Small persistent bonuses that accumulate:
 | Upgrade | Effect |
 |---------|--------|
-| +5% Damage (unit type) | +5% damage for infantry, vehicles, indirect, or air |
-| +1% Damage (all) | +1% damage for all units |
-| -5% Damage Taken (unit type) | Specific units take 5% less damage |
-| -1% Damage Taken (all) | All units take 1% less damage |
+| +5% DMG (unit type) | +5% damage for infantry, vehicles, indirect, or air |
+| +1% DMG All | +1% damage for all units |
+| +5 DEF (unit type) | Specific units take 5% less damage |
+| +1 DEF All | All units take 1% less damage |
 | +5% Revenue | +5% funds from buildings |
 | -10% Cost (unit type) | Specific unit types cost 10% less to build |
 
 **Powers** - Larger abilities equipped into limited slots:
 | Power | Effect |
 |-------|--------|
-| Infantry March / Motor Pool / Air Superiority | +1 movement for specific unit types |
+| Infantry March | +1 movement for foot units (infantry, mech) |
+| Adv. Wheels | +1 movement for wheeled units (recon, rockets, missiles) |
+| Adv. Treads | +1 movement for tracked units (tanks, apc, artillery) |
+| Jet Fuel | +1 movement for air units |
 | Blitz | +1 movement for all units |
 | Extended Range | +1 range for indirect fire units |
-| Infantry/Armored/Artillery/Air Assault | +20% damage for specific unit types |
-| Reinforcements | Start each battle with 3 infantry |
+| Infantry Assault | +20% damage for infantry |
+| Armored Assault | +20% damage for direct fire vehicles |
+| Artillery Barrage | +20% damage for indirect fire |
+| Air Strike | +20% damage for air units |
+| Reserves | Start each battle with 3 infantry |
 | Tank Reserve | Start each battle with 1 Md Tank |
 | All-Terrain Tires | Wheeled units drive on grass/woods like roads |
 
@@ -270,6 +276,13 @@ The tests automatically start the dev server (`npm run watch`) before running. R
   - [x] Randomized reward distribution per campaign
 
 ### Upcoming
+- [ ] campaign screen
+  - [ ] Modal for info on available battles.
+      - explanation of what the unlock is. All explanation text that is not ALL should list the units it applies to.
+      - show what enemy units the enemy has available
+      - show what enemy upgrades/powers are active (right now none, but this will change once i add difficulty scaling)
+      - preview of the map (low res, mainly to give a sense of scale) [only if easy]
+      - "attack" button and "cancel" button that closes the modal.
 - [ ] Enemy difficulty progression (available units, bonuses, better AIs)
 - [ ] Saving and loading games
 - [ ] Better AI

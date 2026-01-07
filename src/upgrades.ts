@@ -27,13 +27,14 @@ export const VEHICLE_UNITS = ['recon', 'tank', 'mediumTank', 'heavyTank', 'apc']
 export const INDIRECT_UNITS = ['artillery', 'rockets', 'missiles'];
 export const AIR_UNITS = ['fighter', 'bomber', 'copter', 'transportCopter'];
 export const WHEELS_UNITS = ['recon', 'rockets', 'missiles'];
+export const TREAD_UNITS = ['tank', 'mediumTank', 'heavyTank', 'apc', 'artillery'];
 
 // Registry of all stacking upgrades
 export const STACKING_UPGRADES: Record<string, StackingUpgrade> = {
   // +5% damage for specific unit types
   'atk_5_infantry': {
     id: 'atk_5_infantry',
-    name: '+5% Infantry',
+    name: '+5% DMG Infantry',
     description: '+5% damage for infantry units',
     type: 'attack',
     value: 5,
@@ -41,15 +42,15 @@ export const STACKING_UPGRADES: Record<string, StackingUpgrade> = {
   },
   'atk_5_vehicle': {
     id: 'atk_5_vehicle',
-    name: '+5% Vehicles',
-    description: '+5% damage for vehicles',
+    name: '+5% DMG Armor',
+    description: '+5% damage for direct fire vehicles',
     type: 'attack',
     value: 5,
     unitFilter: VEHICLE_UNITS,
   },
   'atk_5_indirect': {
     id: 'atk_5_indirect',
-    name: '+5% Indirect',
+    name: '+5% DMG Indirect',
     description: '+5% damage for indirect fire',
     type: 'attack',
     value: 5,
@@ -57,7 +58,7 @@ export const STACKING_UPGRADES: Record<string, StackingUpgrade> = {
   },
   'atk_5_air': {
     id: 'atk_5_air',
-    name: '+5% Air',
+    name: '+5% DMG Air',
     description: '+5% damage for air units',
     type: 'attack',
     value: 5,
@@ -67,16 +68,16 @@ export const STACKING_UPGRADES: Record<string, StackingUpgrade> = {
   // +1% damage for all units
   'atk_1_all': {
     id: 'atk_1_all',
-    name: '+1% All',
+    name: '+1% DMG All',
     description: '+1% damage for all units',
     type: 'attack',
     value: 1,
   },
 
-  // -5% damage taken for specific unit types (defense)
+  // +5 defense for specific unit types
   'def_5_infantry': {
     id: 'def_5_infantry',
-    name: '-5% Dmg Infantry',
+    name: '+5 DEF Infantry',
     description: 'Infantry take 5% less damage',
     type: 'defense',
     value: 5,
@@ -84,15 +85,15 @@ export const STACKING_UPGRADES: Record<string, StackingUpgrade> = {
   },
   'def_5_vehicle': {
     id: 'def_5_vehicle',
-    name: '-5% Dmg Vehicles',
-    description: 'Vehicles take 5% less damage',
+    name: '+5 DEF Armor',
+    description: 'Direct fire vehicles take 5% less damage',
     type: 'defense',
     value: 5,
     unitFilter: VEHICLE_UNITS,
   },
   'def_5_indirect': {
     id: 'def_5_indirect',
-    name: '-5% Dmg Indirect',
+    name: '+5 DEF Indirect',
     description: 'Indirect units take 5% less damage',
     type: 'defense',
     value: 5,
@@ -100,17 +101,17 @@ export const STACKING_UPGRADES: Record<string, StackingUpgrade> = {
   },
   'def_5_air': {
     id: 'def_5_air',
-    name: '-5% Dmg Air',
+    name: '+5 DEF Air',
     description: 'Air units take 5% less damage',
     type: 'defense',
     value: 5,
     unitFilter: AIR_UNITS,
   },
 
-  // -1% damage taken for all units
+  // +1 defense for all units
   'def_1_all': {
     id: 'def_1_all',
-    name: '-1% Dmg All',
+    name: '+1 DEF All',
     description: 'All units take 1% less damage',
     type: 'defense',
     value: 1,
@@ -136,8 +137,8 @@ export const STACKING_UPGRADES: Record<string, StackingUpgrade> = {
   },
   'cost_10_vehicle': {
     id: 'cost_10_vehicle',
-    name: '-10% Vehicle Cost',
-    description: 'Vehicles cost 10% less',
+    name: '-10% Armor Cost',
+    description: 'Direct fire vehicles cost 10% less',
     type: 'cost',
     value: 10,
     unitFilter: VEHICLE_UNITS,
@@ -222,15 +223,21 @@ export const POWERS: Record<string, Power> = {
     description: '+1 movement for infantry',
     effect: { type: 'move_bonus', value: 1, unitFilter: INFANTRY_UNITS },
   },
-  'move_1_vehicle': {
-    id: 'move_1_vehicle',
-    name: 'Motor Pool',
-    description: '+1 movement for vehicles',
-    effect: { type: 'move_bonus', value: 1, unitFilter: VEHICLE_UNITS },
+  'move_1_wheels': {
+    id: 'move_1_wheels',
+    name: 'Adv. Wheels',
+    description: '+1 movement for wheeled units',
+    effect: { type: 'move_bonus', value: 1, unitFilter: WHEELS_UNITS },
+  },
+  'move_1_treads': {
+    id: 'move_1_treads',
+    name: 'Adv. Treads',
+    description: '+1 movement for tracked units',
+    effect: { type: 'move_bonus', value: 1, unitFilter: TREAD_UNITS },
   },
   'move_1_air': {
     id: 'move_1_air',
-    name: 'Air Superiority',
+    name: 'Jet Fuel',
     description: '+1 movement for air units',
     effect: { type: 'move_bonus', value: 1, unitFilter: AIR_UNITS },
   },
@@ -259,7 +266,7 @@ export const POWERS: Record<string, Power> = {
   'atk_20_vehicle': {
     id: 'atk_20_vehicle',
     name: 'Armored Assault',
-    description: '+20% damage for vehicles',
+    description: '+20% damage for direct fire vehicles',
     effect: { type: 'attack_bonus', value: 20, unitFilter: VEHICLE_UNITS },
   },
   'atk_20_indirect': {
@@ -278,7 +285,7 @@ export const POWERS: Record<string, Power> = {
   // Bonus unit powers
   'bonus_infantry_3': {
     id: 'bonus_infantry_3',
-    name: 'Reinforcements',
+    name: 'Reserves',
     description: 'Start each battle with 3 infantry',
     effect: { type: 'bonus_unit', unitType: 'infantry', count: 3 },
   },
