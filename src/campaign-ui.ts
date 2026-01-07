@@ -3,7 +3,7 @@
 // ============================================================================
 
 import type { CampaignCell, CampaignGrid, CampaignState } from './campaign-state.js';
-import { isCellAvailable } from './campaign-state.js';
+import { isCellAvailable, isCellRevealed, isRowMaxed } from './campaign-state.js';
 import { POWERS, STACKING_UPGRADES } from './upgrades.js';
 import { BattleInfoModal } from './battle-info-modal.js';
 
@@ -301,8 +301,8 @@ export class CampaignUI {
     // Sort cells by column
     cells.sort((a, b) => a.col - b.col);
 
-    // Fill in all 6 columns
-    for (let col = 0; col < 6; col++) {
+    // Fill in all 4 columns
+    for (let col = 0; col < 4; col++) {
       const cell = cells.find(c => c.col === col);
       if (cell) {
         rowEl.appendChild(this.createCellElement(cell, state, grid));
@@ -352,7 +352,7 @@ export class CampaignUI {
     const rowEl = document.createElement('div');
     rowEl.className = 'campaign-row tall-row';
     rowEl.style.display = 'grid';
-    rowEl.style.gridTemplateColumns = 'repeat(6, var(--cell-size))';
+    rowEl.style.gridTemplateColumns = 'repeat(4, var(--cell-size))';
     rowEl.style.gridTemplateRows = 'repeat(2, var(--cell-size))';
     rowEl.style.gap = 'var(--gap)';
     rowEl.style.height = 'auto';
@@ -391,12 +391,31 @@ export class CampaignUI {
   private createCellElement(cell: CampaignCell, state: CampaignState, grid: CampaignGrid): HTMLElement {
     const isCompleted = state.completedCells.has(cell.id);
     const isAvailable = !isCompleted && isCellAvailable(cell, state, grid);
+    const isRevealed = isCellRevealed(cell, state, grid);
+    const isRowLocked = !isCompleted && isRowMaxed(cell.row, state);
 
     const cellEl = document.createElement('div');
-    cellEl.className = `campaign-cell ${cell.type} ${isCompleted ? 'completed' : isAvailable ? 'available' : 'locked'}`;
+
+    // Build class list
+    let stateClass = 'locked';
+    if (isCompleted) {
+      stateClass = 'completed';
+    } else if (isRowLocked) {
+      stateClass = 'row-locked';
+    } else if (isAvailable) {
+      stateClass = 'available';
+    } else if (!isRevealed) {
+      stateClass = 'fogged';
+    }
+
+    cellEl.className = `campaign-cell ${cell.type} ${stateClass}`;
+
+    // Show "???" for fogged/row-locked cells
+    const displayLabel = isRevealed && !isRowLocked ? cell.name : '???';
+
     cellEl.innerHTML = `
       <span class="cell-icon">${ICONS[cell.type]}</span>
-      <span class="cell-label">${cell.name}</span>
+      <span class="cell-label">${displayLabel}</span>
     `;
 
     if (isAvailable) {
@@ -409,15 +428,43 @@ export class CampaignUI {
   private createFortressElement(fortress: CampaignCell, state: CampaignState, grid: CampaignGrid): HTMLElement {
     const isCompleted = state.completedCells.has(fortress.id);
     const isAvailable = !isCompleted && isCellAvailable(fortress, state, grid);
+    const isRevealed = isCellRevealed(fortress, state, grid);
+
+    // Check if either row the fortress spans is maxed
+    const height = fortress.height ?? 2;
+    let isRowLocked = false;
+    for (let r = fortress.row; r < fortress.row + height; r++) {
+      if (isRowMaxed(r, state)) {
+        isRowLocked = true;
+        break;
+      }
+    }
 
     const fortressEl = document.createElement('div');
-    fortressEl.className = `campaign-fortress-cell ${isCompleted ? 'completed' : isAvailable ? 'available' : 'locked'}`;
+
+    // Build class list
+    let stateClass = 'locked';
+    if (isCompleted) {
+      stateClass = 'completed';
+    } else if (isRowLocked) {
+      stateClass = 'row-locked';
+    } else if (isAvailable) {
+      stateClass = 'available';
+    } else if (!isRevealed) {
+      stateClass = 'fogged';
+    }
+
+    fortressEl.className = `campaign-fortress-cell ${stateClass}`;
+
+    // Show "???" for fogged/row-locked fortresses
+    const displayName = isRevealed && !isRowLocked ? fortress.name : '???';
+    const displayReward = isRevealed && !isRowLocked ? `★ ${fortress.reward}` : '';
 
     fortressEl.innerHTML = `
       <div class="fortress-tag">Fortress</div>
       <span class="fortress-icon">${ICONS.fortress}</span>
-      <span class="fortress-name">${fortress.name}</span>
-      <span class="fortress-reward">★ ${fortress.reward}</span>
+      <span class="fortress-name">${displayName}</span>
+      <span class="fortress-reward">${displayReward}</span>
     `;
 
     if (isAvailable) {

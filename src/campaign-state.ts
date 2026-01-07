@@ -30,6 +30,9 @@ export interface CampaignState {
   reinforcements: number;       // Lives remaining
   campaignSeed: number;         // Base seed for the entire campaign
 
+  // Row limit system (max 2 cells per row)
+  completionsPerRow: Map<number, number>;  // row -> completion count
+
   // Upgrade system
   acquiredUpgrades: string[];   // IDs of stacking upgrades earned
   unlockedPowers: string[];     // IDs of powers unlocked
@@ -49,11 +52,16 @@ export interface CampaignGrid {
  * Create a fresh campaign state from a grid configuration
  */
 export function createInitialCampaignState(grid: CampaignGrid, seed: number): CampaignState {
+  // Initialize completions per row - starting cells count toward row 0
+  const completionsPerRow = new Map<number, number>();
+  completionsPerRow.set(0, grid.startingCells.length);  // 2 starting cells in row 0
+
   return {
     completedCells: new Set(grid.startingCells),
     unlockedUnits: new Set(grid.startingUnits),
     reinforcements: grid.startingReinforcements,
     campaignSeed: seed,
+    completionsPerRow,
     acquiredUpgrades: [],
     unlockedPowers: [],
     activePowers: [],
@@ -104,6 +112,19 @@ function findCellAtPosition(row: number, col: number, grid: CampaignGrid): Campa
 }
 
 /**
+ * Max completions allowed per row (creates opportunity cost)
+ */
+const MAX_COMPLETIONS_PER_ROW = 2;
+
+/**
+ * Check if a row has reached its completion limit
+ */
+export function isRowMaxed(row: number, state: CampaignState): boolean {
+  const count = state.completionsPerRow.get(row) ?? 0;
+  return count >= MAX_COMPLETIONS_PER_ROW;
+}
+
+/**
  * Check if a cell is available to play
  */
 export function isCellAvailable(
@@ -117,8 +138,8 @@ export function isCellAvailable(
   }
 
   if (cell.type === 'boss') {
-    // Boss cells: available when ANY cell in the row below is completed
-    // For fortresses, check if they span into the row below
+    // Boss cells: not subject to row limits, but need adjacency
+    // Available when ANY cell in the row below is completed
     const rowBelow = cell.row - 1;
     const cellsInRowBelow = grid.cells.filter(c => {
       if (c.type === 'fortress') {
@@ -131,6 +152,14 @@ export function isCellAvailable(
   }
 
   if (cell.type === 'fortress') {
+    // Fortress spans 2 rows - check BOTH rows for limit
+    const height = cell.height ?? 2;
+    for (let r = cell.row; r < cell.row + height; r++) {
+      if (isRowMaxed(r, state)) {
+        return false;
+      }
+    }
+
     // Fortress (2x2): available when ANY adjacent cell is completed
     const perimeterPositions = getFortressPerimeter(cell);
     for (const pos of perimeterPositions) {
@@ -142,7 +171,56 @@ export function isCellAvailable(
     return false;
   }
 
+  // Normal cells: check row limit first
+  if (isRowMaxed(cell.row, state)) {
+    return false;
+  }
+
   // Normal cells: available when an adjacent (orthogonal) cell is completed
+  const neighbors = getNeighborPositions(cell.row, cell.col);
+  for (const pos of neighbors) {
+    const neighbor = findCellAtPosition(pos.row, pos.col, grid);
+    if (neighbor && state.completedCells.has(neighbor.id)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Check if a cell is revealed (adjacent to a completed cell)
+ * Revealed cells show their specific rewards; fogged cells show only type icons.
+ * Completed cells and boss cells are always revealed.
+ */
+export function isCellRevealed(
+  cell: CampaignCell,
+  state: CampaignState,
+  grid: CampaignGrid
+): boolean {
+  // Completed cells are always revealed
+  if (state.completedCells.has(cell.id)) {
+    return true;
+  }
+
+  // Boss cells are always revealed (major events)
+  if (cell.type === 'boss') {
+    return true;
+  }
+
+  if (cell.type === 'fortress') {
+    // Fortress is revealed when ANY perimeter cell is completed
+    const perimeterPositions = getFortressPerimeter(cell);
+    for (const pos of perimeterPositions) {
+      const neighbor = findCellAtPosition(pos.row, pos.col, grid);
+      if (neighbor && state.completedCells.has(neighbor.id)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Normal cells: revealed when adjacent to a completed cell
   const neighbors = getNeighborPositions(cell.row, cell.col);
   for (const pos of neighbors) {
     const neighbor = findCellAtPosition(pos.row, pos.col, grid);
@@ -202,6 +280,7 @@ export function completeCell(
   const newAcquiredUpgrades = [...state.acquiredUpgrades];
   const newUnlockedPowers = [...state.unlockedPowers];
   const newActivePowers = [...state.activePowers];
+  const newCompletionsPerRow = new Map(state.completionsPerRow);
   let newPowerSlots = state.powerSlots;
   let newBossesDefeated = state.bossesDefeated;
 
@@ -217,7 +296,23 @@ export function completeCell(
     }
   }
 
+  // Helper to increment row completion count
+  function incrementRowCompletion(row: number): void {
+    const current = newCompletionsPerRow.get(row) ?? 0;
+    newCompletionsPerRow.set(row, current + 1);
+  }
+
   if (cell) {
+    // Track row completions (fortress affects both rows, boss doesn't count)
+    if (cell.type === 'fortress') {
+      const height = cell.height ?? 2;
+      for (let r = cell.row; r < cell.row + height; r++) {
+        incrementRowCompletion(r);
+      }
+    } else if (cell.type !== 'boss') {
+      incrementRowCompletion(cell.row);
+    }
+
     // Unit unlock
     if (cell.type === 'unit' && cell.reward) {
       newUnlockedUnits.add(cell.reward);
@@ -254,6 +349,7 @@ export function completeCell(
     ...state,
     completedCells: newCompleted,
     unlockedUnits: newUnlockedUnits,
+    completionsPerRow: newCompletionsPerRow,
     acquiredUpgrades: newAcquiredUpgrades,
     unlockedPowers: newUnlockedPowers,
     activePowers: newActivePowers,
@@ -349,13 +445,13 @@ export function getCampaignBattleSeed(cellId: string, campaignSeed: number): num
   return (hashString(cellId) ^ campaignSeed) >>> 0;
 }
 
-// Cells that border the starting cells (Infantry at 0,2 and Tank at 0,3)
+// Cells that border the starting cells (Infantry at 0,1 and Tank at 0,2)
 // These should always use tiny maps for an easier start
 const STARTER_BORDER_CELLS = new Set([
-  '0,1',  // left of Infantry
-  '0,4',  // right of Tank
-  '1,2',  // above Infantry
-  '1,3',  // above Tank
+  '0,0',  // left of Infantry
+  '0,3',  // right of Tank
+  '1,1',  // above Infantry
+  '1,2',  // above Tank
 ]);
 
 /**

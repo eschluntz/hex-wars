@@ -336,7 +336,7 @@
       background: var(--bg-panel);
       border: 1px solid var(--border);
       border-radius: 8px;
-      width: calc(6 * var(--cell-size) + 5 * var(--gap) + 4rem + 2px);
+      width: calc(4 * var(--cell-size) + 3 * var(--gap) + 4rem + 2px);
       box-sizing: border-box;
     }
 
@@ -348,7 +348,7 @@
 
     .campaign-row {
       display: grid;
-      grid-template-columns: repeat(6, var(--cell-size));
+      grid-template-columns: repeat(4, var(--cell-size));
       gap: var(--gap);
       height: var(--cell-size);
     }
@@ -421,6 +421,41 @@
       color: var(--text-dim);
       text-align: center;
       line-height: 1.2;
+    }
+
+    /* Fogged cells - not adjacent to completed, show icon but hide reward */
+    .campaign-cell.fogged {
+      background: var(--bg-dark);
+      border-color: var(--border);
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .campaign-cell.fogged .cell-label {
+      color: var(--text-dim);
+    }
+
+    /* Row-locked cells - row maxed out, shows what you missed */
+    .campaign-cell.row-locked,
+    .campaign-fortress-cell.row-locked {
+      background: var(--bg-dark);
+      border-color: var(--border);
+      opacity: 0.4;
+      pointer-events: none;
+    }
+    .campaign-cell.row-locked .cell-icon,
+    .campaign-cell.row-locked .cell-label,
+    .campaign-fortress-cell.row-locked .fortress-icon,
+    .campaign-fortress-cell.row-locked .fortress-name,
+    .campaign-fortress-cell.row-locked .fortress-reward,
+    .campaign-fortress-cell.row-locked .fortress-tag {
+      display: none;
+    }
+    .campaign-cell.row-locked::after,
+    .campaign-fortress-cell.row-locked::after {
+      content: '✕';
+      font-size: 1.8rem;
+      color: var(--red);
+      opacity: 0.7;
     }
 
     /* Boss cell */
@@ -503,6 +538,15 @@
       border-color: var(--gold-dim);
       cursor: not-allowed;
       opacity: 0.5;
+    }
+    .campaign-fortress-cell.fogged {
+      border-color: var(--gold-dim);
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+    .campaign-fortress-cell.fogged .fortress-name,
+    .campaign-fortress-cell.fogged .fortress-reward {
+      opacity: 0.7;
     }
     .campaign-fortress-cell.available {
       background: var(--gold-dim);
@@ -594,7 +638,7 @@
       background: var(--bg-panel);
       border: 1px solid var(--border);
       border-radius: 8px;
-      width: calc(6 * var(--cell-size) + 5 * var(--gap) + 4rem + 2px);
+      width: calc(4 * var(--cell-size) + 3 * var(--gap) + 4rem + 2px);
       box-sizing: border-box;
     }
     .powers-header {
@@ -693,7 +737,7 @@
       background: var(--bg-panel);
       border: 1px solid var(--border);
       border-radius: 8px;
-      width: calc(6 * var(--cell-size) + 5 * var(--gap) + 4rem + 2px);
+      width: calc(4 * var(--cell-size) + 3 * var(--gap) + 4rem + 2px);
       box-sizing: border-box;
     }
     .upgrades-header {

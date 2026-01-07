@@ -128,6 +128,10 @@ function makeUnitCell(
 
 /**
  * Generates a row of cells with a mix of types
+ * With 4 columns and max 2 completions per row, we use fewer cells:
+ * - 1 unit (if available)
+ * - 1-2 upgrades
+ * - 1 power
  */
 function generateRow(
   row: number,
@@ -140,9 +144,8 @@ function generateRow(
 ): CampaignCell[] {
   const cells: CampaignCell[] = [];
 
-  // Determine cell types for this row (roughly 2 units, 2 upgrades, 2 powers per row)
-  // But randomize the distribution
-  const availableCols = [0, 1, 2, 3, 4, 5].filter(c => !skipCols.includes(c));
+  // 4 columns total
+  const availableCols = [0, 1, 2, 3].filter(c => !skipCols.includes(c));
   rng.shuffle(availableCols);
 
   // Get available units from pool
@@ -151,14 +154,13 @@ function generateRow(
   for (let i = 0; i < availableCols.length; i++) {
     const col = availableCols[i]!;
 
-    // Decide cell type based on position in shuffled order
-    // First 1-2 are units (if available), next 2-3 are upgrades, rest are powers
-    if (i < 2 && availableUnits.length > 0) {
+    // Distribution: 1 unit, 2 upgrades, 1 power
+    if (i === 0 && availableUnits.length > 0) {
       const unitId = rng.pick(availableUnits);
       availableUnits.splice(availableUnits.indexOf(unitId), 1);
       usedUnits.add(unitId);
       cells.push(makeUnitCell(row, col, unitId));
-    } else if (i < 4) {
+    } else if (i < 3) {
       cells.push(makeRandomUpgradeCell(row, col, rng, usedUpgrades));
     } else {
       cells.push(makeRandomPowerCell(row, col, rng, usedPowers));
@@ -185,32 +187,20 @@ function createCampaignCells(seed: number): CampaignCell[] {
   const bossPower2 = pickFromPool(ALL_POWERS, POWERS, usedPowers, rng);
   const bossPower3 = pickFromPool(ALL_POWERS, POWERS, usedPowers, rng);
 
-  // Fortress positions (randomized)
-  const fortress1Col = rng.pick([0, 4]);  // Avoid starting cells
-  const fortress2Col = rng.pick([0, 1, 2, 3, 4]);
-  const fortress3Col = rng.pick([0, 1, 2, 3, 4]);
+  // Fortress positions (0, 1, or 2 so they span cols 0-1, 1-2, or 2-3)
+  const fortress1Col = rng.pick([0, 2]);  // Avoid center starting cells
+  const fortress2Col = rng.pick([0, 1, 2]);
+  const fortress3Col = rng.pick([0, 1, 2]);
 
   // Row 0 (bottom - starting row)
-  // Fixed: Infantry and Tank are starting units, rest randomized
-  cells.push(makeUnitCell(0, 2, 'infantry'));
-  cells.push(makeUnitCell(0, 3, 'tank'));
+  // Only 2 cells in starting row: Infantry at col 1, Tank at col 2
+  // Cols 0 and 3 are left empty (they'd be instantly locked anyway)
+  cells.push(makeUnitCell(0, 1, 'infantry'));
+  cells.push(makeUnitCell(0, 2, 'tank'));
   usedUnits.add('infantry');
   usedUnits.add('tank');
 
-  // Fill remaining spots with tier 1 content
-  const row0Remaining = [0, 1, 4, 5];
-  rng.shuffle(row0Remaining);
-
-  // Add mech as third starting unit option
-  cells.push(makeUnitCell(0, row0Remaining[0]!, 'mech'));
-  usedUnits.add('mech');
-
-  // Rest are upgrades/powers
-  cells.push(makeRandomUpgradeCell(0, row0Remaining[1]!, rng, usedUpgrades));
-  cells.push(makeRandomUpgradeCell(0, row0Remaining[2]!, rng, usedUpgrades));
-  cells.push(makeRandomPowerCell(0, row0Remaining[3]!, rng, usedPowers));
-
-  // Row 1: Mix of tier 1 units and upgrades/powers
+  // Row 1: Full row with tier 1 units
   cells.push(...generateRow(1, rng, TIER_1_UNITS, usedUpgrades, usedPowers, usedUnits));
 
   // Rows 2-3: Fortress section 1
@@ -252,9 +242,9 @@ function createCampaignCells(seed: number): CampaignCell[] {
 export function createCampaignGrid(seed: number): CampaignGrid {
   const cells = createCampaignCells(seed);
 
-  // Find the starting cells (row 0, cols 2-3 - Infantry and Tank)
+  // Find the starting cells (row 0, cols 1-2 - Infantry and Tank)
   const startingCells = cells
-    .filter(c => c.row === 0 && (c.col === 2 || c.col === 3))
+    .filter(c => c.row === 0 && (c.col === 1 || c.col === 2))
     .map(c => c.id);
 
   return {
@@ -266,7 +256,7 @@ export function createCampaignGrid(seed: number): CampaignGrid {
 }
 
 // Grid dimensions for rendering
-export const CAMPAIGN_GRID_COLS = 6;
+export const CAMPAIGN_GRID_COLS = 4;
 export const CAMPAIGN_GRID_ROWS = 13;
 
 // Visual configuration
