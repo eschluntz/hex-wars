@@ -5,6 +5,7 @@
 import type { CampaignCell, CampaignGrid, CampaignState } from './campaign-state.js';
 import { isCellAvailable } from './campaign-state.js';
 import { POWERS, STACKING_UPGRADES } from './upgrades.js';
+import { BattleInfoModal } from './battle-info-modal.js';
 
 const ICONS: Record<string, string> = {
   unit: '⬡',
@@ -15,7 +16,7 @@ const ICONS: Record<string, string> = {
 };
 
 export interface CampaignUICallbacks {
-  onCellClick: (cell: CampaignCell) => void;
+  onStartBattle: (cell: CampaignCell) => void;
   onBackClick: () => void;
   onEquipPower?: (powerId: string) => void;
   onUnequipPower?: (powerId: string) => void;
@@ -29,6 +30,8 @@ export class CampaignUI {
   private powersPanel: HTMLElement | null = null;
   private upgradesPanel: HTMLElement | null = null;
   private infoBox: HTMLElement | null = null;
+  private battleModal: BattleInfoModal;
+  private campaignSeed: number = 0;
   private callbacks: CampaignUICallbacks;
 
   constructor(callbacks: CampaignUICallbacks) {
@@ -37,6 +40,7 @@ export class CampaignUI {
     this.gridContainer = document.getElementById('campaign-grid')!;
     this.heartsContainer = this.overlay.querySelector('.campaign-hearts')!;
     this.backBtn = document.getElementById('campaign-back-btn')!;
+    this.battleModal = new BattleInfoModal();
 
     this.backBtn.addEventListener('click', () => this.callbacks.onBackClick());
 
@@ -72,6 +76,10 @@ export class CampaignUI {
     this.infoBox.innerHTML = '<span class="info-text info-placeholder">Hover for details</span>';
   }
 
+  private showBattleInfoModal(cell: CampaignCell): void {
+    this.battleModal.show(cell, this.campaignSeed, (c) => this.callbacks.onStartBattle(c));
+  }
+
   private setInfoText(text: string): void {
     if (this.infoBox) {
       this.infoBox.innerHTML = `<span class="info-text">${text}</span>`;
@@ -93,6 +101,7 @@ export class CampaignUI {
   }
 
   render(grid: CampaignGrid, state: CampaignState): void {
+    this.campaignSeed = state.campaignSeed;
     this.renderHearts(state.reinforcements);
     this.renderGrid(grid, state);
     this.renderPowersPanel(state);
@@ -326,7 +335,7 @@ export class CampaignUI {
     `;
 
     if (isAvailable) {
-      bossEl.addEventListener('click', () => this.callbacks.onCellClick(boss));
+      bossEl.addEventListener('click', () => this.showBattleInfoModal(boss));
     }
 
     rowEl.appendChild(bossEl);
@@ -391,7 +400,7 @@ export class CampaignUI {
     `;
 
     if (isAvailable) {
-      cellEl.addEventListener('click', () => this.callbacks.onCellClick(cell));
+      cellEl.addEventListener('click', () => this.showBattleInfoModal(cell));
     }
 
     return cellEl;
@@ -412,7 +421,7 @@ export class CampaignUI {
     `;
 
     if (isAvailable) {
-      fortressEl.addEventListener('click', () => this.callbacks.onCellClick(fortress));
+      fortressEl.addEventListener('click', () => this.showBattleInfoModal(fortress));
     }
 
     return fortressEl;

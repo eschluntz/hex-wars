@@ -115,7 +115,7 @@ class Game {
     this.ctx = this.canvas.getContext('2d')!;
     this.menuRenderer = new MenuRenderer(this.ctx, this.canvas.width, this.canvas.height);
     this.campaignUI = new CampaignUI({
-      onCellClick: (cell) => this.handleCampaignCellClick(cell),
+      onStartBattle: (cell) => this.startCampaignBattle(cell),
       onBackClick: () => this.returnToMainMenu(),
       onEquipPower: (powerId) => this.handleEquipPower(powerId),
       onUnequipPower: (powerId) => this.handleUnequipPower(powerId),
@@ -821,11 +821,6 @@ class Game {
     this.showDebugControls(false);
 
     console.log('Campaign started!');
-  }
-
-  private handleCampaignCellClick(cell: CampaignCell): void {
-    // Start battle for this cell (UI already checked availability)
-    this.startCampaignBattle(cell);
   }
 
   private startCampaignBattle(cell: CampaignCell): void {

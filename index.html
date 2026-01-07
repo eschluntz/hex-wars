@@ -760,6 +760,218 @@
       font-style: italic;
     }
 
+    /* Campaign Battle Info Modal */
+    .campaign-battle-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 150;
+      /* Inherit CSS variables from campaign overlay */
+      --bg-dark: #0a0c10;
+      --bg-panel: #12151c;
+      --border: #2a3040;
+      --text: #c8d0e0;
+      --text-dim: #5a6070;
+      --blue: #3b82f6;
+      --blue-dim: #1e3a5f;
+      --red: #ef4444;
+      --red-dim: #5f1e1e;
+      --orange: #f97316;
+      --orange-dim: #5f3a1e;
+      --purple: #a855f7;
+      --purple-dim: #3b1e5f;
+      --gold: #eab308;
+      --gold-dim: #5f4a1e;
+    }
+    .battle-modal-content {
+      background: var(--bg-panel);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      width: min(500px, 90vw);
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .battle-modal-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .battle-modal-icon {
+      font-size: 2.5rem;
+      width: 60px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      border: 2px solid transparent;
+    }
+    .battle-modal-icon.unit {
+      background: var(--blue-dim);
+      border-color: var(--blue);
+      color: var(--blue);
+    }
+    .battle-modal-icon.upgrade {
+      background: var(--red-dim);
+      border-color: var(--red);
+      color: var(--red);
+    }
+    .battle-modal-icon.special {
+      background: var(--orange-dim);
+      border-color: var(--orange);
+      color: var(--orange);
+    }
+    .battle-modal-icon.boss {
+      background: var(--purple-dim);
+      border-color: var(--purple);
+      color: var(--purple);
+    }
+    .battle-modal-icon.fortress {
+      background: var(--gold-dim);
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+    .battle-modal-title {
+      flex: 1;
+    }
+    .battle-modal-title h2 {
+      font-size: 1.3rem;
+      font-weight: bold;
+      color: #fff;
+      margin: 0 0 0.25rem 0;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .battle-modal-title .cell-type {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    .battle-modal-section {
+      margin-bottom: 1.25rem;
+    }
+    .battle-modal-section h3 {
+      font-size: 0.7rem;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+      margin-bottom: 0.5rem;
+    }
+    .battle-modal-reward {
+      padding: 0.75rem;
+      background: var(--bg-dark);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.85rem;
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .battle-modal-reward strong {
+      color: #fff;
+    }
+    .battle-modal-reward .applies-to {
+      display: block;
+      margin-top: 0.5rem;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+    .battle-modal-enemy {
+      padding: 0.75rem;
+      background: var(--bg-dark);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.8rem;
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .battle-modal-enemy .enemy-label {
+      color: var(--text-dim);
+    }
+    .battle-modal-enemy .enemy-value {
+      color: var(--text);
+    }
+    .unit-icons-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+    }
+    .unit-icons-row canvas {
+      cursor: default;
+    }
+    .battle-modal-preview {
+      display: flex;
+      justify-content: center;
+      padding: 0.5rem;
+      background: var(--bg-dark);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    .battle-modal-preview canvas {
+      border-radius: 4px;
+    }
+    .battle-modal-buttons {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+    }
+    .battle-modal-btn {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      border: 2px solid transparent;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .battle-modal-btn.cancel {
+      background: transparent;
+      border-color: var(--border);
+      color: var(--text-dim);
+    }
+    .battle-modal-btn.cancel:hover {
+      border-color: var(--text);
+      color: var(--text);
+    }
+    .battle-modal-btn.attack {
+      background: #22c55e;
+      border-color: #22c55e;
+      color: #000;
+    }
+    .battle-modal-btn.attack:hover {
+      background: #16a34a;
+      border-color: #16a34a;
+    }
+    .battle-modal-btn.attack.boss {
+      background: var(--purple);
+      border-color: var(--purple);
+    }
+    .battle-modal-btn.attack.boss:hover {
+      background: #9333ea;
+      border-color: #9333ea;
+    }
+    .battle-modal-btn.attack.fortress {
+      background: var(--gold);
+      border-color: var(--gold);
+      color: #000;
+    }
+    .battle-modal-btn.attack.fortress:hover {
+      background: #d4a106;
+      border-color: #d4a106;
+    }
+
     /* Map Lab Overlay */
     #map-lab-overlay {
       position: fixed;
