@@ -15,6 +15,7 @@ import {
   getTeamTemplates,
   getTeamTemplate,
   initTeamUnits,
+  UNIT_TYPES,
 } from './unit-templates.js';
 import { ResourceManager } from './resources.js';
 import { GameStats } from './stats.js';
@@ -51,11 +52,17 @@ import {
   getRangeBonus,
   getCostReduction,
   POWERS,
+  STACKING_UPGRADES,
+  REWARD_TO_UPGRADE,
+  REWARD_TO_POWER,
   WHEELS_UNITS,
 } from './upgrades.js';
 import { presetToMapConfig } from './map-presets.js';
 import { MapLabController } from './map-lab.js';
 import { validateMap } from './map-validation.js';
+import { calculateBattleScore, type BattleScoreBreakdown } from './score.js';
+import { GameOverUI, type GameOverDisplayData } from './game-over-ui.js';
+import { getMapName } from './battle-info-modal.js';
 
 const TEAMS = {
   PLAYER: 'player',
@@ -109,6 +116,8 @@ class Game {
   private campaignModifiers: CampaignModifiers | null = null;
   private enemyModifiers: CampaignModifiers | null = null;
   private enemyActivePowers: string[] = [];
+  private lastScoreBreakdown: BattleScoreBreakdown | null = null;  // For game-over display
+  private gameOverUI!: GameOverUI;
 
   // Map Lab
   private mapLabController: MapLabController | null = null;
@@ -127,6 +136,9 @@ class Game {
       onStartGame: (mapType, playerConfigs) => this.startNewGame(mapType, playerConfigs),
       onStartCampaign: () => this.startCampaign(),
       onRerollSeed: () => rerollNormalSeed(),
+    });
+    this.gameOverUI = new GameOverUI({
+      onContinue: () => this.handleGameOverReturn(),
     });
 
     // Start loading textures (async, will render fallback until loaded)
@@ -581,7 +593,10 @@ class Game {
       executeCapture: (unit, logPrefix) => this.executeCapture(unit, logPrefix),
       checkAndTriggerGameOver: () => this.checkAndTriggerGameOver(),
       endTurn: () => this.endTurn(),
-      addUnit: (unit) => this.units.push(unit),
+      addUnit: (unit) => {
+        this.units.push(unit);
+        this.gameStats.recordUnitDeployed(unit.team);
+      },
       getNextUnitId: () => this.nextUnitId++,
     };
   }
@@ -789,6 +804,37 @@ class Game {
     this.recordTurnStats(TEAMS.PLAYER);
     this.recordTurnStats(TEAMS.ENEMY);
 
+    const playerWon = winner === TEAMS.PLAYER;
+    const isCampaign = !!this.activeCampaignCell;
+
+    // Calculate battle score for campaign battles
+    let scoreBreakdown: BattleScoreBreakdown | null = null;
+    let mapName = 'Battle';
+    if (isCampaign && this.activeCampaignCell && this.campaignState) {
+      const preset = getCampaignCellPreset(this.activeCampaignCell, this.campaignState.campaignSeed);
+      const presetKey = preset.name.toLowerCase();
+      mapName = getMapName(presetKey, this.activeCampaignCell.id, this.campaignState.campaignSeed);
+
+      const playerStats = this.gameStats.getTeamStats(TEAMS.PLAYER);
+      const enemyStats = this.gameStats.getTeamStats(TEAMS.ENEMY);
+      const myBuildingsEnd = this.map.getBuildingsByOwner(TEAMS.PLAYER).length;
+      const enemyBuildingsEnd = this.map.getBuildingsByOwner(TEAMS.ENEMY).length;
+      const myUnitsSurviving = this.units.filter(u => u.team === TEAMS.PLAYER && u.isAlive()).length;
+
+      scoreBreakdown = calculateBattleScore(
+        playerStats.totalUnitsKilled,      // enemy units I killed
+        enemyStats.totalUnitsDeployed,     // total enemy units deployed
+        myUnitsSurviving,                  // my units surviving
+        playerStats.totalUnitsDeployed,    // my units deployed
+        myBuildingsEnd,
+        enemyBuildingsEnd,
+        this.turnNumber,
+        preset.parTurns,
+        playerWon
+      );
+      this.lastScoreBreakdown = scoreBreakdown;
+    }
+
     this.gameOverData = {
       winner,
       loser,
@@ -806,6 +852,48 @@ class Game {
     this.showDebugControls(false);
 
     console.log(`Game Over! ${winner.toUpperCase()} wins in ${this.turnNumber} turns!`);
+
+    // Get reward for display
+    let reward: string | null = null;
+    let rewardType: import('./campaign-state.js').CellType | null = null;
+    if (isCampaign && playerWon && this.activeCampaignCell) {
+      rewardType = this.activeCampaignCell.type;
+      // Get friendly name based on cell type
+      switch (this.activeCampaignCell.type) {
+        case 'unit': {
+          const unit = UNIT_TYPES[this.activeCampaignCell.reward];
+          reward = unit ? unit.name : this.activeCampaignCell.reward;
+          break;
+        }
+        case 'upgrade': {
+          const upgradeId = REWARD_TO_UPGRADE[this.activeCampaignCell.name];
+          const upgrade = upgradeId ? STACKING_UPGRADES[upgradeId] : null;
+          reward = upgrade ? upgrade.name : this.activeCampaignCell.name;
+          break;
+        }
+        case 'special': {
+          const powerId = REWARD_TO_POWER[this.activeCampaignCell.name];
+          const power = powerId ? POWERS[powerId] : null;
+          reward = power ? power.name : this.activeCampaignCell.name;
+          break;
+        }
+        default:
+          reward = this.activeCampaignCell.name;
+      }
+    }
+
+    // Show the game over UI
+    const displayData: GameOverDisplayData = {
+      winner,
+      turnCount: this.turnNumber,
+      stats: this.gameStats.getAllStats(),
+      mapName,
+      scoreBreakdown,
+      reward,
+      rewardType,
+      isCampaign,
+    };
+    this.gameOverUI.show(displayData);
   }
 
   // --- Campaign Methods ---
@@ -942,6 +1030,7 @@ class Game {
         ? this.createUnitWithBonuses(team, hex.q, hex.r, unitType)
         : new Unit(`${unitType}_${this.nextUnitId++}`, team, hex.q, hex.r, unitType);
       this.units.push(unit);
+      this.gameStats.recordUnitDeployed(team);
       console.log(`${team} bonus ${unitType} spawned at (${hex.q}, ${hex.r})`);
       spawned++;
     }
@@ -970,7 +1059,17 @@ class Game {
   private handleBattleResult(playerWon: boolean): void {
     if (!this.campaignState || !this.campaignGrid || !this.activeCampaignCell) return;
 
-    if (playerWon) {
+    // Use the score breakdown calculated in triggerGameOver
+    const scoreBreakdown = this.lastScoreBreakdown;
+
+    if (playerWon && scoreBreakdown) {
+      // Add score to campaign total
+      this.campaignState = {
+        ...this.campaignState,
+        totalScore: this.campaignState.totalScore + scoreBreakdown.totalScore,
+      };
+      console.log(`Campaign total score: ${this.campaignState.totalScore}`);
+
       // Mark cell as completed
       this.campaignState = completeCell(
         this.activeCampaignCell.id,
@@ -978,7 +1077,7 @@ class Game {
         this.campaignGrid
       );
       console.log(`Cell ${this.activeCampaignCell.name} completed!`);
-    } else {
+    } else if (!playerWon) {
       // Lose a reinforcement
       this.campaignState = loseReinforcement(this.campaignState);
       console.log(`Lost a reinforcement. Remaining: ${this.campaignState.reinforcements}`);
@@ -993,6 +1092,7 @@ class Game {
 
     // Return to campaign view
     this.activeCampaignCell = null;
+    this.lastScoreBreakdown = null;
     this.gamePhase = 'campaign';
     this.showDebugControls(false);
 
@@ -1303,6 +1403,7 @@ class Game {
       const unit = this.createUnitWithBonuses(this.currentTeam, factory.q, factory.r, template.id);
       unit.hasActed = true; // New units can't act this turn
       this.units.push(unit);
+      this.gameStats.recordUnitDeployed(this.currentTeam);
 
       console.log(`Built ${template.name} at (${factory.q}, ${factory.r}) for $${cost}`);
       this.setState({ type: 'idle' });
@@ -1416,7 +1517,6 @@ class Game {
   }
 
   private handleUnitDeath(deadUnit: Unit, killerTeam: string): void {
-    // Record kill
     this.gameStats.recordUnitKilled(killerTeam, deadUnit.team);
     this.map.resetCaptureByUnit(deadUnit.id);
 
@@ -1824,9 +1924,11 @@ class Game {
       // Campaign UI is HTML-based, just clear canvas
       this.ctx.fillStyle = '#0a0c10';
       this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    } else if (this.gamePhase === 'game_over' && this.gameOverData) {
+    } else if (this.gamePhase === 'game_over') {
       this.htmlMenuController.hide();
-      this.menuRenderer.renderGameOver(this.gameOverData);
+      // Game over UI is HTML-based, just clear canvas
+      this.ctx.fillStyle = '#0a0c10';
+      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     } else if (this.gamePhase === 'playing') {
       this.htmlMenuController.hide();
       this.viewport.update();

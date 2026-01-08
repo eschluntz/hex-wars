@@ -23,6 +23,8 @@ export interface TeamStats {
   totalBuildingsCaptured: number;
   totalFundsCollected: number;
   totalScienceCollected: number;
+  // Deployment tracking for scoring
+  totalUnitsDeployed: number;  // starting units + factory production
 }
 
 export class GameStats {
@@ -37,7 +39,8 @@ export class GameStats {
         totalUnitsLost: 0,
         totalBuildingsCaptured: 0,
         totalFundsCollected: 0,
-        totalScienceCollected: 0
+        totalScienceCollected: 0,
+        totalUnitsDeployed: 0,
       });
       this.currentTurnStats.set(team, {
         unitsKilled: 0,
@@ -58,6 +61,10 @@ export class GameStats {
 
     this.stats.get(killerTeam)!.totalUnitsKilled++;
     this.stats.get(victimTeam)!.totalUnitsLost++;
+  }
+
+  recordUnitDeployed(team: string): void {
+    this.stats.get(team)!.totalUnitsDeployed++;
   }
 
   recordBuildingCaptured(team: string): void {

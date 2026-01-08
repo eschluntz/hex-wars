@@ -35,12 +35,14 @@ export class CampaignUI {
   private campaignState: CampaignState | null = null;
   private campaignGrid: CampaignGrid | null = null;
   private callbacks: CampaignUICallbacks;
+  private scoreValueEl: HTMLElement;
 
   constructor(callbacks: CampaignUICallbacks) {
     this.callbacks = callbacks;
     this.overlay = document.getElementById('campaign-overlay')!;
     this.gridContainer = document.getElementById('campaign-grid')!;
     this.heartsContainer = this.overlay.querySelector('.campaign-hearts')!;
+    this.scoreValueEl = this.overlay.querySelector('.campaign-score .score-value')!;
     this.backBtn = document.getElementById('campaign-back-btn')!;
     this.battleModal = new BattleInfoModal();
 
@@ -114,9 +116,14 @@ export class CampaignUI {
     this.campaignState = state;
     this.campaignGrid = grid;
     this.renderHearts(state.reinforcements);
+    this.renderScore(state.totalScore);
     this.renderGrid(grid, state);
     this.renderPowersPanel(state);
     this.renderUpgradesPanel(state);
+  }
+
+  private renderScore(score: number): void {
+    this.scoreValueEl.textContent = score.toLocaleString();
   }
 
   private renderPowersPanel(state: CampaignState): void {

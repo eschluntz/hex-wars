@@ -40,6 +40,9 @@ export interface CampaignState {
   activePowers: string[];       // IDs of powers currently equipped
   powerSlots: number;           // Number of power slots (starts at 1, +1 per boss)
   bossesDefeated: number;       // Number of bosses defeated
+
+  // Scoring system
+  totalScore: number;           // Cumulative campaign score
 }
 
 export interface CampaignGrid {
@@ -68,6 +71,7 @@ export function createInitialCampaignState(grid: CampaignGrid, seed: number): Ca
     activePowers: [],
     powerSlots: 1,
     bossesDefeated: 0,
+    totalScore: 0,
   };
 }
 

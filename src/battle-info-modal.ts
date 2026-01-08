@@ -20,6 +20,22 @@ const ICONS: Record<string, string> = {
   fortress: '🏰',
 };
 
+/**
+ * Get a deterministic map name based on preset, cell ID, and campaign seed.
+ * Exported for use by other modules (e.g., game-over-ui).
+ */
+export function getMapName(presetName: string, cellId: string, campaignSeed: number): string {
+  const names = MAP_NAMES[presetName]!;
+  // Deterministic selection based on cell id and campaign seed
+  // Use a different offset from flavor text to get independent selection
+  let hash = campaignSeed + 7777;
+  for (let i = 0; i < cellId.length; i++) {
+    hash = ((hash << 5) - hash + cellId.charCodeAt(i)) | 0;
+  }
+  const index = Math.abs(hash) % names.length;
+  return names[index]!;
+}
+
 export class BattleInfoModal {
   private element: HTMLElement;
   private onAttackCallback: ((cell: CampaignCell) => void) | null = null;
@@ -65,7 +81,7 @@ export class BattleInfoModal {
     const mapPreview = this.renderMapPreview(cell, campaignSeed, this.currentEnemyConfig);
     const preset = getCampaignCellPreset(cell, campaignSeed);
     const presetKey = preset.name.toLowerCase();
-    const mapName = this.getMapName(presetKey, cell.id, campaignSeed);
+    const mapName = getMapName(presetKey, cell.id, campaignSeed);
     const flavorText = this.getFlavorText(presetKey, cell.id, campaignSeed);
 
     // For unit cells, we'll add the unit sprite after building the HTML
@@ -226,18 +242,6 @@ export class BattleInfoModal {
         }
       }
     });
-  }
-
-  private getMapName(presetName: string, cellId: string, campaignSeed: number): string {
-    const names = MAP_NAMES[presetName]!;
-    // Deterministic selection based on cell id and campaign seed
-    // Use a different offset from flavor text to get independent selection
-    let hash = campaignSeed + 7777;
-    for (let i = 0; i < cellId.length; i++) {
-      hash = ((hash << 5) - hash + cellId.charCodeAt(i)) | 0;
-    }
-    const index = Math.abs(hash) % names.length;
-    return names[index]!;
   }
 
   private getFlavorText(presetName: string, cellId: string, campaignSeed: number): string {

@@ -330,6 +330,25 @@
     .campaign-heart.filled { color: var(--red); }
     .campaign-heart.empty { color: var(--text-dim); opacity: 0.4; }
 
+    .campaign-score {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-left: 1.5rem;
+      padding-left: 1.5rem;
+      border-left: 1px solid var(--border);
+    }
+    .campaign-score .score-icon {
+      font-size: 1.25rem;
+      color: var(--yellow);
+    }
+    .campaign-score .score-value {
+      font-size: 1.1rem;
+      font-weight: bold;
+      color: var(--yellow);
+      font-family: 'Courier New', monospace;
+    }
+
     .campaign-grid-container {
       position: relative;
       padding: 2rem;
@@ -1256,6 +1275,236 @@
       font-family: inherit;
       color: #6495ED;
     }
+
+    /* Game Over Overlay */
+    #game-over-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.92);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      z-index: 200;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      overflow-y: auto;
+      padding: 2rem 0;
+    }
+    #game-over-overlay.visible {
+      display: flex;
+    }
+    .game-over-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      max-width: 900px;
+      margin: auto;
+      width: 100%;
+      padding: 2rem;
+    }
+    .winner-text {
+      font-size: 2.5rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin: 0 0 0.25rem 0;
+      text-shadow: 0 0 30px currentColor;
+    }
+    .winner-text.victory { color: #22c55e; }
+    .winner-text.defeat { color: #ef4444; }
+    .map-info {
+      display: flex;
+      gap: 1.5rem;
+      font-size: 1rem;
+      color: #888;
+      margin-bottom: 1rem;
+    }
+    .map-info .map-name {
+      color: #aaa;
+    }
+    .turn-count {
+      color: #666;
+    }
+    .game-over-graphs {
+      margin-bottom: 1rem;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+    }
+    #stats-graph-canvas {
+      max-width: 100%;
+    }
+
+    /* Score Breakdown */
+    .score-breakdown {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      width: 100%;
+      max-width: 400px;
+      margin-bottom: 1rem;
+    }
+    .score-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.6rem 1rem;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      opacity: 0;
+      transform: translateX(-20px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    .score-row.visible {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    .score-row.pulse {
+      animation: score-pulse 0.3s ease;
+    }
+    @keyframes score-pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    .score-label {
+      font-size: 0.9rem;
+      color: #ccc;
+    }
+    .score-value {
+      font-size: 1.1rem;
+      font-weight: bold;
+      color: #fff;
+      font-family: 'Courier New', monospace;
+    }
+    .score-value.counting {
+      color: #facc15;
+    }
+    /* Component-specific colors */
+    .score-row[data-type="power"] .score-value { color: #ef4444; }
+    .score-row[data-type="defense"] .score-value { color: #22c55e; }
+    .score-row[data-type="control"] .score-value { color: #3b82f6; }
+    .score-row[data-type="speed"] .score-value { color: #a855f7; }
+    .score-row.total {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      margin-top: 0.5rem;
+    }
+    .score-row.total .score-label {
+      font-size: 1rem;
+      color: #fff;
+      font-weight: bold;
+    }
+    .score-row.total .score-value {
+      font-size: 1.3rem;
+      color: #facc15;
+    }
+
+    /* Reward Display */
+    .reward-display {
+      position: relative;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      padding: 1rem 2rem;
+      border-radius: 12px;
+      margin-bottom: 1rem;
+      overflow: hidden;
+      /* Default purple (fallback) */
+      background: rgba(168, 85, 247, 0.15);
+      border: 2px solid #a855f7;
+    }
+    .reward-display.visible {
+      display: flex;
+      animation: reward-fade-in 0.5s ease;
+    }
+    /* Type-specific colors (matching campaign board) */
+    .reward-display.unit {
+      background: rgba(250, 204, 21, 0.15);
+      border-color: #facc15;
+    }
+    .reward-display.upgrade {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: #ef4444;
+    }
+    .reward-display.special {
+      background: rgba(249, 115, 22, 0.15);
+      border-color: #f97316;
+    }
+    .reward-display.boss {
+      background: rgba(168, 85, 247, 0.15);
+      border-color: #a855f7;
+    }
+    .reward-display.fortress {
+      background: rgba(249, 115, 22, 0.15);
+      border-color: #f97316;
+    }
+    @keyframes reward-fade-in {
+      from { opacity: 0; transform: scale(0.9); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .reward-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #888;
+      margin-bottom: 0.25rem;
+    }
+    .reward-icon {
+      font-size: 2rem;
+      margin-bottom: 0.25rem;
+    }
+    /* Type-specific icon colors */
+    .reward-display.unit .reward-icon { color: #facc15; }
+    .reward-display.upgrade .reward-icon { color: #ef4444; }
+    .reward-display.special .reward-icon { color: #f97316; }
+    .reward-display.boss .reward-icon { color: #a855f7; }
+    .reward-display.fortress .reward-icon { color: #f97316; }
+    .reward-item {
+      font-size: 1.1rem;
+      font-weight: bold;
+      color: #fff;
+    }
+    .shine-overlay {
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 50%;
+      height: 100%;
+      background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.3),
+        transparent
+      );
+      animation: shine-travel 2s ease-in-out infinite;
+    }
+    @keyframes shine-travel {
+      0% { left: -100%; }
+      100% { left: 200%; }
+    }
+
+    /* Continue Button */
+    .btn-continue {
+      padding: 1rem 3rem;
+      border: 2px solid #22c55e;
+      border-radius: 8px;
+      background: #22c55e;
+      color: #000;
+      font-size: 1.2rem;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      opacity: 0;
+    }
+    .btn-continue.visible {
+      opacity: 1;
+    }
+    .btn-continue:hover {
+      background: #16a34a;
+      border-color: #16a34a;
+      transform: scale(1.05);
+    }
   </style>
 </head>
 <body>
@@ -1312,6 +1561,10 @@
           <span class="campaign-heart filled">♥</span>
           <span class="campaign-heart filled">♥</span>
           <span class="campaign-heart filled">♥</span>
+        </div>
+        <div class="campaign-score">
+          <span class="score-icon">★</span>
+          <span class="score-value">0</span>
         </div>
       </div>
     </header>
@@ -1387,6 +1640,53 @@
 
     <div class="maplab-shortcuts">
       <kbd>R</kbd> Reroll &nbsp;·&nbsp; <kbd>1-9</kbd> Select preset
+    </div>
+  </div>
+
+  <!-- Game Over Overlay -->
+  <div id="game-over-overlay">
+    <div class="game-over-content">
+      <h1 class="winner-text"></h1>
+      <div class="map-info">
+        <span class="map-name"></span>
+        <span class="turn-count"></span>
+      </div>
+
+      <div class="game-over-graphs">
+        <canvas id="stats-graph-canvas"></canvas>
+      </div>
+
+      <div class="score-breakdown">
+        <div class="score-row" data-type="power">
+          <span class="score-label">⚔️ Power</span>
+          <span class="score-value">0</span>
+        </div>
+        <div class="score-row" data-type="defense">
+          <span class="score-label">🛡️ Defense</span>
+          <span class="score-value">0</span>
+        </div>
+        <div class="score-row" data-type="control">
+          <span class="score-label">🏰 Control</span>
+          <span class="score-value">0</span>
+        </div>
+        <div class="score-row" data-type="speed">
+          <span class="score-label">⚡ Speed</span>
+          <span class="score-value">0</span>
+        </div>
+        <div class="score-row total">
+          <span class="score-label">Total</span>
+          <span class="score-value">0</span>
+        </div>
+      </div>
+
+      <div class="reward-display">
+        <div class="reward-label">Reward Unlocked</div>
+        <div class="reward-icon"></div>
+        <div class="reward-item"></div>
+        <div class="shine-overlay"></div>
+      </div>
+
+      <button class="btn-continue">Continue</button>
     </div>
   </div>
 
