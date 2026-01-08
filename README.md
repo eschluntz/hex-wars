@@ -111,7 +111,7 @@ Capture the enemy's capital to win instantly.
 ### Campaign Mode
 Roguelike progression through a grid of battles:
 
-- **6-column, 13-row grid** with normal cells, boss barriers, and 2x2 fortresses
+- **4-column, 19-row grid** divided into 3 sections, each ending with a boss
 - **3 reinforcements** (lives) - lose one per lost battle, campaign ends at zero
 - **Start** with Infantry and Tank unlocked at the center of row 0
 - **Randomized rewards** - upgrades and powers are randomly distributed each campaign
@@ -121,7 +121,14 @@ Roguelike progression through a grid of battles:
 - ▲ **Upgrade** - Stacking stat bonuses (damage, defense, income, cost reduction)
 - ★ **Power** - Equippable abilities (movement, range, bonus units, terrain modifiers)
 - 👑 **Boss** - Spans full row, uses Boss map preset, grants +1 power slot
-- 🏰 **Fortress** - 2x2 block, uses Fortress map preset, position randomized per campaign
+- 🏰 **Fortress** - 2x2 block, uses Fortress map preset, position randomized per section
+
+**Section structure:**
+| Section | Rows | Boss | Unit Tier |
+|---------|------|------|-----------|
+| 1 | 0-6 | General Steelheart | Tier 1: Recon, APC, Artillery, Anti-Air |
+| 2 | 7-12 | Admiral Darkwave | Tier 2: Rockets, Md Tank, B-Copter, T-Copter |
+| 3 | 13-18 | Supreme Commander | Tier 3: Mega Tank, Bomber, Fighter, Missiles |
 
 **Unlock rules:**
 - **Normal cells**: Unlock when any orthogonally adjacent cell is completed
@@ -173,6 +180,43 @@ Campaign mode features a roguelike upgrade system with two types of rewards:
 - Equip/unequip powers from the campaign UI
 - Only equipped powers are active in battle
 
+### Enemy Difficulty Progression
+
+Enemy strength scales as you progress through the campaign:
+
+**Unit availability by section:**
+- Section 1 (rows 0-6): Infantry, Tank + Tier 1 units
+- Section 2 (rows 7-12): + Tier 2 units
+- Section 3 (rows 13-18): + Tier 3 units
+
+**Row scaling:**
+- +2% Attack Value (AV) and Defense Value (DV) per row
+- Row 6 boss: +12% AV/DV
+- Row 18 final boss: +36% AV/DV
+
+**Cascading rewards:**
+- Enemy has the cell's upgrade/power active during that battle
+- Enemy also gains all upgrades/powers from cells you skipped in lower rows
+- Skipping upgrade cells makes future enemies stronger
+
+**Power slot parity:**
+- Enemy uses same power slot count as player
+- Fortress and boss battles: enemy gets +1 power slot
+- If enemy has more powers than slots, selection is randomized (deterministic per battle)
+
+**Cluster bonuses:**
+| Battle Type | Player Clusters | Enemy Clusters |
+|-------------|-----------------|----------------|
+| Normal | 1 | 1 |
+| Fortress | 1 | 2 |
+| Boss | 2 | 4 |
+
+**Battle Info Modal:**
+- Shows both "Our Forces" and "Enemy Forces" side-by-side
+- Displays available units, active upgrades, equipped powers
+- Shows row bonus and cluster counts for fortress/boss
+- Hover over any power or upgrade for description
+
 ### Controls
 - **Click** to select unit, click destination to move
 - **Action menu**: Wait, Cancel, Attack, Capture, Unload
@@ -204,11 +248,13 @@ hex-dominion/
 │   ├── input.ts          # Input handling
 │   ├── menu.ts           # Main menu / game over
 │   ├── stats.ts          # Game statistics
-│   ├── campaign-state.ts # Campaign state and cell availability
-│   ├── campaign-config.ts# Campaign grid layout and reward distribution
-│   ├── campaign-ui.ts    # Campaign HTML UI (grid, powers, upgrades panels)
-│   ├── upgrades.ts       # Upgrade/power definitions and modifiers
-│   └── main.ts           # Game loop and state machine
+│   ├── campaign-state.ts  # Campaign state and cell availability
+│   ├── campaign-config.ts # Campaign grid layout and reward distribution
+│   ├── campaign-ui.ts     # Campaign HTML UI (grid, powers, upgrades panels)
+│   ├── upgrades.ts        # Upgrade/power definitions and modifiers
+│   ├── enemy-difficulty.ts# Enemy scaling, cascading rewards, cluster bonuses
+│   ├── battle-info-modal.ts# Pre-battle intel modal
+│   └── main.ts            # Game loop and state machine
 ├── tests/                # Test suite (206 tests)
 ├── hex_assets/           # Terrain textures
 ├── unit_assets/          # Unit sprites
@@ -274,16 +320,18 @@ The tests automatically start the dev server (`npm run watch`) before running. R
   - [x] Bonus unit spawning at battle start
   - [x] Terrain modification power (All-Terrain Tires)
   - [x] Randomized reward distribution per campaign
-  - [x] Modal for info on available battles.
-      - explanation of what the unlock is. All explanation text that is not ALL should list the units it applies to.
-      - show what enemy units the enemy has available
-      - show what enemy upgrades/powers are active (right now none, but this will change once i add difficulty scaling)
-      - preview of the map (low res, mainly to give a sense of scale) [only if easy]
-      - "attack" button and "cancel" button that closes the modal.
-- [x] More roguelike feel - fog of war and limited choices.
+- [x] Battle info modal with map preview and reward info
+- [x] More roguelike feel - fog of war and limited choices
+- [x] Enemy difficulty progression
+  - [x] Section-based unit availability (3 tiers matching 3 sections)
+  - [x] Row scaling (+2% AV/DV per row)
+  - [x] Cascading rewards from skipped cells
+  - [x] Cell reward active against player
+  - [x] Power slot parity with +1 for fortress/boss
+  - [x] Asymmetric cluster bonuses (fortress: 1v2, boss: 2v4)
+  - [x] Battle info modal shows player and enemy forces
 
 ### Upcoming
-- [ ] Enemy difficulty progression (available units, bonuses, better AIs)
 - [ ] Saving and loading games
 - [ ] Better AI
     - [ ] Can use transports
