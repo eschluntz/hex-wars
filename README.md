@@ -274,16 +274,15 @@ The tests automatically start the dev server (`npm run watch`) before running. R
   - [x] Bonus unit spawning at battle start
   - [x] Terrain modification power (All-Terrain Tires)
   - [x] Randomized reward distribution per campaign
-
-### Upcoming
-- [ ] campaign screen
   - [x] Modal for info on available battles.
       - explanation of what the unlock is. All explanation text that is not ALL should list the units it applies to.
       - show what enemy units the enemy has available
       - show what enemy upgrades/powers are active (right now none, but this will change once i add difficulty scaling)
       - preview of the map (low res, mainly to give a sense of scale) [only if easy]
       - "attack" button and "cancel" button that closes the modal.
-- [x] More roguelike feel
+- [x] More roguelike feel - fog of war and limited choices.
+
+### Upcoming
 - [ ] Enemy difficulty progression (available units, bonuses, better AIs)
 - [ ] Saving and loading games
 - [ ] Better AI

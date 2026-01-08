@@ -28,6 +28,7 @@ import { CombatAnimator, COUNTER_ATTACK_HEALTH_DELAY } from './combat-animator.j
 import { AITurnExecutor, type AIGameOperations } from './ai-turn-executor.js';
 import { CampaignUI } from './campaign-ui.js';
 import { createCampaignGrid } from './campaign-config.js';
+import { getEnemyBattleConfig, type EnemyBattleConfig } from './enemy-difficulty.js';
 import {
   type CampaignState,
   type CampaignCell,
@@ -106,6 +107,8 @@ class Game {
   private debugWinBtn: HTMLButtonElement | null = null;
   private debugLoseBtn: HTMLButtonElement | null = null;
   private campaignModifiers: CampaignModifiers | null = null;
+  private enemyModifiers: CampaignModifiers | null = null;
+  private enemyActivePowers: string[] = [];
 
   // Map Lab
   private mapLabController: MapLabController | null = null;
@@ -837,6 +840,15 @@ class Game {
 
     console.log(`Cell ${cell.id}: preset=${preset.name}, seed=${baseSeed}`);
 
+    // Get enemy difficulty configuration
+    const enemyConfig = getEnemyBattleConfig(cell, this.campaignState!, this.campaignGrid!);
+    console.log('Enemy config:', {
+      units: enemyConfig.unlockedUnits,
+      upgrades: enemyConfig.activeUpgrades,
+      powers: enemyConfig.activePowers,
+      clusters: enemyConfig.enemyClusters,
+    });
+
     // Generate map with validation, retry with different salt if invalid
     let mapConfig: MapConfig;
     let attempts = 0;
@@ -844,7 +856,7 @@ class Game {
 
     while (attempts < maxAttempts) {
       const seed = baseSeed + attempts;
-      mapConfig = presetToMapConfig(preset, seed);
+      mapConfig = presetToMapConfig(preset, seed, enemyConfig.playerClusters, enemyConfig.enemyClusters);
       const testMap = new GameMap(mapConfig);
       const validation = validateMap(testMap, mapConfig.constraints);
 
@@ -858,7 +870,7 @@ class Game {
     }
 
     // Use the last attempt even if invalid (better than no map)
-    mapConfig = presetToMapConfig(preset, baseSeed + attempts);
+    mapConfig = presetToMapConfig(preset, baseSeed + attempts, enemyConfig.playerClusters, enemyConfig.enemyClusters);
 
     const playerConfigs: PlayerConfig[] = [
       { id: TEAMS.PLAYER, name: 'Player', type: 'human' },
@@ -867,43 +879,48 @@ class Game {
 
     this.startNewGameWithConfig(mapConfig, playerConfigs);
 
-    // Override player's available units with campaign unlocks
+    // Set up player's campaign modifiers
     if (this.campaignState) {
       initTeamUnits(TEAMS.PLAYER, Array.from(this.campaignState.unlockedUnits));
-      // Compute campaign modifiers for combat bonuses
       this.campaignModifiers = getCampaignModifiers(this.campaignState);
-      console.log('Campaign modifiers:', this.campaignModifiers);
+      console.log('Player modifiers:', this.campaignModifiers);
 
-      // Apply power effects at battle start
-      this.applyBattleStartPowers();
+      // Apply player power effects at battle start
+      this.applyBattleStartPowers(TEAMS.PLAYER, this.campaignState.activePowers);
     }
+
+    // Set up enemy's campaign modifiers and units
+    initTeamUnits(TEAMS.ENEMY, enemyConfig.unlockedUnits);
+    this.enemyModifiers = enemyConfig.modifiers;
+    this.enemyActivePowers = enemyConfig.activePowers;
+    console.log('Enemy modifiers:', this.enemyModifiers);
+
+    // Apply enemy power effects at battle start
+    this.applyBattleStartPowers(TEAMS.ENEMY, this.enemyActivePowers);
 
     // Show debug controls during battle
     this.showDebugControls(true);
   }
 
   /**
-   * Apply power effects at the start of a campaign battle
+   * Apply power effects at the start of a campaign battle for a team
    */
-  private applyBattleStartPowers(): void {
-    if (!this.campaignState) return;
-
-    for (const powerId of this.campaignState.activePowers) {
+  private applyBattleStartPowers(team: string, activePowers: string[]): void {
+    for (const powerId of activePowers) {
       const power = POWERS[powerId];
       if (!power) continue;
 
       if (power.effect.type === 'bonus_unit') {
-        this.spawnBonusUnits(power.effect.unitType, power.effect.count);
+        this.spawnBonusUnits(team, power.effect.unitType, power.effect.count);
       }
-      // Other power effects can be handled here or during gameplay
     }
   }
 
   /**
-   * Spawn bonus units near the player's capital
+   * Spawn bonus units near a team's capital
    */
-  private spawnBonusUnits(unitType: string, count: number): void {
-    const capital = this.map.getCapital(TEAMS.PLAYER);
+  private spawnBonusUnits(team: string, unitType: string, count: number): void {
+    const capital = this.map.getCapital(team);
     if (!capital) return;
 
     // Get empty hexes around capital
@@ -920,14 +937,17 @@ class Game {
     for (const hex of emptyHexes) {
       if (spawned >= count) break;
 
-      const unit = this.createUnitWithBonuses(TEAMS.PLAYER, hex.q, hex.r, unitType);
+      // For player, apply campaign bonuses; for enemy, create base unit
+      const unit = team === TEAMS.PLAYER
+        ? this.createUnitWithBonuses(team, hex.q, hex.r, unitType)
+        : new Unit(`${unitType}_${this.nextUnitId++}`, team, hex.q, hex.r, unitType);
       this.units.push(unit);
-      console.log(`Bonus ${unitType} spawned at (${hex.q}, ${hex.r})`);
+      console.log(`${team} bonus ${unitType} spawned at (${hex.q}, ${hex.r})`);
       spawned++;
     }
 
     if (spawned < count) {
-      console.log(`Could only spawn ${spawned}/${count} bonus units (not enough space)`);
+      console.log(`Could only spawn ${spawned}/${count} ${team} bonus units (not enough space)`);
     }
   }
 
@@ -1004,6 +1024,8 @@ class Game {
     this.campaignGrid = null;
     this.activeCampaignCell = null;
     this.campaignModifiers = null;
+    this.enemyModifiers = null;
+    this.enemyActivePowers = [];
     this.campaignUI.hide();
     this.showDebugControls(false);
   }
@@ -1423,28 +1445,25 @@ class Game {
     const defenderHealthBefore = defender.health;
 
     // Compute AV/DV based on campaign modifiers (if in campaign) and team
-    let attackerAV = 100;
-    let defenderDV = 100;
-    let defenderAV = 100;
-    let attackerDV = 100;
+    const getModifiers = (team: string): CampaignModifiers | null => {
+      if (team === TEAMS.PLAYER) return this.campaignModifiers;
+      if (team === TEAMS.ENEMY) return this.enemyModifiers;
+      return null;
+    };
 
-    if (this.campaignModifiers) {
-      // Player attacking enemy
-      if (attacker.team === TEAMS.PLAYER) {
-        attackerAV = getAttackerAV(attacker.templateId!, this.campaignModifiers);
-      }
-      // Player defending against enemy
-      if (defender.team === TEAMS.PLAYER) {
-        defenderDV = getDefenderDV(defender.templateId!, this.campaignModifiers);
-      }
-      // Defender counter-attacking player
-      if (defender.team === TEAMS.PLAYER) {
-        defenderAV = getAttackerAV(defender.templateId!, this.campaignModifiers);
-      }
-      // Attacker defending against counter-attack
-      if (attacker.team === TEAMS.PLAYER) {
-        attackerDV = getDefenderDV(attacker.templateId!, this.campaignModifiers);
-      }
+    let attackerAV = 100, attackerDV = 100;
+    let defenderAV = 100, defenderDV = 100;
+
+    const attackerMods = getModifiers(attacker.team);
+    if (attackerMods) {
+      attackerAV = getAttackerAV(attacker.templateId!, attackerMods);
+      attackerDV = getDefenderDV(attacker.templateId!, attackerMods);
+    }
+
+    const defenderMods = getModifiers(defender.team);
+    if (defenderMods) {
+      defenderDV = getDefenderDV(defender.templateId!, defenderMods);
+      defenderAV = getAttackerAV(defender.templateId!, defenderMods);
     }
 
     // Execute combat with terrain defense and campaign modifiers

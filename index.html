@@ -903,6 +903,76 @@
     .battle-modal-section {
       margin-bottom: 1.25rem;
     }
+    .battle-modal-forces {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+    }
+    .battle-modal-forces .forces-section {
+      flex: 1;
+      margin-bottom: 0;
+    }
+    /* Shared styles for player/enemy force panels */
+    .battle-modal-player,
+    .battle-modal-enemy {
+      padding: 0.75rem;
+      background: var(--bg-dark);
+      border-radius: 6px;
+      font-size: 0.8rem;
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .battle-modal-player { border: 1px solid var(--blue); }
+    .battle-modal-enemy { border: 1px solid var(--red); }
+
+    .battle-modal-forces .force-label {
+      color: var(--text-dim);
+    }
+    .battle-modal-forces .force-value {
+      color: var(--text);
+    }
+    .battle-modal-forces .force-items-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 4px;
+      align-items: center;
+    }
+    .battle-modal-forces .power-slot.filled {
+      padding: 0.25rem 0.5rem;
+      font-size: 0.7rem;
+      flex: none;
+      cursor: default;
+    }
+    .battle-modal-forces .power-slot.filled:hover {
+      background: var(--purple-dim);
+    }
+    .battle-modal-forces .upgrade-item {
+      font-size: 0.7rem;
+      cursor: default;
+    }
+    .battle-modal-forces .force-slots {
+      color: var(--text-dim);
+      font-size: 0.7rem;
+      margin-left: 4px;
+    }
+    .battle-modal-info-box {
+      padding: 0.5rem 0.75rem;
+      background: var(--bg-dark);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.75rem;
+      color: var(--text);
+      min-height: 2.5rem;
+      margin-bottom: 1rem;
+    }
+    .battle-modal-info-box .info-placeholder {
+      color: var(--text-dim);
+      font-style: italic;
+    }
+    .battle-modal-info-box.has-content {
+      border-color: var(--purple);
+    }
     .battle-modal-section h3 {
       font-size: 0.7rem;
       font-weight: bold;
@@ -928,21 +998,6 @@
       margin-top: 0.5rem;
       font-size: 0.75rem;
       color: var(--text-dim);
-    }
-    .battle-modal-enemy {
-      padding: 0.75rem;
-      background: var(--bg-dark);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      font-size: 0.8rem;
-      color: var(--text);
-      line-height: 1.6;
-    }
-    .battle-modal-enemy .enemy-label {
-      color: var(--text-dim);
-    }
-    .battle-modal-enemy .enemy-value {
-      color: var(--text);
     }
     .unit-icons-row {
       display: flex;

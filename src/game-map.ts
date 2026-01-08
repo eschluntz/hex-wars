@@ -259,6 +259,32 @@ export class GameMap {
       }
     }
 
+    // Get asymmetric cluster counts from config (defaults to 1 each)
+    const playerClusterCount = cfg.playerClusters ?? 1;
+    const enemyClusterCount = cfg.enemyClusters ?? 1;
+
+    // Collect indices of non-home clusters for redistribution
+    const remainingIndices: number[] = [];
+    for (let i = 0; i < clusters.length; i++) {
+      if (i !== playerClusterIdx && i !== enemyClusterIdx) {
+        remainingIndices.push(i);
+      }
+    }
+
+    // Shuffle remaining clusters randomly for fair distribution
+    rng.shuffle(remainingIndices);
+
+    // Assign extra clusters to player and enemy (beyond their home cluster)
+    const playerBonusCount = Math.min(playerClusterCount - 1, remainingIndices.length);
+    const playerBonusIndices = remainingIndices.splice(0, playerBonusCount);
+
+    const enemyBonusCount = Math.min(enemyClusterCount - 1, remainingIndices.length);
+    const enemyBonusIndices = remainingIndices.splice(0, enemyBonusCount);
+
+    // Create sets for quick lookup
+    const playerClusterIndices = new Set([playerClusterIdx, ...playerBonusIndices]);
+    const enemyClusterIndices = new Set([enemyClusterIdx, ...enemyBonusIndices]);
+
     // Step 3: Place buildings in home clusters with identical composition
     const playerCluster = clusters[playerClusterIdx]!;
     const enemyCluster = clusters[enemyClusterIdx]!;
@@ -292,11 +318,22 @@ export class GameMap {
       }
     }
 
-    // Step 4: Place buildings in non-home clusters (all neutral)
+    // Step 4: Place buildings in non-home clusters
+    // Bonus clusters for player/enemy get ownership, others are neutral
     for (let clusterIdx = 0; clusterIdx < clusters.length; clusterIdx++) {
+      // Skip home clusters (already handled above)
       if (clusterIdx === playerClusterIdx || clusterIdx === enemyClusterIdx) continue;
 
       const cluster = clusters[clusterIdx]!;
+
+      // Determine ownership for bonus clusters
+      let owner: string | null = null;
+      if (playerClusterIndices.has(clusterIdx)) {
+        owner = 'player';
+      } else if (enemyClusterIndices.has(clusterIdx)) {
+        owner = 'enemy';
+      }
+
       for (let i = 0; i < cluster.buildings.length; i++) {
         const pos = cluster.buildings[i]!;
 
@@ -309,7 +346,7 @@ export class GameMap {
           buildingType = 'factory';
         }
 
-        const building = createBuilding(pos.q, pos.r, buildingType, null);
+        const building = createBuilding(pos.q, pos.r, buildingType, owner);
         this.buildings.set(getBuildingKey(pos.q, pos.r), building);
       }
     }

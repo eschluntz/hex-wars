@@ -343,8 +343,14 @@ export const REGULAR_PRESETS = [
 
 /**
  * Convert a MapPreset + seed into a full MapConfig
+ * Optionally specify asymmetric cluster counts for campaign difficulty
  */
-export function presetToMapConfig(preset: MapPreset, seed: number): MapConfig {
+export function presetToMapConfig(
+  preset: MapPreset,
+  seed: number,
+  playerClusters?: number,
+  enemyClusters?: number
+): MapConfig {
   return {
     name: preset.name,
     description: preset.description,
@@ -353,7 +359,9 @@ export function presetToMapConfig(preset: MapPreset, seed: number): MapConfig {
     seed,
     terrain: preset.terrain,
     clusters: preset.clusters,
-    constraints: preset.constraints
+    constraints: preset.constraints,
+    playerClusters,
+    enemyClusters,
   };
 }
 

@@ -32,6 +32,8 @@ export class CampaignUI {
   private infoBox: HTMLElement | null = null;
   private battleModal: BattleInfoModal;
   private campaignSeed: number = 0;
+  private campaignState: CampaignState | null = null;
+  private campaignGrid: CampaignGrid | null = null;
   private callbacks: CampaignUICallbacks;
 
   constructor(callbacks: CampaignUICallbacks) {
@@ -77,7 +79,14 @@ export class CampaignUI {
   }
 
   private showBattleInfoModal(cell: CampaignCell): void {
-    this.battleModal.show(cell, this.campaignSeed, (c) => this.callbacks.onStartBattle(c));
+    if (!this.campaignState || !this.campaignGrid) return;
+    this.battleModal.show(
+      cell,
+      this.campaignSeed,
+      this.campaignState,
+      this.campaignGrid,
+      (c) => this.callbacks.onStartBattle(c)
+    );
   }
 
   private setInfoText(text: string): void {
@@ -102,6 +111,8 @@ export class CampaignUI {
 
   render(grid: CampaignGrid, state: CampaignState): void {
     this.campaignSeed = state.campaignSeed;
+    this.campaignState = state;
+    this.campaignGrid = grid;
     this.renderHearts(state.reinforcements);
     this.renderGrid(grid, state);
     this.renderPowersPanel(state);
@@ -234,9 +245,20 @@ export class CampaignUI {
 
   private renderHearts(reinforcements: number): void {
     this.heartsContainer.innerHTML = '';
-    for (let i = 0; i < 3; i++) {
+    const baseHearts = 3;
+
+    // Base hearts (first 3) - can show as empty if lost
+    for (let i = 0; i < baseHearts; i++) {
       const heart = document.createElement('span');
       heart.className = `campaign-heart ${i < reinforcements ? 'filled' : 'empty'}`;
+      heart.textContent = '♥';
+      this.heartsContainer.appendChild(heart);
+    }
+
+    // Bonus hearts beyond base 3 - just filled, disappear when lost
+    for (let i = baseHearts; i < reinforcements; i++) {
+      const heart = document.createElement('span');
+      heart.className = 'campaign-heart filled bonus';
       heart.textContent = '♥';
       this.heartsContainer.appendChild(heart);
     }

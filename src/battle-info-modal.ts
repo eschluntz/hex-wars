@@ -2,14 +2,15 @@
 // HEX DOMINION - Battle Info Modal
 // ============================================================================
 
-import type { CampaignCell } from './campaign-state.js';
+import type { CampaignCell, CampaignGrid, CampaignState } from './campaign-state.js';
 import { getCampaignCellPreset, getCampaignBattleSeed } from './campaign-state.js';
 import { POWERS, STACKING_UPGRADES, REWARD_TO_UPGRADE, REWARD_TO_POWER } from './upgrades.js';
-import { UNIT_TYPES, DEFAULT_UNLOCKED_UNITS } from './unit-templates.js';
+import { UNIT_TYPES } from './unit-templates.js';
 import { presetToMapConfig, MAP_FLAVOR_TEXT } from './map-presets.js';
 import { GameMap } from './game-map.js';
 import { HexUtil } from './core.js';
 import { getUnitTexture } from './textures.js';
+import { getEnemyBattleConfig, type EnemyBattleConfig } from './enemy-difficulty.js';
 
 const ICONS: Record<string, string> = {
   unit: '⬡',
@@ -23,6 +24,9 @@ export class BattleInfoModal {
   private element: HTMLElement;
   private onAttackCallback: ((cell: CampaignCell) => void) | null = null;
   private currentCell: CampaignCell | null = null;
+  private currentEnemyConfig: EnemyBattleConfig | null = null;
+  private currentCampaignState: CampaignState | null = null;
+  private infoBox: HTMLElement | null = null;
 
   constructor() {
     this.element = document.createElement('div');
@@ -40,14 +44,25 @@ export class BattleInfoModal {
     });
   }
 
-  show(cell: CampaignCell, campaignSeed: number, onAttack: (cell: CampaignCell) => void): void {
+  show(
+    cell: CampaignCell,
+    campaignSeed: number,
+    campaignState: CampaignState,
+    campaignGrid: CampaignGrid,
+    onAttack: (cell: CampaignCell) => void
+  ): void {
     this.currentCell = cell;
     this.onAttackCallback = onAttack;
+    this.currentCampaignState = campaignState;
+
+    // Compute enemy config for intel display
+    this.currentEnemyConfig = getEnemyBattleConfig(cell, campaignState, campaignGrid);
 
     const icon = ICONS[cell.type];
     const reward = this.formatRewardDescription(cell);
-    const enemyHtml = this.formatEnemyInfo();
-    const mapPreview = this.renderMapPreview(cell, campaignSeed);
+    const playerHtml = this.formatPlayerInfo(campaignState);
+    const enemyHtml = this.formatEnemyInfo(cell.row);
+    const mapPreview = this.renderMapPreview(cell, campaignSeed, this.currentEnemyConfig);
     const preset = getCampaignCellPreset(cell, campaignSeed);
     const flavorText = this.getFlavorText(preset.name.toLowerCase(), cell.id, campaignSeed);
 
@@ -65,9 +80,20 @@ export class BattleInfoModal {
           </div>
         </div>
 
-        <div class="battle-modal-section">
-          <h3>Enemy Forces</h3>
-          <div class="battle-modal-enemy">${enemyHtml}</div>
+        <div class="battle-modal-forces">
+          <div class="battle-modal-section forces-section">
+            <h3>Our Forces</h3>
+            <div class="battle-modal-player">${playerHtml}</div>
+          </div>
+
+          <div class="battle-modal-section forces-section">
+            <h3>Enemy Forces</h3>
+            <div class="battle-modal-enemy">${enemyHtml}</div>
+          </div>
+        </div>
+
+        <div class="battle-modal-info-box" id="battle-info-box">
+          <span class="info-placeholder">Hover over powers or upgrades for details</span>
         </div>
 
         <div class="battle-modal-section">
@@ -105,10 +131,16 @@ export class BattleInfoModal {
       }
     }
 
-    // Insert enemy units icons
+    // Insert player units icons
+    const playerUnitsContainer = this.element.querySelector('#player-units-icons');
+    if (playerUnitsContainer && campaignState) {
+      this.fillUnitIconRow(playerUnitsContainer as HTMLElement, Array.from(campaignState.unlockedUnits), 'player');
+    }
+
+    // Insert enemy units icons (uses computed enemy config)
     const enemyUnitsContainer = this.element.querySelector('#enemy-units-icons');
-    if (enemyUnitsContainer) {
-      this.fillUnitIconRow(enemyUnitsContainer as HTMLElement, DEFAULT_UNLOCKED_UNITS, 'enemy');
+    if (enemyUnitsContainer && this.currentEnemyConfig) {
+      this.fillUnitIconRow(enemyUnitsContainer as HTMLElement, this.currentEnemyConfig.unlockedUnits, 'enemy');
     }
 
     // Insert reward units icons if there's a unit filter
@@ -118,6 +150,10 @@ export class BattleInfoModal {
         this.fillUnitIconRow(rewardUnitsContainer as HTMLElement, reward.unitFilter, 'player');
       }
     }
+
+    // Store info box reference and wire up hover events
+    this.infoBox = this.element.querySelector('#battle-info-box');
+    this.wireUpHoverEvents();
 
     // Wire up button handlers
     const cancelBtn = this.element.querySelector('.battle-modal-btn.cancel');
@@ -145,6 +181,50 @@ export class BattleInfoModal {
     this.element.style.display = 'none';
     this.currentCell = null;
     this.onAttackCallback = null;
+    this.currentEnemyConfig = null;
+    this.currentCampaignState = null;
+    this.infoBox = null;
+  }
+
+  private setInfoText(text: string): void {
+    if (this.infoBox) {
+      this.infoBox.innerHTML = text;
+      this.infoBox.classList.add('has-content');
+    }
+  }
+
+  private clearInfoText(): void {
+    if (this.infoBox) {
+      this.infoBox.innerHTML = '<span class="info-placeholder">Hover over powers or upgrades for details</span>';
+      this.infoBox.classList.remove('has-content');
+    }
+  }
+
+  private wireUpHoverEvents(): void {
+    // Wire up hover for all power and upgrade elements
+    const powerElements = this.element.querySelectorAll('.power-slot.filled[data-power-id]');
+    powerElements.forEach(el => {
+      const powerId = el.getAttribute('data-power-id');
+      if (powerId) {
+        const power = POWERS[powerId];
+        if (power) {
+          el.addEventListener('mouseenter', () => this.setInfoText(`<strong>${power.name}</strong>: ${power.description}`));
+          el.addEventListener('mouseleave', () => this.clearInfoText());
+        }
+      }
+    });
+
+    const upgradeElements = this.element.querySelectorAll('.upgrade-item[data-upgrade-id]');
+    upgradeElements.forEach(el => {
+      const upgradeId = el.getAttribute('data-upgrade-id');
+      if (upgradeId) {
+        const upgrade = STACKING_UPGRADES[upgradeId];
+        if (upgrade) {
+          el.addEventListener('mouseenter', () => this.setInfoText(`<strong>${upgrade.name}</strong>: ${upgrade.description}`));
+          el.addEventListener('mouseleave', () => this.clearInfoText());
+        }
+      }
+    });
   }
 
   private getCellTypeLabel(type: string): string {
@@ -241,20 +321,78 @@ export class BattleInfoModal {
     }
   }
 
-  private formatEnemyInfo(): string {
-    // Current state: Enemy has all units, no upgrades/powers
+  private formatUpgradesHtml(upgrades: string[]): string {
+    if (upgrades.length === 0) {
+      return '<span class="force-value">None</span>';
+    }
+    return '<div class="force-items-row">' +
+      upgrades
+        .map(id => {
+          const name = STACKING_UPGRADES[id]?.name ?? id;
+          return `<div class="upgrade-item" data-upgrade-id="${id}">${name}</div>`;
+        })
+        .join('') +
+      '</div>';
+  }
+
+  private formatPowersHtml(powers: string[], slots: number): string {
+    if (powers.length === 0) {
+      return '<span class="force-value">None</span>';
+    }
+    const slotsInfo = `<span class="force-slots">(${powers.length}/${slots} slots)</span>`;
+    return '<div class="force-items-row">' +
+      powers
+        .map(id => {
+          const name = POWERS[id]?.name ?? id;
+          return `<div class="power-slot filled" data-power-id="${id}">${name}</div>`;
+        })
+        .join('') +
+      slotsInfo +
+      '</div>';
+  }
+
+  private formatPlayerInfo(state: CampaignState): string {
+    const upgradesHtml = this.formatUpgradesHtml(state.acquiredUpgrades);
+    const powersHtml = this.formatPowersHtml(state.activePowers, state.powerSlots);
+
     return `
-      <div><span class="enemy-label">Available units:</span></div>
-      <div id="enemy-units-icons" class="unit-icons-row"></div>
-      <div><span class="enemy-label">Upgrades:</span> <span class="enemy-value">None</span></div>
-      <div><span class="enemy-label">Powers:</span> <span class="enemy-value">None</span></div>
+      <div><span class="force-label">Available units:</span></div>
+      <div id="player-units-icons" class="unit-icons-row"></div>
+      <div><span class="force-label">Upgrades:</span> ${upgradesHtml}</div>
+      <div><span class="force-label">Powers:</span> ${powersHtml}</div>
     `;
   }
 
-  private renderMapPreview(cell: CampaignCell, campaignSeed: number): HTMLCanvasElement {
+  private formatEnemyInfo(row: number): string {
+    const config = this.currentEnemyConfig;
+
+    const upgradesHtml = this.formatUpgradesHtml(config?.activeUpgrades ?? []);
+    const powersHtml = this.formatPowersHtml(config?.activePowers ?? [], config?.powerSlots ?? 0);
+
+    // Calculate row bonus
+    const rowBonus = row * 2;
+
+    // Cluster info for fortress/boss
+    let clusterInfo = '';
+    if (config && (config.enemyClusters > 1 || config.playerClusters > 1)) {
+      clusterInfo = `<div><span class="force-label">Clusters:</span> <span class="force-value">Player: ${config.playerClusters}, Enemy: ${config.enemyClusters}</span></div>`;
+    }
+
+    return `
+      <div><span class="force-label">Available units:</span></div>
+      <div id="enemy-units-icons" class="unit-icons-row"></div>
+      <div><span class="force-label">Upgrades:</span> ${upgradesHtml}</div>
+      <div><span class="force-label">Powers:</span> ${powersHtml}</div>
+      <div><span class="force-label">Row Bonus:</span> <span class="force-value">+${rowBonus}% AV/DV</span></div>
+      ${clusterInfo}
+    `;
+  }
+
+  private renderMapPreview(cell: CampaignCell, campaignSeed: number, enemyConfig?: EnemyBattleConfig): HTMLCanvasElement {
     const preset = getCampaignCellPreset(cell, campaignSeed);
     const seed = getCampaignBattleSeed(cell.id, campaignSeed);
-    const config = presetToMapConfig(preset, seed);
+    // Pass cluster counts if available
+    const config = presetToMapConfig(preset, seed, enemyConfig?.playerClusters, enemyConfig?.enemyClusters);
     const map = new GameMap(config);
 
     // Small hex size for preview

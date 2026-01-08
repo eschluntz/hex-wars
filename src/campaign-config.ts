@@ -22,11 +22,11 @@ import { STACKING_UPGRADES, POWERS } from './upgrades.js';
  *   Row 12: Final Boss
  */
 
-// Unit unlocks by tier (row ranges)
-const TIER_1_UNITS = ['recon', 'apc', 'artillery'];
-const TIER_2_UNITS = ['antiAir', 'rockets'];
-const TIER_3_UNITS = ['mediumTank', 'copter', 'transportCopter'];
-const TIER_4_UNITS = ['heavyTank', 'bomber', 'fighter', 'missiles'];
+// Unit unlocks by tier - 3 tiers mapping cleanly to 3 sections
+// Each section uses exactly one tier, enemies get cumulative access
+export const TIER_1_UNITS = ['recon', 'apc', 'artillery', 'antiAir'];
+export const TIER_2_UNITS = ['rockets', 'mediumTank', 'copter', 'transportCopter'];
+export const TIER_3_UNITS = ['heavyTank', 'bomber', 'fighter', 'missiles'];
 
 // All upgrade IDs from the registry
 const ALL_UPGRADES = Object.keys(STACKING_UPGRADES);
@@ -200,37 +200,37 @@ function createCampaignCells(seed: number): CampaignCell[] {
   usedUnits.add('infantry');
   usedUnits.add('tank');
 
-  // Section 1: Rows 1-5 (6 rows total including row 0)
+  // Section 1: Rows 1-5 - TIER_1 units only
   cells.push(...generateRow(1, rng, TIER_1_UNITS, usedUpgrades, usedPowers, usedUnits));
   cells.push(...generateRow(2, rng, TIER_1_UNITS, usedUpgrades, usedPowers, usedUnits));
-  cells.push(...generateRow(3, rng, TIER_2_UNITS, usedUpgrades, usedPowers, usedUnits));
+  cells.push(...generateRow(3, rng, TIER_1_UNITS, usedUpgrades, usedPowers, usedUnits));
   const fortress1SkipCols = [fortress1Col, fortress1Col + 1];
-  cells.push(...generateRow(4, rng, TIER_2_UNITS, usedUpgrades, usedPowers, usedUnits, fortress1SkipCols));
-  cells.push(...generateRow(5, rng, TIER_2_UNITS, usedUpgrades, usedPowers, usedUnits, fortress1SkipCols));
+  cells.push(...generateRow(4, rng, TIER_1_UNITS, usedUpgrades, usedPowers, usedUnits, fortress1SkipCols));
+  cells.push(...generateRow(5, rng, TIER_1_UNITS, usedUpgrades, usedPowers, usedUnits, fortress1SkipCols));
   cells.push(makeFortress(4, fortress1Col, 'Steel Bastion', fortressPower1.name));
 
   // Row 6: Boss 1
   cells.push(makeCell(6, 0, 'boss', 'General Steelheart', bossPower1.name));
 
-  // Section 2: Rows 7-11 (5 rows after boss)
+  // Section 2: Rows 7-11 - TIER_2 units only
   cells.push(...generateRow(7, rng, TIER_2_UNITS, usedUpgrades, usedPowers, usedUnits));
-  cells.push(...generateRow(8, rng, TIER_3_UNITS, usedUpgrades, usedPowers, usedUnits));
-  cells.push(...generateRow(9, rng, TIER_3_UNITS, usedUpgrades, usedPowers, usedUnits));
+  cells.push(...generateRow(8, rng, TIER_2_UNITS, usedUpgrades, usedPowers, usedUnits));
+  cells.push(...generateRow(9, rng, TIER_2_UNITS, usedUpgrades, usedPowers, usedUnits));
   const fortress2SkipCols = [fortress2Col, fortress2Col + 1];
-  cells.push(...generateRow(10, rng, TIER_3_UNITS, usedUpgrades, usedPowers, usedUnits, fortress2SkipCols));
-  cells.push(...generateRow(11, rng, TIER_3_UNITS, usedUpgrades, usedPowers, usedUnits, fortress2SkipCols));
+  cells.push(...generateRow(10, rng, TIER_2_UNITS, usedUpgrades, usedPowers, usedUnits, fortress2SkipCols));
+  cells.push(...generateRow(11, rng, TIER_2_UNITS, usedUpgrades, usedPowers, usedUnits, fortress2SkipCols));
   cells.push(makeFortress(10, fortress2Col, 'Sky Citadel', fortressPower2.name));
 
   // Row 12: Boss 2
   cells.push(makeCell(12, 0, 'boss', 'Admiral Darkwave', bossPower2.name));
 
-  // Section 3: Rows 13-17 (5 rows after boss)
+  // Section 3: Rows 13-17 - TIER_3 units only
   cells.push(...generateRow(13, rng, TIER_3_UNITS, usedUpgrades, usedPowers, usedUnits));
-  cells.push(...generateRow(14, rng, TIER_4_UNITS, usedUpgrades, usedPowers, usedUnits));
-  cells.push(...generateRow(15, rng, TIER_4_UNITS, usedUpgrades, usedPowers, usedUnits));
+  cells.push(...generateRow(14, rng, TIER_3_UNITS, usedUpgrades, usedPowers, usedUnits));
+  cells.push(...generateRow(15, rng, TIER_3_UNITS, usedUpgrades, usedPowers, usedUnits));
   const fortress3SkipCols = [fortress3Col, fortress3Col + 1];
-  cells.push(...generateRow(16, rng, TIER_4_UNITS, usedUpgrades, usedPowers, usedUnits, fortress3SkipCols));
-  cells.push(...generateRow(17, rng, TIER_4_UNITS, usedUpgrades, usedPowers, usedUnits, fortress3SkipCols));
+  cells.push(...generateRow(16, rng, TIER_3_UNITS, usedUpgrades, usedPowers, usedUnits, fortress3SkipCols));
+  cells.push(...generateRow(17, rng, TIER_3_UNITS, usedUpgrades, usedPowers, usedUnits, fortress3SkipCols));
   cells.push(makeFortress(16, fortress3Col, 'Omega Base', fortressPower3.name));
 
   // Row 18: Final Boss

@@ -43,6 +43,9 @@ export interface MapConfig {
   } | null;
   // Validation constraints (reject maps that don't meet these)
   constraints?: MapConstraints;
+  // Asymmetric cluster ownership (for campaign difficulty)
+  playerClusters?: number;  // How many clusters player starts with (default 1)
+  enemyClusters?: number;   // How many clusters enemy starts with (default 1)
 }
 
 export const MAP_CONFIGS: Record<string, MapConfig> = {
