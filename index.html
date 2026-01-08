@@ -274,9 +274,9 @@
       --border: #2a3040;
       --text: #c8d0e0;
       --text-dim: #5a6070;
-      --blue: #3b82f6;
-      --blue-glow: rgba(59, 130, 246, 0.4);
-      --blue-dim: #1e3a5f;
+      --yellow: #facc15;
+      --yellow-glow: rgba(250, 204, 21, 0.4);
+      --yellow-dim: #4a3f1e;
       --red: #ef4444;
       --red-glow: rgba(239, 68, 68, 0.4);
       --red-dim: #5f1e1e;
@@ -374,10 +374,10 @@
       opacity: 0.4;
     }
     .campaign-cell.available.unit {
-      background: var(--blue-dim);
-      border-color: var(--blue);
-      box-shadow: 0 0 20px var(--blue-glow), inset 0 0 20px var(--blue-glow);
-      animation: campaign-pulse-blue 2s ease-in-out infinite;
+      background: var(--yellow-dim);
+      border-color: var(--yellow);
+      box-shadow: 0 0 20px var(--yellow-glow), inset 0 0 20px var(--yellow-glow);
+      animation: campaign-pulse-yellow 2s ease-in-out infinite;
     }
     .campaign-cell.available.upgrade {
       background: var(--red-dim);
@@ -391,9 +391,9 @@
       box-shadow: 0 0 20px var(--orange-glow), inset 0 0 20px var(--orange-glow);
       animation: campaign-pulse-orange 2s ease-in-out infinite;
     }
-    @keyframes campaign-pulse-blue {
-      0%, 100% { box-shadow: 0 0 15px var(--blue-glow), inset 0 0 15px var(--blue-glow); }
-      50% { box-shadow: 0 0 25px var(--blue-glow), inset 0 0 25px var(--blue-glow); }
+    @keyframes campaign-pulse-yellow {
+      0%, 100% { box-shadow: 0 0 15px var(--yellow-glow), inset 0 0 15px var(--yellow-glow); }
+      50% { box-shadow: 0 0 25px var(--yellow-glow), inset 0 0 25px var(--yellow-glow); }
     }
     @keyframes campaign-pulse-red {
       0%, 100% { box-shadow: 0 0 15px var(--red-glow), inset 0 0 15px var(--red-glow); }
@@ -411,14 +411,14 @@
     .campaign-cell.completed .cell-icon { color: var(--completed); }
     .campaign-cell.completed .cell-label { color: var(--completed); }
     .cell-icon { font-size: 1.5rem; margin-bottom: 2px; }
-    .campaign-cell.unit .cell-icon { color: var(--blue); }
+    .campaign-cell.unit .cell-icon { color: var(--yellow); }
     .campaign-cell.upgrade .cell-icon { color: var(--red); }
     .campaign-cell.special .cell-icon { color: var(--orange); }
     .cell-label {
       font-size: 0.55rem;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      color: var(--text-dim);
+      color: var(--text);
       text-align: center;
       line-height: 1.2;
     }
@@ -536,12 +536,12 @@
       background: var(--bg-dark);
     }
     .campaign-fortress-cell.locked {
-      border-color: var(--gold-dim);
+      border-color: var(--orange-dim);
       cursor: not-allowed;
       opacity: 0.5;
     }
     .campaign-fortress-cell.fogged {
-      border-color: var(--gold-dim);
+      border-color: var(--orange-dim);
       cursor: not-allowed;
       opacity: 0.5;
     }
@@ -550,26 +550,26 @@
       opacity: 0.7;
     }
     .campaign-fortress-cell.available {
-      background: var(--gold-dim);
-      border-color: var(--gold);
-      box-shadow: 0 0 35px var(--gold-glow), inset 0 0 35px var(--gold-glow);
+      background: var(--orange-dim);
+      border-color: var(--orange);
+      box-shadow: 0 0 35px var(--orange-glow), inset 0 0 35px var(--orange-glow);
       animation: campaign-pulse-fortress 2s ease-in-out infinite;
     }
     @keyframes campaign-pulse-fortress {
-      0%, 100% { box-shadow: 0 0 30px var(--gold-glow), inset 0 0 25px var(--gold-glow); }
-      50% { box-shadow: 0 0 45px var(--gold-glow), inset 0 0 40px var(--gold-glow); }
+      0%, 100% { box-shadow: 0 0 30px var(--orange-glow), inset 0 0 25px var(--orange-glow); }
+      50% { box-shadow: 0 0 45px var(--orange-glow), inset 0 0 40px var(--orange-glow); }
     }
     .campaign-fortress-cell.available:hover { transform: scale(1.03); }
     .campaign-fortress-cell.completed {
       background: rgba(34, 197, 94, 0.15);
       border-color: var(--completed);
     }
-    .fortress-icon { font-size: 3rem; color: var(--gold); margin-bottom: 0.5rem; }
+    .fortress-icon { font-size: 3rem; color: var(--orange); margin-bottom: 0.5rem; }
     .campaign-fortress-cell.completed .fortress-icon { color: var(--completed); }
     .fortress-name {
       font-size: 0.85rem;
       font-weight: bold;
-      color: var(--gold);
+      color: var(--orange);
       text-transform: uppercase;
     }
     .campaign-fortress-cell.completed .fortress-name { color: var(--completed); }
@@ -579,7 +579,7 @@
       top: -10px;
       left: 50%;
       transform: translateX(-50%);
-      background: var(--gold);
+      background: var(--orange);
       color: var(--bg-dark);
       font-size: 0.55rem;
       font-weight: bold;
@@ -602,11 +602,11 @@
     }
     .legend-item { display: flex; align-items: center; gap: 0.5rem; color: var(--text); }
     .legend-dot { width: 16px; height: 16px; border-radius: 4px; }
-    .legend-dot.unit { background: var(--blue); }
+    .legend-dot.unit { background: var(--yellow); }
     .legend-dot.upgrade { background: var(--red); }
     .legend-dot.special { background: var(--orange); }
     .legend-dot.boss { background: var(--purple); }
-    .legend-dot.fortress { background: var(--gold); }
+    .legend-dot.fortress { background: var(--orange); }
     .legend-dot.completed { background: var(--completed); }
 
     .campaign-back-btn {
@@ -820,8 +820,8 @@
       --border: #2a3040;
       --text: #c8d0e0;
       --text-dim: #5a6070;
-      --blue: #3b82f6;
-      --blue-dim: #1e3a5f;
+      --yellow: #3b82f6;
+      --yellow-dim: #1e3a5f;
       --red: #ef4444;
       --red-dim: #5f1e1e;
       --orange: #f97316;
@@ -859,9 +859,9 @@
       border: 2px solid transparent;
     }
     .battle-modal-icon.unit {
-      background: var(--blue-dim);
-      border-color: var(--blue);
-      color: var(--blue);
+      background: var(--yellow-dim);
+      border-color: var(--yellow);
+      color: var(--yellow);
     }
     .battle-modal-icon.upgrade {
       background: var(--red-dim);
@@ -879,9 +879,9 @@
       color: var(--purple);
     }
     .battle-modal-icon.fortress {
-      background: var(--gold-dim);
-      border-color: var(--gold);
-      color: var(--gold);
+      background: var(--orange-dim);
+      border-color: var(--orange);
+      color: var(--orange);
     }
     .battle-modal-title {
       flex: 1;
@@ -894,7 +894,7 @@
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
-    .battle-modal-title .cell-type {
+    .battle-modal-title .map-type {
       font-size: 0.75rem;
       color: var(--text-dim);
       text-transform: uppercase;
@@ -922,7 +922,7 @@
       color: var(--text);
       line-height: 1.6;
     }
-    .battle-modal-player { border: 1px solid var(--blue); }
+    .battle-modal-player { border: 1px solid var(--yellow); }
     .battle-modal-enemy { border: 1px solid var(--red); }
 
     .battle-modal-forces .force-label {
@@ -990,6 +990,11 @@
       color: var(--text);
       line-height: 1.5;
     }
+    .battle-modal-reward.unit { border-color: var(--yellow); }
+    .battle-modal-reward.upgrade { border-color: var(--red); }
+    .battle-modal-reward.special { border-color: var(--orange); }
+    .battle-modal-reward.boss { border-color: var(--purple); }
+    .battle-modal-reward.fortress { border-color: var(--orange); }
     .battle-modal-reward strong {
       color: #fff;
     }
@@ -1071,13 +1076,13 @@
       border-color: #9333ea;
     }
     .battle-modal-btn.attack.fortress {
-      background: var(--gold);
-      border-color: var(--gold);
+      background: var(--orange);
+      border-color: var(--orange);
       color: #000;
     }
     .battle-modal-btn.attack.fortress:hover {
-      background: #d4a106;
-      border-color: #d4a106;
+      background: #ea580c;
+      border-color: #ea580c;
     }
 
     /* Map Lab Overlay */

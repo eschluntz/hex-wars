@@ -6,7 +6,7 @@ import type { CampaignCell, CampaignGrid, CampaignState } from './campaign-state
 import { getCampaignCellPreset, getCampaignBattleSeed } from './campaign-state.js';
 import { POWERS, STACKING_UPGRADES, REWARD_TO_UPGRADE, REWARD_TO_POWER } from './upgrades.js';
 import { UNIT_TYPES } from './unit-templates.js';
-import { presetToMapConfig, MAP_FLAVOR_TEXT } from './map-presets.js';
+import { presetToMapConfig, MAP_FLAVOR_TEXT, MAP_NAMES } from './map-presets.js';
 import { GameMap } from './game-map.js';
 import { HexUtil } from './core.js';
 import { getUnitTexture } from './textures.js';
@@ -64,7 +64,9 @@ export class BattleInfoModal {
     const enemyHtml = this.formatEnemyInfo(cell.row);
     const mapPreview = this.renderMapPreview(cell, campaignSeed, this.currentEnemyConfig);
     const preset = getCampaignCellPreset(cell, campaignSeed);
-    const flavorText = this.getFlavorText(preset.name.toLowerCase(), cell.id, campaignSeed);
+    const presetKey = preset.name.toLowerCase();
+    const mapName = this.getMapName(presetKey, cell.id, campaignSeed);
+    const flavorText = this.getFlavorText(presetKey, cell.id, campaignSeed);
 
     // For unit cells, we'll add the unit sprite after building the HTML
     const unitIconPlaceholder = cell.type === 'unit' ? '<div id="unit-icon-container"></div>' : '';
@@ -75,9 +77,19 @@ export class BattleInfoModal {
           <div class="battle-modal-icon ${cell.type}">${icon}</div>
           ${unitIconPlaceholder}
           <div class="battle-modal-title">
-            <h2>${cell.name}</h2>
-            <span class="cell-type">${this.getCellTypeLabel(cell.type)}</span>
+            <h2>${mapName}</h2>
+            <span class="map-type">Battlefield type: ${preset.name}</span>
           </div>
+        </div>
+
+        <div class="battle-modal-section">
+          <div class="battle-modal-preview" id="battle-modal-preview-container"></div>
+          <div class="battle-modal-flavor">${flavorText}</div>
+        </div>
+
+        <div class="battle-modal-section">
+          <h3>Victory Reward</h3>
+          <div class="battle-modal-reward ${cell.type}">${reward.html}</div>
         </div>
 
         <div class="battle-modal-forces">
@@ -94,17 +106,6 @@ export class BattleInfoModal {
 
         <div class="battle-modal-info-box" id="battle-info-box">
           <span class="info-placeholder">Hover over powers or upgrades for details</span>
-        </div>
-
-        <div class="battle-modal-section">
-          <h3>Battlefield Preview</h3>
-          <div class="battle-modal-preview" id="battle-modal-preview-container"></div>
-          <div class="battle-modal-flavor">${flavorText}</div>
-        </div>
-
-        <div class="battle-modal-section">
-          <h3>Victory Reward</h3>
-          <div class="battle-modal-reward">${reward.html}</div>
         </div>
 
         <div class="battle-modal-buttons">
@@ -227,15 +228,16 @@ export class BattleInfoModal {
     });
   }
 
-  private getCellTypeLabel(type: string): string {
-    switch (type) {
-      case 'unit': return 'Unit Unlock';
-      case 'upgrade': return 'Upgrade';
-      case 'special': return 'Special Power';
-      case 'boss': return 'Boss Battle';
-      case 'fortress': return 'Fortress Assault';
-      default: return type;
+  private getMapName(presetName: string, cellId: string, campaignSeed: number): string {
+    const names = MAP_NAMES[presetName]!;
+    // Deterministic selection based on cell id and campaign seed
+    // Use a different offset from flavor text to get independent selection
+    let hash = campaignSeed + 7777;
+    for (let i = 0; i < cellId.length; i++) {
+      hash = ((hash << 5) - hash + cellId.charCodeAt(i)) | 0;
     }
+    const index = Math.abs(hash) % names.length;
+    return names[index]!;
   }
 
   private getFlavorText(presetName: string, cellId: string, campaignSeed: number): string {

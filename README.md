@@ -333,6 +333,7 @@ The tests automatically start the dev server (`npm run watch`) before running. R
 
 ### Upcoming
 - [ ] Saving and loading games
+- [ ] Scoring system
 - [ ] Better AI
     - [ ] Can use transports
     - [ ] Reactive unit composition
