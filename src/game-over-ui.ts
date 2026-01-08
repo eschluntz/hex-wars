@@ -42,6 +42,8 @@ export class GameOverUI {
   private rewardItem: HTMLElement;
   private continueBtn: HTMLElement;
   private callbacks: GameOverUICallbacks;
+  private isAnimating = false;
+  private skipRequested = false;
 
   constructor(callbacks: GameOverUICallbacks) {
     this.callbacks = callbacks;
@@ -57,15 +59,30 @@ export class GameOverUI {
     this.continueBtn = this.overlay.querySelector('.btn-continue')!;
 
     this.continueBtn.addEventListener('click', () => {
+      if (this.isAnimating) return;
       this.hide();
       this.callbacks.onContinue();
     });
 
-    // Handle Escape key
+    // Handle keyboard during game over
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.overlay.classList.contains('visible')) {
-        this.hide();
-        this.callbacks.onContinue();
+      if (!this.overlay.classList.contains('visible')) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (e.key === ' ' || e.key === 'Enter') {
+        if (this.isAnimating) {
+          this.skipRequested = true;
+        } else {
+          this.hide();
+          this.callbacks.onContinue();
+        }
+      } else if (e.key === 'Escape') {
+        if (!this.isAnimating) {
+          this.hide();
+          this.callbacks.onContinue();
+        }
       }
     });
   }
@@ -73,6 +90,7 @@ export class GameOverUI {
   async show(data: GameOverDisplayData): Promise<void> {
     // Reset state
     this.resetState();
+    this.skipRequested = false;
 
     // Set winner text
     const isVictory = data.winner === 'player';
@@ -91,17 +109,18 @@ export class GameOverUI {
 
     // Animate score reveal if in campaign
     if (data.isCampaign && data.scoreBreakdown) {
+      this.isAnimating = true;
       await this.animateScoreReveal(data.scoreBreakdown);
 
-      // Show reward with shine
+      // Show reward with shine (skip if requested)
       if (data.reward && isVictory && data.rewardType) {
         this.rewardIcon.textContent = REWARD_ICONS[data.rewardType];
         this.rewardItem.textContent = data.reward;
-        // Remove old type classes and add new one
         this.rewardDisplay.classList.remove('unit', 'upgrade', 'special', 'boss', 'fortress');
         this.rewardDisplay.classList.add(data.rewardType, 'visible');
-        await this.delay(500);
+        if (!this.skipRequested) await this.delay(500);
       }
+      this.isAnimating = false;
     } else {
       // Non-campaign: just hide score breakdown
       this.scoreBreakdown.style.display = 'none';
@@ -143,21 +162,38 @@ export class GameOverUI {
       { type: 'speed', value: breakdown.speed },
     ];
 
+    // If skip requested, show everything immediately
+    if (this.skipRequested) {
+      this.showFinalScores(breakdown);
+      return;
+    }
+
     // Animate each row
     for (const row of rows) {
+      if (this.skipRequested) {
+        this.showFinalScores(breakdown);
+        return;
+      }
+
       const rowEl = this.scoreBreakdown.querySelector(`[data-type="${row.type}"]`) as HTMLElement;
       const valueEl = rowEl.querySelector('.score-value')!;
 
-      // Fade in
       rowEl.classList.add('visible');
       await this.delay(100);
 
-      // Count up value
-      await this.countUp(valueEl, row.value, '');
+      if (this.skipRequested) {
+        this.showFinalScores(breakdown);
+        return;
+      }
 
-      // Pulse
+      await this.countUp(valueEl, row.value, '');
       rowEl.classList.add('pulse');
       await this.delay(200);
+    }
+
+    if (this.skipRequested) {
+      this.showFinalScores(breakdown);
+      return;
     }
 
     // Now show total
@@ -167,12 +203,35 @@ export class GameOverUI {
     totalRow.classList.add('visible');
     await this.delay(100);
 
-    // Count up total
-    await this.countUp(totalValue, breakdown.totalScore, '');
+    if (this.skipRequested) {
+      this.showFinalScores(breakdown);
+      return;
+    }
 
-    // Final pulse
+    await this.countUp(totalValue, breakdown.totalScore, '');
     totalRow.classList.add('pulse');
     await this.delay(500);
+  }
+
+  private showFinalScores(breakdown: BattleScoreBreakdown): void {
+    const scores = [
+      { type: 'power', value: breakdown.power },
+      { type: 'defense', value: breakdown.defense },
+      { type: 'control', value: breakdown.control },
+      { type: 'speed', value: breakdown.speed },
+    ];
+
+    for (const score of scores) {
+      const rowEl = this.scoreBreakdown.querySelector(`[data-type="${score.type}"]`) as HTMLElement;
+      const valueEl = rowEl.querySelector('.score-value')!;
+      rowEl.classList.add('visible');
+      valueEl.textContent = score.value.toLocaleString();
+    }
+
+    const totalRow = this.scoreBreakdown.querySelector('.score-row.total') as HTMLElement;
+    const totalValue = totalRow.querySelector('.score-value')!;
+    totalRow.classList.add('visible');
+    totalValue.textContent = breakdown.totalScore.toLocaleString();
   }
 
   private async countUp(element: Element, target: number, prefix: string, suffix: string = ''): Promise<void> {

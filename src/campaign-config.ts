@@ -24,7 +24,7 @@ import { STACKING_UPGRADES, POWERS } from './upgrades.js';
 
 // Unit unlocks by tier - 3 tiers mapping cleanly to 3 sections
 // Each section uses exactly one tier, enemies get cumulative access
-export const TIER_1_UNITS = ['recon', 'apc', 'artillery', 'antiAir'];
+export const TIER_1_UNITS = ['mech', 'recon', 'apc', 'artillery', 'antiAir'];
 export const TIER_2_UNITS = ['rockets', 'mediumTank', 'copter', 'transportCopter'];
 export const TIER_3_UNITS = ['heavyTank', 'bomber', 'fighter', 'missiles'];
 

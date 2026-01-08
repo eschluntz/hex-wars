@@ -126,7 +126,7 @@ Roguelike progression through a grid of battles:
 **Section structure:**
 | Section | Rows | Boss | Unit Tier |
 |---------|------|------|-----------|
-| 1 | 0-6 | General Steelheart | Tier 1: Recon, APC, Artillery, Anti-Air |
+| 1 | 0-6 | General Steelheart | Tier 1: Mech, Recon, APC, Artillery, Anti-Air |
 | 2 | 7-12 | Admiral Darkwave | Tier 2: Rockets, Md Tank, B-Copter, T-Copter |
 | 3 | 13-18 | Supreme Commander | Tier 3: Mega Tank, Bomber, Fighter, Missiles |
 
@@ -216,6 +216,34 @@ Enemy strength scales as you progress through the campaign:
 - Displays available units, active upgrades, equipped powers
 - Shows row bonus and cluster counts for fortress/boss
 - Hover over any power or upgrade for description
+
+### Scoring System
+
+Each campaign battle awards a score based on four components, each worth up to 5,000 points (max 20,000 per battle):
+
+| Component | Calculation | Description |
+|-----------|-------------|-------------|
+| ⚔️ Power | enemies killed ÷ enemies deployed | % of enemy army destroyed |
+| 🛡️ Defense | units surviving ÷ units deployed | % of your army that survived |
+| 🏰 Control | your buildings ÷ contested buildings | % of non-neutral buildings owned at end |
+| ⚡ Speed | par turns ÷ actual turns (capped at 100%) | How fast you won vs expected |
+
+**Par turns by map preset:**
+| Preset | Par |
+|--------|-----|
+| Tiny | 10 |
+| Forest | 14 |
+| Standard | 15 |
+| Highlands | 16 |
+| Archipelago | 18 |
+| Corridor, Tall | 20 |
+| Fortress | 35 |
+| Boss | 40 |
+
+**Scoring rules:**
+- Defeat = 0 points (no partial credit)
+- Campaign total accumulates across all battles
+- Score is displayed in the campaign header
 
 ### Controls
 - **Click** to select unit, click destination to move
@@ -330,10 +358,14 @@ The tests automatically start the dev server (`npm run watch`) before running. R
   - [x] Power slot parity with +1 for fortress/boss
   - [x] Asymmetric cluster bonuses (fortress: 1v2, boss: 2v4)
   - [x] Battle info modal shows player and enemy forces
+- [x] Scoring system
+  - [x] 4-component formula (Power, Defense, Control, Speed)
+  - [x] Par turns per map preset
+  - [x] Animated end-battle breakdown
+  - [x] Campaign score accumulation
 
 ### Upcoming
 - [ ] Saving and loading games
-- [ ] Scoring system
 - [ ] Better AI
     - [ ] Can use transports
     - [ ] Reactive unit composition
