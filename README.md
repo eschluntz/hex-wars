@@ -102,11 +102,25 @@ Capture the enemy's capital to win instantly.
 - Cargo destroyed if transport is destroyed
 
 ### AI Opponent
-**GreedyAI** with priority-based decisions:
-1. Build units at factories (prioritize closer to enemy)
-2. Capture buildings if possible
+**GreedyAI** uses an async callback pattern where actions execute immediately:
+
+```typescript
+async planTurn(ctx: AIContext): Promise<void> {
+  await ctx.doAction({ type: 'move', ... });   // Executes, animates, state updates
+  await ctx.doAction({ type: 'attack', ... }); // Sees fresh state from previous action
+}
+```
+
+**Per-unit priorities:**
+1. Capture building if standing on one
+2. Move to capture a reachable building (capitals prioritized)
 3. Attack with maximum expected damage
-4. Move toward nearest enemy/building
+4. Move toward nearest targetable enemy
+5. Wait
+
+**Production:** Build at factories closest to enemy, prioritize infantry early.
+
+**Indirect fire units** (artillery, rockets) maintain optimal range—they won't move closer than their minimum range.
 
 ### Campaign Mode
 Roguelike progression through a grid of battles:
@@ -313,9 +327,12 @@ hex-dominion/
 │   ├── pathfinder.ts     # A* pathfinding
 │   ├── game-map.ts       # Map generation
 │   ├── ai/
+│   │   ├── controller.ts # AIController interface, AIContext
+│   │   ├── actions.ts    # AIAction type definitions
+│   │   ├── base-utils.ts # Shared AI utilities
 │   │   ├── greedy-ai.ts  # Main AI implementation
-│   │   ├── noop-ai.ts    # Testing baseline
-│   │   └── ...
+│   │   └── noop-ai.ts    # Testing baseline
+│   ├── ai-turn-executor.ts # Executes AI actions with animations
 │   ├── renderer.ts       # Canvas rendering
 │   ├── textures.ts       # Sprite loading and tinting
 │   ├── viewport.ts       # Camera controls
@@ -330,7 +347,7 @@ hex-dominion/
 │   ├── enemy-difficulty.ts# Enemy scaling, cascading rewards, cluster bonuses
 │   ├── battle-info-modal.ts# Pre-battle intel modal
 │   └── main.ts            # Game loop and state machine
-├── tests/                # Test suite (206 tests)
+├── tests/                # Test suite (231 tests)
 ├── hex_assets/           # Terrain textures
 ├── unit_assets/          # Unit sprites
 └── index.html
@@ -342,7 +359,7 @@ hex-dominion/
 npm run watch      # Build + serve with auto-rebuild
 npm run build      # One-time build
 npm run typecheck  # Check types
-npm test           # Run unit tests (206 tests)
+npm test           # Run unit tests (231 tests)
 npm run test:e2e   # Run Playwright e2e tests
 ```
 

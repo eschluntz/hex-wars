@@ -16,13 +16,13 @@ import { type AIController, type AIContext } from './controller.js';
 import { type Unit } from '../unit.js';
 import {
   getBlockedPositions,
-  getEnemyPositions,
   minDistanceToPositions,
   minPathDistanceToPositions,
   isInRangeFrom,
   isPositionOccupied,
-  pickRandomTemplate,
 } from './base-utils.js';
+import { getBaseDamage } from '../damage-table.js';
+import { type UnitTemplate } from '../unit-templates.js';
 
 export class GreedyAI implements AIController {
   readonly id = 'greedy';
@@ -154,18 +154,23 @@ export class GreedyAI implements AIController {
     const templates = ctx.getTemplates();
     const factories = ctx.getBuildings().filter(b => b.type === 'factory' && b.owner === ctx.team);
     const allUnits = ctx.getUnits();
+    const allBuildings = ctx.getBuildings();
 
-    // Sort factories by distance to enemy
-    const enemyPositions = getEnemyPositions({ units: allUnits, buildings: ctx.getBuildings() }, ctx.team);
-    const sortedFactories = factories.sort((a, b) => {
-      const distA = minDistanceToPositions(a.q, a.r, enemyPositions);
-      const distB = minDistanceToPositions(b.q, b.r, enemyPositions);
-      return distA - distB;
-    });
+    // Collect uncaptured buildings (not owned by AI)
+    const uncapturedBuildings = allBuildings.filter(b => b.owner !== ctx.team);
 
-    // Count infantry for early-game priority
-    const infantryCount = allUnits.filter(u => u.team === ctx.team && u.isAlive() && u.templateId === 'infantry').length;
-    const needsInfantry = infantryCount < 3;
+    // Collect enemy units (exclude carried)
+    const enemyUnits = allUnits.filter(u => u.team !== ctx.team && u.isAlive() && u.carriedBy === null);
+
+    // Sort factories by distance to own capital (defend HQ first)
+    const capital = allBuildings.find(b => b.type === 'capital' && b.owner === ctx.team);
+    const sortedFactories = capital
+      ? factories.sort((a, b) => {
+          const distA = HexUtil.distance(a.q, a.r, capital.q, capital.r);
+          const distB = HexUtil.distance(b.q, b.r, capital.q, capital.r);
+          return distA - distB;
+        })
+      : factories;
 
     for (const factory of sortedFactories) {
       // Check if factory is occupied (query fresh state, exclude carried units)
@@ -173,21 +178,57 @@ export class GreedyAI implements AIController {
       if (unitAtFactory) continue;
 
       const funds = ctx.getFunds();
-      const affordableTemplates = templates
-        .filter(t => t.cost <= funds)
-        .sort((a, b) => a.cost - b.cost);
+      const affordableTemplates = templates.filter(t => t.cost <= funds);
+      if (affordableTemplates.length === 0) continue;
 
-      if (affordableTemplates.length > 0) {
-        const template = (needsInfantry && affordableTemplates.find(t => t.id === 'infantry'))
-          || pickRandomTemplate(affordableTemplates);
-        await ctx.doAction({
-          type: 'build',
-          factoryQ: factory.q,
-          factoryR: factory.r,
-          templateId: template.id
-        });
+      // Find closest uncaptured building
+      const closestBuildingDist = minDistanceToPositions(factory.q, factory.r, uncapturedBuildings);
+
+      // Find closest enemy unit and its type
+      let closestEnemyDist = Infinity;
+      let closestEnemyType: string | null = null;
+      for (const enemy of enemyUnits) {
+        const dist = HexUtil.distance(factory.q, factory.r, enemy.q, enemy.r);
+        if (dist < closestEnemyDist) {
+          closestEnemyDist = dist;
+          closestEnemyType = enemy.templateId;
+        }
+      }
+
+      let template: UnitTemplate;
+      if (closestBuildingDist <= closestEnemyDist) {
+        // Building is closer (or equal) - build infantry to capture
+        template = affordableTemplates.find(t => t.id === 'infantry') ?? affordableTemplates[0]!;
+      } else {
+        // Enemy is closer - build best counter
+        template = this.findBestCounter(affordableTemplates, closestEnemyType!);
+      }
+
+      await ctx.doAction({
+        type: 'build',
+        factoryQ: factory.q,
+        factoryR: factory.r,
+        templateId: template.id
+      });
+    }
+  }
+
+  /**
+   * Find the affordable unit that deals the most damage to the target type.
+   */
+  private findBestCounter(affordableTemplates: UnitTemplate[], targetType: string): UnitTemplate {
+    let bestTemplate = affordableTemplates[0]!;
+    let bestDamage = 0;
+
+    for (const template of affordableTemplates) {
+      const damage = getBaseDamage(template.id, targetType);
+      if (damage > bestDamage) {
+        bestDamage = damage;
+        bestTemplate = template;
       }
     }
+
+    return bestTemplate;
   }
 
   private findBestCaptureTarget(
