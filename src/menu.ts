@@ -158,6 +158,7 @@ export class MenuRenderer {
 export interface HTMLMenuCallbacks {
   onStartGame: (mapType: string, playerConfigs: PlayerConfig[]) => void;
   onStartCampaign: () => void;
+  onContinueCampaign: () => void;
   onRerollSeed: () => number;
 }
 
@@ -168,6 +169,7 @@ export class HTMLMenuController {
   private btnSmall: HTMLButtonElement;
   private btnNormal: HTMLButtonElement;
   private btnCampaign: HTMLButtonElement;
+  private btnContinue: HTMLButtonElement;
   private btnReroll: HTMLButtonElement;
   private seedDisplay: HTMLElement;
   private callbacks: HTMLMenuCallbacks;
@@ -181,6 +183,7 @@ export class HTMLMenuController {
     this.btnSmall = document.getElementById('btn-small-map') as HTMLButtonElement;
     this.btnNormal = document.getElementById('btn-normal-map') as HTMLButtonElement;
     this.btnCampaign = document.getElementById('btn-campaign') as HTMLButtonElement;
+    this.btnContinue = document.getElementById('btn-continue') as HTMLButtonElement;
     this.btnReroll = document.getElementById('btn-reroll-seed') as HTMLButtonElement;
     this.seedDisplay = document.getElementById('seed-display')!;
 
@@ -212,6 +215,7 @@ export class HTMLMenuController {
     this.btnSmall.addEventListener('click', () => this.startGame('small'));
     this.btnNormal.addEventListener('click', () => this.startGame('normal'));
     this.btnCampaign.addEventListener('click', () => this.callbacks.onStartCampaign());
+    this.btnContinue.addEventListener('click', () => this.callbacks.onContinueCampaign());
     this.btnReroll.addEventListener('click', () => this.rerollSeed());
   }
 
@@ -251,8 +255,10 @@ export class HTMLMenuController {
     return configs;
   }
 
-  show(): void {
+  show(hasSave: boolean = false): void {
     this.overlay.classList.remove('hidden');
+    // Show/hide continue button based on save state
+    this.btnContinue.style.display = hasSave ? 'block' : 'none';
   }
 
   hide(): void {

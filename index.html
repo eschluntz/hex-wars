@@ -179,6 +179,20 @@
       display: block;
       margin-top: 4px;
     }
+    .menu-btn-continue {
+      background: #2563eb;
+      color: #ffffff;
+    }
+    .menu-btn-continue:hover {
+      background: #3b82f6;
+    }
+    .menu-btn-continue .btn-desc {
+      font-size: 12px;
+      font-weight: normal;
+      color: #93c5fd;
+      display: block;
+      margin-top: 4px;
+    }
     #debug-controls {
       position: fixed;
       bottom: 20px;
@@ -1528,6 +1542,10 @@
 
     <p class="menu-map-label">Select Game Mode</p>
     <div class="menu-buttons">
+      <button id="btn-continue" class="menu-btn menu-btn-continue" style="display: none;">
+        Continue
+        <span class="btn-desc">Resume campaign</span>
+      </button>
       <button id="btn-campaign" class="menu-btn menu-btn-campaign">
         Campaign
         <span class="btn-desc">Roguelike progression</span>

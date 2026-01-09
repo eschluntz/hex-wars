@@ -245,6 +245,52 @@ Each campaign battle awards a score based on four components, each worth up to 5
 - Campaign total accumulates across all battles
 - Score is displayed in the campaign header
 
+### Campaign Save System
+
+Campaign progress auto-saves to localStorage after each battle. A "Continue" button appears on the main menu when a save exists.
+
+**What's saved** (in `localStorage['hex_dominion_campaign_save']`):
+```javascript
+{
+  "version": 1,
+  "savedAt": 1736410000000,
+  "state": {
+    "completedCells": ["start_infantry", "start_tank", ...],
+    "unlockedUnits": ["infantry", "tank", "artillery", ...],
+    "reinforcements": 3,
+    "campaignSeed": 482915,
+    "completionsPerRow": [[0, 3], [1, 1]],
+    "acquiredUpgrades": ["av_infantry_1", ...],
+    "unlockedPowers": ["bonus_infantry", ...],
+    "activePowers": ["bonus_infantry"],
+    "powerSlots": 2,
+    "bossesDefeated": 1,
+    "totalScore": 4500
+  }
+}
+```
+
+**Key insight**: The campaign grid regenerates deterministically from `campaignSeed`, so only player progression is stored—not map data.
+
+**Breaking changes** (would corrupt saves):
+- Renaming `CampaignState` fields
+- Changing field types
+- Removing fields the deserializer expects
+
+**Safe changes** (saves remain valid):
+- Adding new fields (add defaults in deserializer)
+- Changing unit/upgrade/power IDs (old saves reference stale IDs but won't crash)
+- Changing campaign grid layout (regenerates from seed)
+- Changing upgrade/power effects (IDs still reference correctly)
+
+**Version migration**: The `SAVE_VERSION` constant enables future migrations. Currently mismatched versions are rejected; change `loadCampaign()` to migrate instead if needed.
+
+**Debug commands** (browser console):
+```javascript
+localStorage.getItem('hex_dominion_campaign_save')     // view
+localStorage.removeItem('hex_dominion_campaign_save')  // delete
+```
+
 ### Controls
 - **Click** to select unit, click destination to move
 - **Action menu**: Wait, Cancel, Attack, Capture, Unload
@@ -279,6 +325,7 @@ hex-dominion/
 │   ├── campaign-state.ts  # Campaign state and cell availability
 │   ├── campaign-config.ts # Campaign grid layout and reward distribution
 │   ├── campaign-ui.ts     # Campaign HTML UI (grid, powers, upgrades panels)
+│   ├── save-load.ts       # Campaign save/load to localStorage
 │   ├── upgrades.ts        # Upgrade/power definitions and modifiers
 │   ├── enemy-difficulty.ts# Enemy scaling, cascading rewards, cluster bonuses
 │   ├── battle-info-modal.ts# Pre-battle intel modal
@@ -363,9 +410,9 @@ The tests automatically start the dev server (`npm run watch`) before running. R
   - [x] Par turns per map preset
   - [x] Animated end-battle breakdown
   - [x] Campaign score accumulation
+- [x] Campaign save/load (auto-save after battles, Continue button)
 
 ### Upcoming
-- [ ] Saving and loading games
 - [ ] Better AI
     - [ ] Can use transports
     - [ ] Reactive unit composition

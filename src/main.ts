@@ -63,6 +63,7 @@ import { validateMap } from './map-validation.js';
 import { calculateBattleScore, type BattleScoreBreakdown } from './score.js';
 import { GameOverUI, type GameOverDisplayData } from './game-over-ui.js';
 import { getMapName } from './battle-info-modal.js';
+import { saveCampaign, loadCampaign, deleteSavedCampaign, hasSavedCampaign } from './save-load.js';
 
 const TEAMS = {
   PLAYER: 'player',
@@ -135,6 +136,7 @@ class Game {
     this.htmlMenuController = new HTMLMenuController({
       onStartGame: (mapType, playerConfigs) => this.startNewGame(mapType, playerConfigs),
       onStartCampaign: () => this.startCampaign(),
+      onContinueCampaign: () => this.continueCampaign(),
       onRerollSeed: () => rerollNormalSeed(),
     });
     this.gameOverUI = new GameOverUI({
@@ -899,6 +901,9 @@ class Game {
   // --- Campaign Methods ---
 
   private startCampaign(): void {
+    // Delete any existing save when starting fresh
+    deleteSavedCampaign();
+
     const campaignSeed = Math.floor(Math.random() * 1000000);
     this.campaignGrid = createCampaignGrid(campaignSeed);
     this.campaignState = createInitialCampaignState(this.campaignGrid, campaignSeed);
@@ -912,6 +917,25 @@ class Game {
     this.showDebugControls(false);
 
     console.log('Campaign started!');
+  }
+
+  private continueCampaign(): void {
+    const savedState = loadCampaign();
+    if (!savedState) return;
+
+    // Regenerate grid from saved seed (deterministic)
+    this.campaignGrid = createCampaignGrid(savedState.campaignSeed);
+    this.campaignState = savedState;
+    this.activeCampaignCell = null;
+    this.gamePhase = 'campaign';
+
+    // Hide menu, show campaign UI
+    this.htmlMenuController.hide();
+    this.campaignUI.show();
+    this.campaignUI.render(this.campaignGrid, this.campaignState);
+    this.showDebugControls(false);
+
+    console.log('Campaign continued from save!');
   }
 
   private startCampaignBattle(cell: CampaignCell): void {
@@ -1086,6 +1110,7 @@ class Game {
     // Check if campaign is over
     if (isCampaignOver(this.campaignState)) {
       console.log('Campaign over - no reinforcements left!');
+      deleteSavedCampaign();
       this.returnToMainMenu();
       return;
     }
@@ -1105,6 +1130,9 @@ class Game {
     // Show campaign UI and re-render
     this.campaignUI.show();
     this.campaignUI.render(this.campaignGrid, this.campaignState);
+
+    // Auto-save after returning to campaign view
+    saveCampaign(this.campaignState);
   }
 
   private handleGameOverReturn(): void {
@@ -1915,7 +1943,7 @@ class Game {
 
   private loop = (): void => {
     if (this.gamePhase === 'main_menu') {
-      this.htmlMenuController.show();
+      this.htmlMenuController.show(hasSavedCampaign());
       // Clear canvas behind menu
       this.ctx.fillStyle = '#1a1a2e';
       this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
