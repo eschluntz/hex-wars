@@ -5,16 +5,23 @@
 
 import { HexUtil, type TerrainCosts } from '../core.js';
 import { type Unit } from '../unit.js';
+import { type Building } from '../building.js';
 import { type Pathfinder } from '../pathfinder.js';
-import { type AIGameState } from './game-state.js';
+
+/** Minimal state interface for utility functions */
+interface MinimalState {
+  readonly units: readonly Unit[];
+  readonly buildings: readonly Building[];
+}
 
 /**
  * Get all positions blocked by enemy units (for pathfinding).
+ * Excludes units being carried by transports.
  */
-export function getBlockedPositions(state: AIGameState, forTeam: string): Set<string> {
+export function getBlockedPositions(state: MinimalState, forTeam: string): Set<string> {
   const blocked = new Set<string>();
   for (const unit of state.units) {
-    if (unit.team !== forTeam && unit.isAlive()) {
+    if (unit.team !== forTeam && unit.isAlive() && unit.carriedBy === null) {
       blocked.add(`${unit.q},${unit.r}`);
     }
   }
@@ -22,26 +29,14 @@ export function getBlockedPositions(state: AIGameState, forTeam: string): Set<st
 }
 
 /**
- * Get all occupied positions (for movement - can't end turn on occupied tile).
- */
-export function getOccupiedPositions(state: AIGameState, excludeUnitId: string): Set<string> {
-  const occupied = new Set<string>();
-  for (const unit of state.units) {
-    if (unit.id !== excludeUnitId && unit.isAlive()) {
-      occupied.add(`${unit.q},${unit.r}`);
-    }
-  }
-  return occupied;
-}
-
-/**
  * Get all enemy and neutral positions (units and buildings).
+ * Excludes units being carried by transports.
  */
-export function getEnemyPositions(state: AIGameState, team: string): Array<{ q: number; r: number }> {
+export function getEnemyPositions(state: MinimalState, team: string): Array<{ q: number; r: number }> {
   const positions: Array<{ q: number; r: number }> = [];
 
-  // Enemy units
-  for (const unit of state.units.filter(u => u.team !== team && u.isAlive())) {
+  // Enemy units (exclude carried units)
+  for (const unit of state.units.filter(u => u.team !== team && u.isAlive() && u.carriedBy === null)) {
     positions.push({ q: unit.q, r: unit.r });
   }
 
@@ -102,6 +97,21 @@ export function minPathDistanceToPositions(
 export function isInRangeFrom(unit: Unit, target: Unit, fromQ: number, fromR: number): boolean {
   const distance = HexUtil.distance(fromQ, fromR, target.q, target.r);
   return distance >= unit.minRange && distance <= unit.range;
+}
+
+/**
+ * Check if a position is occupied by any unit (optionally excluding one).
+ * Excludes units being carried by transports.
+ */
+export function isPositionOccupied(
+  units: readonly Unit[],
+  q: number,
+  r: number,
+  excludeUnitId?: string
+): boolean {
+  return units.some(u =>
+    u.q === q && u.r === r && u.isAlive() && u.carriedBy === null && u.id !== excludeUnitId
+  );
 }
 
 /**

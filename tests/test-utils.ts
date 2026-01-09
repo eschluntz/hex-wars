@@ -10,8 +10,7 @@ import { Combat } from '../src/combat.js';
 import { Pathfinder } from '../src/pathfinder.js';
 import { ResourceManager } from '../src/resources.js';
 import { type AIAction } from '../src/ai/actions.js';
-import { type AIController } from '../src/ai/controller.js';
-import { type AIGameState } from '../src/ai/game-state.js';
+import { type AIController, type AIContext } from '../src/ai/controller.js';
 import {
   initTeamUnits,
   getTeamTemplates,
@@ -123,17 +122,25 @@ export class TestGame {
     this.map.addBuilding(createBuilding(q, r, type, owner));
   }
 
-  createAIState(): AIGameState {
-    return {
-      currentTeam: this.currentTeam,
-      turnNumber: this.turn,
-      units: this.units,
-      map: this.map as any, // TestMap is compatible with GameMap interface
-      buildings: this.map.getAllBuildings(),
-      resources: this.resources,
-      pathfinder: this.pathfinder,
-      getTeamTemplates,
+  /** Create an AIContext that executes actions and records them */
+  createAIContext(): { ctx: AIContext; actions: AIAction[] } {
+    const team = this.currentTeam;
+    const actions: AIAction[] = [];
+
+    const ctx: AIContext = {
+      team,
+      getUnits: () => this.units,
+      getBuildings: () => this.map.getAllBuildings(),
+      getFunds: () => this.resources.getResources(team).funds,
+      getTemplates: () => getTeamTemplates(team),
+      getPathfinder: () => this.pathfinder,
+      doAction: async (action: AIAction) => {
+        actions.push(action);
+        this.executeAction(action);
+      },
     };
+
+    return { ctx, actions };
   }
 
   executeAction(action: AIAction): void {
@@ -272,15 +279,9 @@ export function createEconomyScenario(
 /**
  * Runs a single AI turn: plan actions, execute them, end turn.
  */
-export function runAITurn(game: TestGame, ai: AIController): AIAction[] {
-  const aiState = game.createAIState();
-  const actions = ai.planTurn(aiState, game.currentTeam);
-
-  for (const action of actions) {
-    if (action.type === 'endTurn') break;
-    game.executeAction(action);
-  }
-
+export async function runAITurn(game: TestGame, ai: AIController): Promise<AIAction[]> {
+  const { ctx, actions } = game.createAIContext();
+  await ai.planTurn(ctx);
   game.endTurn();
   return actions;
 }
@@ -289,14 +290,14 @@ export function runAITurn(game: TestGame, ai: AIController): AIAction[] {
  * Runs the game until one side wins or max turns reached.
  * Returns the winner (or null if max turns reached).
  */
-export function runUntilGameOver(
+export async function runUntilGameOver(
   game: TestGame,
   ais: AIController[],
   maxTurns: number = 50
-): string | null {
+): Promise<string | null> {
   for (let halfTurn = 0; halfTurn < maxTurns * 2; halfTurn++) {
     const ai = ais[game.currentTeamIndex]!;
-    runAITurn(game, ai);
+    await runAITurn(game, ai);
 
     const loser = game.checkGameOver();
     if (loser) {

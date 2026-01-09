@@ -4,8 +4,8 @@
 
 import { TestRunner, assertEqual, assert } from '../framework.js';
 import { NoOpAI } from '../../src/ai/noop-ai.js';
-import { type AIGameState } from '../../src/ai/game-state.js';
-import { ResourceManager } from '../../src/resources.js';
+import { type AIContext } from '../../src/ai/controller.js';
+import { type AIAction } from '../../src/ai/actions.js';
 import { Pathfinder } from '../../src/pathfinder.js';
 
 const runner = new TestRunner();
@@ -18,37 +18,34 @@ class TestMap {
   getAllTiles() {
     return [];
   }
-  getBuilding() {
-    return undefined;
-  }
-  getAllBuildings() {
-    return [];
-  }
 }
 
-// Create a minimal mock AIGameState
-function createMockState(): AIGameState {
-  const resourceManager = new ResourceManager(['enemy']);
+// Create a mock AIContext that records actions
+function createMockContext(): { ctx: AIContext; actions: AIAction[] } {
+  const actions: AIAction[] = [];
   const testMap = new TestMap();
 
-  return {
-    currentTeam: 'enemy',
-    turnNumber: 1,
-    units: [],
-    map: testMap as any,
-    buildings: [],
-    resources: resourceManager,
-    pathfinder: new Pathfinder(testMap as any),
-    getTeamTemplates: () => [],
+  const ctx: AIContext = {
+    team: 'enemy',
+    getUnits: () => [],
+    getBuildings: () => [],
+    getFunds: () => 0,
+    getTemplates: () => [],
+    getPathfinder: () => new Pathfinder(testMap as any),
+    doAction: async (action: AIAction) => {
+      actions.push(action);
+    },
   };
+
+  return { ctx, actions };
 }
 
 runner.describe('NoOpAI', () => {
   runner.describe('planTurn', () => {
-    runner.it('should only return endTurn action', () => {
+    runner.it('should only return endTurn action', async () => {
       const ai = new NoOpAI();
-      const state = createMockState();
-      const actions = ai.planTurn(state, 'enemy');
+      const { ctx, actions } = createMockContext();
+      await ai.planTurn(ctx);
 
       assertEqual(actions.length, 1);
       assertEqual(actions[0]!.type, 'endTurn');

@@ -3,15 +3,13 @@
 // ============================================================================
 // Testing baseline - just ends turn without doing anything.
 
-import { type AIController } from './controller.js';
-import { type AIAction } from './actions.js';
-import { type AIGameState } from './game-state.js';
+import { type AIController, type AIContext } from './controller.js';
 
 export class NoOpAI implements AIController {
   readonly id = 'noop';
   readonly name = 'No-Op AI';
 
-  planTurn(_state: AIGameState, _team: string): AIAction[] {
-    return [{ type: 'endTurn' }];
+  async planTurn(ctx: AIContext): Promise<void> {
+    await ctx.doAction({ type: 'endTurn' });
   }
 }

@@ -3,16 +3,14 @@
 // ============================================================================
 // Handles execution of AI actions during the AI's turn.
 
-import { CONFIG } from './config.js';
 import { Unit } from './unit.js';
 import { type AIAction } from './ai/actions.js';
-import { type AIGameState } from './ai/game-state.js';
+import { type AIContext } from './ai/controller.js';
 import { type Player } from './player.js';
 import { type AnimationController } from './animation.js';
 import { type Pathfinder } from './pathfinder.js';
 import { type GameMap } from './game-map.js';
 import { type ResourceManager } from './resources.js';
-import { type Building } from './building.js';
 import { getTeamTemplate, getTeamTemplates } from './unit-templates.js';
 import { COMBAT_ANIMATION_DURATION } from './combat-animator.js';
 
@@ -23,6 +21,7 @@ import { COMBAT_ANIMATION_DURATION } from './combat-animator.js';
 export interface AIGameOperations {
   // Queries
   getPlayer(teamId: string): Player | undefined;
+  getUnits(): Unit[];
   getUnitById(id: string): Unit | undefined;
   getUnitAt(q: number, r: number): Unit | undefined;
   getBlockedPositions(forTeam: string): Set<string>;
@@ -62,8 +61,7 @@ export class AITurnExecutor {
    */
   async executeTurn(
     currentTeam: string,
-    ops: AIGameOperations,
-    units: Unit[]
+    ops: AIGameOperations
   ): Promise<void> {
     const player = ops.getPlayer(currentTeam);
     if (!player || player.type !== 'ai' || !player.aiController) {
@@ -72,30 +70,24 @@ export class AITurnExecutor {
 
     console.log(`AI (${player.name}) is taking its turn...`);
 
-    const aiState = this.createAIState(currentTeam, units);
-    const actions = player.aiController.planTurn(aiState, currentTeam);
+    // Create the context with query methods and doAction callback
+    const ctx: AIContext = {
+      team: currentTeam,
 
-    for (const action of actions) {
-      if (ops.isGameOver()) break;
+      getUnits: () => ops.getUnits(),
+      getBuildings: () => this.map.getAllBuildings(),
+      getFunds: () => this.resources.getResources(currentTeam).funds,
+      getTemplates: () => getTeamTemplates(currentTeam),
+      getPathfinder: () => this.pathfinder,
 
-      await this.executeAction(action, currentTeam, ops);
-
-      // Small delay between actions for visual feedback
-      await this.delay(50);
-    }
-  }
-
-  private createAIState(currentTeam: string, units: Unit[]): AIGameState {
-    return {
-      currentTeam,
-      turnNumber: 1, // AI doesn't need exact turn number
-      units,
-      map: this.map,
-      buildings: this.map.getAllBuildings(),
-      resources: this.resources,
-      pathfinder: this.pathfinder,
-      getTeamTemplates,
+      doAction: async (action: AIAction): Promise<void> => {
+        if (ops.isGameOver()) return;
+        await this.executeAction(action, currentTeam, ops);
+        await this.delay(50);
+      },
     };
+
+    await player.aiController.planTurn(ctx);
   }
 
   private async executeAction(

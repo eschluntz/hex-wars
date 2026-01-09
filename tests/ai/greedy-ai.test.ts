@@ -4,12 +4,12 @@
 
 import { TestRunner, assertEqual, assert } from '../framework.js';
 import { GreedyAI } from '../../src/ai/greedy-ai.js';
-import { type AIGameState } from '../../src/ai/game-state.js';
-import { DEFAULT_TERRAIN_COSTS, HexUtil } from '../../src/core.js';
-import { type Building, createBuilding, CAPTURE_RESISTANCE } from '../../src/building.js';
+import { type AIContext } from '../../src/ai/controller.js';
+import { type AIAction } from '../../src/ai/actions.js';
+import { DEFAULT_TERRAIN_COSTS } from '../../src/core.js';
+import { type Building, createBuilding } from '../../src/building.js';
 import { type UnitTemplate } from '../../src/unit-templates.js';
 import { Unit } from '../../src/unit.js';
-import { Combat } from '../../src/combat.js';
 import { Pathfinder } from '../../src/pathfinder.js';
 import { ResourceManager } from '../../src/resources.js';
 
@@ -87,39 +87,64 @@ class TestMap {
   }
 }
 
-// Helper to create a mock AIGameState
-function createMockState(config: {
+// Helper to create a mock AIContext that records actions
+function createMockContext(config: {
+  team?: string;
   units?: Unit[];
   buildings?: Building[];
-  resources?: { funds: number };
+  funds?: number;
   templates?: UnitTemplate[];
   pathfinder?: Pathfinder;
-} = {}): AIGameState {
-  const units = config.units ?? [];
+} = {}): { ctx: AIContext; actions: AIAction[] } {
+  const team = config.team ?? 'enemy';
+  let units = config.units ?? [];
   const buildings = config.buildings ?? [];
-  const resources = config.resources ?? { funds: 1000 };
+  let funds = config.funds ?? 1000;
   const templates = config.templates ?? [];
   const pathfinder = config.pathfinder ?? new Pathfinder(new TestMap() as any);
 
-  const resourceManager = new ResourceManager(['enemy', 'player']);
-  resourceManager.addFunds('enemy', resources.funds);
+  const actions: AIAction[] = [];
 
-  return {
-    currentTeam: 'enemy',
-    turnNumber: 1,
-    units,
-    map: {
-      getBuilding: (q: number, r: number) => buildings.find(b => b.q === q && b.r === r),
-      getAllBuildings: () => buildings,
-      getTile: (q: number, r: number) => ({ q, r, type: 'grass' }),
-      getAllTiles: () => [],
-      getTerrainDefenseStars: () => 1,  // All grass = 1 star
-    } as any,
-    buildings,
-    resources: resourceManager,
-    pathfinder,
-    getTeamTemplates: () => templates,
+  const ctx: AIContext = {
+    team,
+    getUnits: () => units,
+    getBuildings: () => buildings,
+    getFunds: () => funds,
+    getTemplates: () => templates,
+    getPathfinder: () => pathfinder,
+    doAction: async (action: AIAction) => {
+      actions.push(action);
+      // Simulate action effects for realistic testing
+      if (action.type === 'move') {
+        const unit = units.find(u => u.id === action.unitId);
+        if (unit) {
+          unit.q = action.targetQ;
+          unit.r = action.targetR;
+        }
+      } else if (action.type === 'wait' || action.type === 'capture' || action.type === 'attack') {
+        const unit = units.find(u => u.id === action.unitId);
+        if (unit) {
+          unit.hasActed = true;
+        }
+      } else if (action.type === 'build') {
+        const template = templates.find(t => t.id === action.templateId);
+        if (template) {
+          funds -= template.cost;
+          const newUnit = Unit.withStats(
+            `${action.templateId}_new`,
+            team,
+            action.factoryQ,
+            action.factoryR,
+            { templateId: action.templateId }
+          );
+          newUnit.hasActed = true;
+          units = [...units, newUnit];
+        }
+      }
+    },
   };
+
+  return { ctx, actions };
 }
 
 runner.describe('GreedyAI', () => {
@@ -130,26 +155,20 @@ runner.describe('GreedyAI', () => {
       assertEqual(ai.name, 'Greedy AI');
     });
 
-    runner.it('should always end with endTurn action', () => {
+    runner.it('should always end with endTurn action', async () => {
       const ai = new GreedyAI();
-      const state = createMockState();
-      const actions = ai.planTurn(state, 'enemy');
+      const { ctx, actions } = createMockContext();
+      await ai.planTurn(ctx);
 
       assert(actions.length >= 1, 'Should have at least one action');
       assertEqual(actions[actions.length - 1]!.type, 'endTurn');
     });
 
-    runner.it('should return only endTurn when no units, buildings, or new components', () => {
+    runner.it('should return only endTurn when no units, buildings, or new components', async () => {
       const ai = new GreedyAI();
-      // Create state with existing templates (no new designs needed)
-      const existingTemplates = [{
-        id: 'infantry', name: 'Infantry',         cost: 1000, speed: 3, range: 1, minRange: 0,
-        canMoveAndAttack: true, terrainCosts: DEFAULT_TERRAIN_COSTS,
-        flying: false, canCapture: true, canBuild: false,
-        transportCapacity: 0, transportFilter: [],
-      }];
-      const state = createMockState({ units: [], buildings: [], templates: existingTemplates });
-      const actions = ai.planTurn(state, 'enemy');
+      const existingTemplates = [createTemplate('infantry', 1000)];
+      const { ctx, actions } = createMockContext({ units: [], buildings: [], templates: existingTemplates });
+      await ai.planTurn(ctx);
 
       assertEqual(actions.length, 1);
       assertEqual(actions[0]!.type, 'endTurn');
@@ -157,71 +176,68 @@ runner.describe('GreedyAI', () => {
   });
 
   runner.describe('capture priority', () => {
-    runner.it('should capture building when unit is on it', () => {
+    runner.it('should capture building when unit is on it', async () => {
       const ai = new GreedyAI();
       const unit = createUnit('soldier1', 'enemy', 5, 5, { canCapture: true });
       const building = createBuilding(5, 5, 'city', 'player');
 
-      const state = createMockState({
+      const { ctx, actions } = createMockContext({
         units: [unit],
         buildings: [building],
       });
 
-      const actions = ai.planTurn(state, 'enemy');
+      await ai.planTurn(ctx);
 
-      // Should have capture action
       const captureAction = actions.find(a => a.type === 'capture');
       assert(captureAction !== undefined, 'Should have capture action');
       assertEqual((captureAction as { type: 'capture'; unitId: string }).unitId, 'soldier1');
     });
 
-    runner.it('should capture neutral building', () => {
+    runner.it('should capture neutral building', async () => {
       const ai = new GreedyAI();
       const unit = createUnit('soldier1', 'enemy', 5, 5, { canCapture: true });
       const building = createBuilding(5, 5, 'factory', null);
 
-      const state = createMockState({
+      const { ctx, actions } = createMockContext({
         units: [unit],
         buildings: [building],
       });
 
-      const actions = ai.planTurn(state, 'enemy');
+      await ai.planTurn(ctx);
 
       const captureAction = actions.find(a => a.type === 'capture');
       assert(captureAction !== undefined, 'Should capture neutral building');
     });
 
-    runner.it('should not capture own building', () => {
+    runner.it('should not capture own building', async () => {
       const ai = new GreedyAI();
       const unit = createUnit('soldier1', 'enemy', 5, 5, { canCapture: true });
       const building = createBuilding(5, 5, 'city', 'enemy');
 
-      const state = createMockState({
+      const { ctx, actions } = createMockContext({
         units: [unit],
         buildings: [building],
       });
 
-      const actions = ai.planTurn(state, 'enemy');
+      await ai.planTurn(ctx);
 
       const captureAction = actions.find(a => a.type === 'capture');
       assertEqual(captureAction, undefined);
     });
 
-    runner.it('should prioritize capturing capital over city', () => {
+    runner.it('should prioritize capturing capital over city', async () => {
       const ai = new GreedyAI();
-      // Unit can reach both buildings in one turn
       const unit = createUnit('soldier1', 'enemy', 5, 5, { canCapture: true, speed: 4 });
-      const city = createBuilding(6, 5, 'city', 'player');     // 1 hex away
-      const capital = createBuilding(7, 5, 'capital', 'player'); // 2 hexes away
+      const city = createBuilding(6, 5, 'city', 'player');
+      const capital = createBuilding(7, 5, 'capital', 'player');
 
-      const state = createMockState({
+      const { ctx, actions } = createMockContext({
         units: [unit],
         buildings: [city, capital],
       });
 
-      const actions = ai.planTurn(state, 'enemy');
+      await ai.planTurn(ctx);
 
-      // Should move toward capital (further but higher priority)
       const moveAction = actions.find(a => a.type === 'move');
       assert(moveAction !== undefined, 'Should have move action');
       if (moveAction?.type === 'move') {
@@ -232,16 +248,16 @@ runner.describe('GreedyAI', () => {
   });
 
   runner.describe('attack priority', () => {
-    runner.it('should attack enemy in range', () => {
+    runner.it('should attack enemy in range', async () => {
       const ai = new GreedyAI();
-      const attacker = createUnit('soldier1', 'enemy', 5, 5, { range: 1 });
-      const target = createUnit('player_unit', 'player', 5, 6);
+      const attacker = createUnit('soldier1', 'enemy', 5, 5, { range: 1, canCapture: false });
+      const target = createUnit('player_unit', 'player', 5, 6, { canCapture: false });
 
-      const state = createMockState({
+      const { ctx, actions } = createMockContext({
         units: [attacker, target],
       });
 
-      const actions = ai.planTurn(state, 'enemy');
+      await ai.planTurn(ctx);
 
       const attackAction = actions.find(a => a.type === 'attack');
       assert(attackAction !== undefined, 'Should have attack action');
@@ -251,22 +267,20 @@ runner.describe('GreedyAI', () => {
       }
     });
 
-    runner.it('should prefer higher damage targets', () => {
+    runner.it('should prefer higher damage targets', async () => {
       const ai = new GreedyAI();
-      const attacker = createUnit('soldier1', 'enemy', 5, 5, { range: 1, templateId: 'infantry' });
-      // Two enemies adjacent - tank vs infantry (infantry takes more damage)
-      const tankTarget = createUnit('tank', 'player', 5, 6, { templateId: 'tank' });
-      const softTarget = createUnit('soldier', 'player', 6, 5, { templateId: 'infantry' });
+      const attacker = createUnit('soldier1', 'enemy', 5, 5, { range: 1, templateId: 'infantry', canCapture: false });
+      const tankTarget = createUnit('tank', 'player', 5, 6, { templateId: 'tank', canCapture: false });
+      const softTarget = createUnit('soldier', 'player', 6, 5, { templateId: 'infantry', canCapture: false });
 
-      const state = createMockState({
+      const { ctx, actions } = createMockContext({
         units: [attacker, tankTarget, softTarget],
       });
 
-      const actions = ai.planTurn(state, 'enemy');
+      await ai.planTurn(ctx);
 
       const attackAction = actions.find(a => a.type === 'attack');
       assert(attackAction !== undefined, 'Should attack');
-      // Should attack the soft target for more damage (armor halves damage)
       if (attackAction?.type === 'attack') {
         assertEqual(attackAction.targetQ, 6);
         assertEqual(attackAction.targetR, 5);
@@ -275,17 +289,17 @@ runner.describe('GreedyAI', () => {
   });
 
   runner.describe('production', () => {
-    runner.it('should build units at unoccupied factories', () => {
+    runner.it('should build units at unoccupied factories', async () => {
       const ai = new GreedyAI();
       const factory = createBuilding(0, 0, 'factory', 'enemy');
 
-      const state = createMockState({
+      const { ctx, actions } = createMockContext({
         buildings: [factory],
         templates: [createTemplate('infantry', 500)],
-        resources: { funds: 1000 },
+        funds: 1000,
       });
 
-      const actions = ai.planTurn(state, 'enemy');
+      await ai.planTurn(ctx);
 
       const buildAction = actions.find(a => a.type === 'build');
       assert(buildAction !== undefined, 'Should build a unit');
@@ -296,35 +310,35 @@ runner.describe('GreedyAI', () => {
       }
     });
 
-    runner.it('should not build when factory is occupied', () => {
+    runner.it('should not build when factory is occupied', async () => {
       const ai = new GreedyAI();
       const factory = createBuilding(0, 0, 'factory', 'enemy');
-      const occupyingUnit = createUnit('existing', 'enemy', 0, 0);
+      const occupyingUnit = createUnit('existing', 'enemy', 0, 0, { hasActed: true });
 
-      const state = createMockState({
+      const { ctx, actions } = createMockContext({
         units: [occupyingUnit],
         buildings: [factory],
         templates: [createTemplate('infantry', 500)],
-        resources: { funds: 1000 },
+        funds: 1000,
       });
 
-      const actions = ai.planTurn(state, 'enemy');
+      await ai.planTurn(ctx);
 
       const buildAction = actions.find(a => a.type === 'build');
       assertEqual(buildAction, undefined);
     });
 
-    runner.it('should not build when cannot afford', () => {
+    runner.it('should not build when cannot afford', async () => {
       const ai = new GreedyAI();
       const factory = createBuilding(0, 0, 'factory', 'enemy');
 
-      const state = createMockState({
+      const { ctx, actions } = createMockContext({
         buildings: [factory],
         templates: [createTemplate('infantry', 500)],
-        resources: { funds: 100 }, // Not enough funds
+        funds: 100,
       });
 
-      const actions = ai.planTurn(state, 'enemy');
+      await ai.planTurn(ctx);
 
       const buildAction = actions.find(a => a.type === 'build');
       assertEqual(buildAction, undefined);
@@ -332,41 +346,38 @@ runner.describe('GreedyAI', () => {
   });
 
   runner.describe('movement', () => {
-    runner.it('should move toward enemy when nothing else to do', () => {
+    runner.it('should move toward enemy when nothing else to do', async () => {
       const ai = new GreedyAI();
-      const unit = createUnit('soldier1', 'enemy', 0, 0);
-      const enemy = createUnit('player_unit', 'player', 10, 10);
+      const unit = createUnit('soldier1', 'enemy', 0, 0, { canCapture: false });
+      const enemy = createUnit('player_unit', 'player', 10, 10, { canCapture: false });
 
-      // Create a pathfinder that returns specific reachable positions
       const testMap = new TestMap();
       const pathfinder = new Pathfinder(testMap as any);
 
-      const state = createMockState({
+      const { ctx, actions } = createMockContext({
         units: [unit, enemy],
         pathfinder,
       });
 
-      const actions = ai.planTurn(state, 'enemy');
+      await ai.planTurn(ctx);
 
       const moveAction = actions.find(a => a.type === 'move');
       assert(moveAction !== undefined, 'Should have move action');
-      // Should move toward the enemy (not stay at 0,0)
       if (moveAction?.type === 'move') {
         const movedCloser = moveAction.targetQ > 0 || moveAction.targetR > 0;
         assert(movedCloser, 'Should move closer to enemy');
       }
     });
 
-    runner.it('should wait if no movement improves position', () => {
+    runner.it('should wait if no movement improves position', async () => {
       const ai = new GreedyAI();
-      const unit = createUnit('soldier1', 'enemy', 5, 5);
+      const unit = createUnit('soldier1', 'enemy', 5, 5, { canCapture: false });
 
-      // No enemies, no buildings to capture - just one unit alone
-      const state = createMockState({
+      const { ctx, actions } = createMockContext({
         units: [unit],
       });
 
-      const actions = ai.planTurn(state, 'enemy');
+      await ai.planTurn(ctx);
 
       const waitAction = actions.find(a => a.type === 'wait');
       assert(waitAction !== undefined, 'Should have wait action');
@@ -374,21 +385,20 @@ runner.describe('GreedyAI', () => {
   });
 
   runner.describe('canMoveAndAttack restriction', () => {
-    runner.it('should attack from current position when canMoveAndAttack is false', () => {
+    runner.it('should attack from current position when canMoveAndAttack is false', async () => {
       const ai = new GreedyAI();
       const aiUnit = createUnit('ai', 'enemy', 5, 5, {
-        range: 3, canMoveAndAttack: false, templateId: 'artillery'
+        range: 3, canMoveAndAttack: false, templateId: 'artillery', canCapture: false
       });
-      const playerUnit = createUnit('player', 'player', 7, 5, { templateId: 'infantry' }); // distance 2, in range
+      const playerUnit = createUnit('player', 'player', 7, 5, { templateId: 'infantry', canCapture: false });
 
-      const state = createMockState({
+      const { ctx, actions } = createMockContext({
         units: [aiUnit, playerUnit],
-        resources: { funds: 0 },
+        funds: 0,
       });
 
-      const actions = ai.planTurn(state, 'enemy');
+      await ai.planTurn(ctx);
 
-      // Should attack without moving
       const attackAction = actions.find(a => a.type === 'attack');
       const moveAction = actions.find(a => a.type === 'move' && (a as { unitId: string }).unitId === 'ai');
 
@@ -396,42 +406,38 @@ runner.describe('GreedyAI', () => {
       assert(moveAction === undefined, 'Should NOT have move action before attack');
     });
 
-    runner.it('should not attack after moving when canMoveAndAttack is false', () => {
+    runner.it('should not attack after moving when canMoveAndAttack is false', async () => {
       const ai = new GreedyAI();
       const aiUnit = createUnit('ai', 'enemy', 5, 5, {
-        range: 3, canMoveAndAttack: false, templateId: 'artillery'
+        range: 3, canMoveAndAttack: false, templateId: 'artillery', canCapture: false
       });
-      // Player unit at distance 6 - needs to move to attack
-      const playerUnit = createUnit('player', 'player', 11, 5, { templateId: 'infantry' });
+      const playerUnit = createUnit('player', 'player', 11, 5, { templateId: 'infantry', canCapture: false });
 
-      const state = createMockState({
+      const { ctx, actions } = createMockContext({
         units: [aiUnit, playerUnit],
-        resources: { funds: 0 },
+        funds: 0,
       });
 
-      const actions = ai.planTurn(state, 'enemy');
+      await ai.planTurn(ctx);
 
-      // Should NOT have attack action since it would require moving first
       const attackAction = actions.find(a => a.type === 'attack' && (a as { unitId: string }).unitId === 'ai');
       assert(attackAction === undefined, 'Should NOT attack when it requires moving');
     });
 
-    runner.it('should allow move-then-attack when canMoveAndAttack is true', () => {
+    runner.it('should allow move-then-attack when canMoveAndAttack is true', async () => {
       const ai = new GreedyAI();
       const aiUnit = createUnit('ai', 'enemy', 5, 5, {
-        range: 1, speed: 4, canMoveAndAttack: true, templateId: 'infantry'
+        range: 1, speed: 4, canMoveAndAttack: true, templateId: 'infantry', canCapture: false
       });
-      // Player unit at distance 3 - needs to move to be adjacent
-      const playerUnit = createUnit('player', 'player', 8, 5, { templateId: 'infantry' });
+      const playerUnit = createUnit('player', 'player', 8, 5, { templateId: 'infantry', canCapture: false });
 
-      const state = createMockState({
+      const { ctx, actions } = createMockContext({
         units: [aiUnit, playerUnit],
-        resources: { funds: 0 },
+        funds: 0,
       });
 
-      const actions = ai.planTurn(state, 'enemy');
+      await ai.planTurn(ctx);
 
-      // Should have move then attack
       const moveIdx = actions.findIndex(a => a.type === 'move' && (a as { unitId: string }).unitId === 'ai');
       const attackIdx = actions.findIndex(a => a.type === 'attack' && (a as { unitId: string }).unitId === 'ai');
 
@@ -442,40 +448,37 @@ runner.describe('GreedyAI', () => {
   });
 
   runner.describe('minRange restriction', () => {
-    runner.it('should not attack targets closer than minRange when cannot move', () => {
+    runner.it('should not attack targets closer than minRange when cannot move', async () => {
       const ai = new GreedyAI();
-      // Unit with minRange that cannot move and attack - must attack from current position
       const aiUnit = createUnit('ai', 'enemy', 5, 5, {
         range: 3, minRange: 2, canMoveAndAttack: false, canCapture: false, templateId: 'artillery'
       });
-      const playerUnit = createUnit('player', 'player', 6, 5, { canCapture: false, templateId: 'infantry' }); // distance 1 - too close
+      const playerUnit = createUnit('player', 'player', 6, 5, { canCapture: false, templateId: 'infantry' });
 
-      const state = createMockState({
+      const { ctx, actions } = createMockContext({
         units: [aiUnit, playerUnit],
-        resources: { funds: 0 },
+        funds: 0,
       });
 
-      const actions = ai.planTurn(state, 'enemy');
+      await ai.planTurn(ctx);
 
-      // When the target is at distance 1 but minRange is 2, and unit can't move-and-attack,
-      // there should be no attack action
       const attackAction = actions.find(a => a.type === 'attack' && (a as { unitId: string }).unitId === 'ai');
       assert(attackAction === undefined, 'Should NOT attack target that is too close');
     });
 
-    runner.it('should attack targets at or beyond minRange', () => {
+    runner.it('should attack targets at or beyond minRange', async () => {
       const ai = new GreedyAI();
       const aiUnit = createUnit('ai', 'enemy', 5, 5, {
-        range: 3, minRange: 2, templateId: 'artillery'
+        range: 3, minRange: 2, templateId: 'artillery', canCapture: false
       });
-      const playerUnit = createUnit('player', 'player', 7, 5, { templateId: 'infantry' }); // distance 2 - at minRange
+      const playerUnit = createUnit('player', 'player', 7, 5, { templateId: 'infantry', canCapture: false });
 
-      const state = createMockState({
+      const { ctx, actions } = createMockContext({
         units: [aiUnit, playerUnit],
-        resources: { funds: 0 },
+        funds: 0,
       });
 
-      const actions = ai.planTurn(state, 'enemy');
+      await ai.planTurn(ctx);
 
       const attackAction = actions.find(a => a.type === 'attack' && (a as { unitId: string }).unitId === 'ai');
       assert(attackAction !== undefined, 'Should attack target at minRange');

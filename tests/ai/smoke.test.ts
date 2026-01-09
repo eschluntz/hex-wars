@@ -6,21 +6,17 @@
 
 import { TestRunner, assertEqual, assert } from '../framework.js';
 import { GreedyAI } from '../../src/ai/greedy-ai.js';
-import { NoOpAI } from '../../src/ai/noop-ai.js';
-import { getTeamTemplates } from '../../src/unit-templates.js';
 import {
-  TestGame,
   createDuelScenario,
   createEconomyScenario,
   runAITurn,
-  runUntilGameOver,
 } from '../test-utils.js';
 
 const runner = new TestRunner();
 
 runner.describe('AI Smoke Tests', () => {
   runner.describe('Economy battle', () => {
-    runner.it('should build units within 2 turns when starting with economy', () => {
+    runner.it('should build units within 2 turns when starting with economy', async () => {
       const { game } = createEconomyScenario(['team1', 'team2'], 5000);
       const ai1 = new GreedyAI();
       const ai2 = new GreedyAI();
@@ -28,7 +24,7 @@ runner.describe('AI Smoke Tests', () => {
       // Run for 2 full turns (4 half-turns)
       for (let i = 0; i < 4; i++) {
         const ai = game.currentTeamIndex === 0 ? ai1 : ai2;
-        runAITurn(game, ai);
+        await runAITurn(game, ai);
       }
 
       const team1Units = game.units.filter(u => u.team === 'team1' && u.isAlive());
@@ -40,21 +36,15 @@ runner.describe('AI Smoke Tests', () => {
   });
 
   runner.describe('Combat integration', () => {
-    runner.it('should correctly apply damage using real Combat system', () => {
+    runner.it('should correctly apply damage using real Combat system', async () => {
       const { game, attacker, defender } = createDuelScenario('infantry', 'infantry');
       const ai = new GreedyAI();
 
-      const aiState = game.createAIState();
-      const actions = ai.planTurn(aiState, 'attacker');
+      const { ctx, actions } = game.createAIContext();
+      await ai.planTurn(ctx);
 
       const attackAction = actions.find(a => a.type === 'attack');
       assert(attackAction !== undefined, 'AI should plan an attack');
-
-      for (const action of actions) {
-        if (action.type === 'endTurn') break;
-        game.executeAction(action);
-      }
-
       assert(defender.health < 10, `Defender should have taken damage, health: ${defender.health}`);
     });
   });

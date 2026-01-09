@@ -587,6 +587,7 @@ class Game {
   private getAIOperations(): AIGameOperations {
     return {
       getPlayer: (teamId) => this.getPlayer(teamId),
+      getUnits: () => this.units,
       getUnitById: (id) => this.getUnitById(id),
       getUnitAt: (q, r) => this.getUnitAt(q, r),
       getBlockedPositions: (forTeam) => this.getBlockedPositions(forTeam),
@@ -607,8 +608,7 @@ class Game {
     this.isAITurnInProgress = true;
     await this.aiTurnExecutor.executeTurn(
       this.currentTeam,
-      this.getAIOperations(),
-      this.units
+      this.getAIOperations()
     );
     this.isAITurnInProgress = false;
   }
