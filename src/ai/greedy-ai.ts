@@ -2,12 +2,16 @@
 // HEX DOMINION - Greedy AI Controller
 // ============================================================================
 // Simple AI with greedy decision-making:
-// - Production: Order factories by distance to enemy, build random affordable unit
-// - Unit control (per-unit greedy):
+//
+// Production (factories ordered by distance to own capital):
+//   - If unclaimed building is closer: build infantry to capture
+//   - If enemy unit is closer: build best counter unit
+//
+// Unit control (per-unit greedy, capturers processed closest-first):
 //   1. Capture building (if on one)
-//   2. Move to capture building (if in range)
+//   2. Move to capture a building (if reachable)
 //   3. Attack with maximum expected damage
-//   4. Move toward nearest enemy/neutral building
+//   4. Move toward nearest enemy/unclaimed building
 //   5. Wait
 
 import { Combat } from '../combat.js';
@@ -20,6 +24,7 @@ import {
   minPathDistanceToPositions,
   isInRangeFrom,
   isPositionOccupied,
+  posKey,
 } from './base-utils.js';
 import { getBaseDamage } from '../damage-table.js';
 import { type UnitTemplate } from '../unit-templates.js';
@@ -29,26 +34,55 @@ export class GreedyAI implements AIController {
   readonly name = 'Greedy AI';
 
   async planTurn(ctx: AIContext): Promise<void> {
+    // Track buildings already targeted by capturing units
+    const claimedTargets = new Set<string>();
+
+    // Pre-claim buildings where friendly capturers are actively capturing
+    const uncapturedBuildings = ctx.getBuildings().filter(b => b.owner !== ctx.team);
+    for (const unit of ctx.getUnits()) {
+      if (unit.team !== ctx.team || !unit.isAlive() || !unit.canCapture || unit.carriedBy !== null) continue;
+
+      const onBuilding = uncapturedBuildings.find(b => b.q === unit.q && b.r === unit.r);
+      if (onBuilding) {
+        claimedTargets.add(posKey(onBuilding.q, onBuilding.r));
+      }
+    }
+
     // Phase 1: Move units (clears factories, captures, attacks)
-    await this.handleUnits(ctx);
+    await this.handleUnits(ctx, claimedTargets);
 
     // Phase 2: Build at factories (now cleared by unit moves)
-    await this.handleProduction(ctx);
+    await this.handleProduction(ctx, claimedTargets);
 
     // End turn
     await ctx.doAction({ type: 'endTurn' });
   }
 
-  private async handleUnits(ctx: AIContext): Promise<void> {
+  private async handleUnits(ctx: AIContext, claimedTargets: Set<string>): Promise<void> {
     // Get units that haven't acted yet (exclude carried units)
     const units = ctx.getUnits().filter(u => u.team === ctx.team && u.isAlive() && !u.hasActed && u.carriedBy === null);
 
-    for (const unit of units) {
-      await this.handleUnit(ctx, unit);
+    // Sort capturing units by distance to nearest uncaptured building (closest first)
+    // This way closer units claim buildings first, causing "trains" to peel off
+    const uncapturedBuildings = ctx.getBuildings().filter(b => b.owner !== ctx.team);
+    const sortedUnits = [...units].sort((a, b) => {
+      if (a.canCapture && b.canCapture) {
+        const distA = minDistanceToPositions(a.q, a.r, uncapturedBuildings);
+        const distB = minDistanceToPositions(b.q, b.r, uncapturedBuildings);
+        return distA - distB;
+      }
+      // Capturers first, then others
+      if (a.canCapture) return -1;
+      if (b.canCapture) return 1;
+      return 0;
+    });
+
+    for (const unit of sortedUnits) {
+      await this.handleUnit(ctx, unit, claimedTargets);
     }
   }
 
-  private async handleUnit(ctx: AIContext, unit: Unit): Promise<void> {
+  private async handleUnit(ctx: AIContext, unit: Unit, claimedTargets: Set<string>): Promise<void> {
     const pathfinder = ctx.getPathfinder();
     const buildings = ctx.getBuildings();
     const allUnits = ctx.getUnits();
@@ -65,7 +99,7 @@ export class GreedyAI implements AIController {
     const occupied = new Set<string>();
     for (const u of allUnits) {
       if (u.id !== unit.id && u.team === ctx.team && u.isAlive() && u.carriedBy === null) {
-        occupied.add(`${u.q},${u.r}`);
+        occupied.add(posKey(u.q, u.r));
       }
     }
 
@@ -79,7 +113,7 @@ export class GreedyAI implements AIController {
 
     // Priority 1.5: Move off friendly factory
     if (building && building.type === 'factory' && building.owner === ctx.team) {
-      const moveTarget = this.findMoveTarget(ctx, unit, reachable);
+      const moveTarget = this.findMoveTarget(ctx, unit, reachable, claimedTargets);
       if (moveTarget && (moveTarget.q !== unit.q || moveTarget.r !== unit.r)) {
         await ctx.doAction({
           type: 'move',
@@ -90,6 +124,7 @@ export class GreedyAI implements AIController {
         // Check if we can capture at new position
         const newBuilding = ctx.getBuildings().find(b => b.q === moveTarget.q && b.r === moveTarget.r);
         if (newBuilding && newBuilding.owner !== ctx.team && unit.canCapture) {
+          claimedTargets.add(posKey(newBuilding.q, newBuilding.r));
           await ctx.doAction({ type: 'capture', unitId: unit.id });
         } else {
           await ctx.doAction({ type: 'wait', unitId: unit.id });
@@ -100,8 +135,9 @@ export class GreedyAI implements AIController {
 
     // Priority 2: Move to capture a building
     if (unit.canCapture) {
-      const captureTarget = this.findBestCaptureTarget(ctx, reachable);
+      const captureTarget = this.findBestCaptureTarget(ctx, reachable, claimedTargets);
       if (captureTarget) {
+        claimedTargets.add(posKey(captureTarget.q, captureTarget.r));
         if (captureTarget.q !== unit.q || captureTarget.r !== unit.r) {
           await ctx.doAction({
             type: 'move',
@@ -136,8 +172,15 @@ export class GreedyAI implements AIController {
     }
 
     // Priority 4: Move toward objective
-    const moveTarget = this.findMoveTarget(ctx, unit, reachable);
+    const moveTarget = this.findMoveTarget(ctx, unit, reachable, claimedTargets);
     if (moveTarget && (moveTarget.q !== unit.q || moveTarget.r !== unit.r)) {
+      // If moving toward a building to capture, claim it
+      if (unit.canCapture) {
+        const targetBuilding = buildings.find(b => b.q === moveTarget.q && b.r === moveTarget.r && b.owner !== ctx.team);
+        if (targetBuilding) {
+          claimedTargets.add(posKey(targetBuilding.q, targetBuilding.r));
+        }
+      }
       await ctx.doAction({
         type: 'move',
         unitId: unit.id,
@@ -150,14 +193,16 @@ export class GreedyAI implements AIController {
     await ctx.doAction({ type: 'wait', unitId: unit.id });
   }
 
-  private async handleProduction(ctx: AIContext): Promise<void> {
+  private async handleProduction(ctx: AIContext, claimedTargets: Set<string>): Promise<void> {
     const templates = ctx.getTemplates();
     const factories = ctx.getBuildings().filter(b => b.type === 'factory' && b.owner === ctx.team);
     const allUnits = ctx.getUnits();
     const allBuildings = ctx.getBuildings();
 
-    // Collect uncaptured buildings (not owned by AI)
-    const uncapturedBuildings = allBuildings.filter(b => b.owner !== ctx.team);
+    // Collect uncaptured buildings (not owned by AI, not already claimed)
+    const uncapturedBuildings = allBuildings.filter(b =>
+      b.owner !== ctx.team && !claimedTargets.has(posKey(b.q, b.r))
+    );
 
     // Collect enemy units (exclude carried)
     const enemyUnits = allUnits.filter(u => u.team !== ctx.team && u.isAlive() && u.carriedBy === null);
@@ -233,7 +278,8 @@ export class GreedyAI implements AIController {
 
   private findBestCaptureTarget(
     ctx: AIContext,
-    reachable: Map<string, { q: number; r: number; cost: number }>
+    reachable: Map<string, { q: number; r: number; cost: number }>,
+    claimedTargets: Set<string>
   ): { q: number; r: number } | null {
     const buildings = ctx.getBuildings().filter(b => b.owner !== ctx.team);
     const units = ctx.getUnits();
@@ -242,8 +288,9 @@ export class GreedyAI implements AIController {
 
     for (const building of buildings) {
       if (isPositionOccupied(units, building.q, building.r)) continue;
+      if (claimedTargets.has(posKey(building.q, building.r))) continue;
 
-      const reachablePos = reachable.get(`${building.q},${building.r}`);
+      const reachablePos = reachable.get(posKey(building.q, building.r));
       if (reachablePos) {
         const priority = building.type === 'capital' ? 1000 : 0;
         const score = priority - reachablePos.cost;
@@ -323,7 +370,8 @@ export class GreedyAI implements AIController {
   private findMoveTarget(
     ctx: AIContext,
     unit: Unit,
-    reachable: Map<string, { q: number; r: number; cost: number }>
+    reachable: Map<string, { q: number; r: number; cost: number }>,
+    claimedTargets: Set<string>
   ): { q: number; r: number } | null {
     const pathfinder = ctx.getPathfinder();
     const units = ctx.getUnits();
@@ -337,11 +385,13 @@ export class GreedyAI implements AIController {
       }
     }
 
-    // Collect building targets (only if unit can capture)
+    // Collect building targets (only if unit can capture, exclude claimed)
     const buildingTargets: Array<{ q: number; r: number }> = [];
     if (unit.canCapture) {
       for (const building of buildings.filter(b => b.owner !== ctx.team)) {
-        buildingTargets.push({ q: building.q, r: building.r });
+        if (!claimedTargets.has(posKey(building.q, building.r))) {
+          buildingTargets.push({ q: building.q, r: building.r });
+        }
       }
     }
 

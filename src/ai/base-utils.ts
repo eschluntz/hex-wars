@@ -15,6 +15,13 @@ interface MinimalState {
 }
 
 /**
+ * Create a string key from hex coordinates for use in Sets/Maps.
+ */
+export function posKey(q: number, r: number): string {
+  return `${q},${r}`;
+}
+
+/**
  * Get all positions blocked by enemy units (for pathfinding).
  * Excludes units being carried by transports.
  */
@@ -22,7 +29,7 @@ export function getBlockedPositions(state: MinimalState, forTeam: string): Set<s
   const blocked = new Set<string>();
   for (const unit of state.units) {
     if (unit.team !== forTeam && unit.isAlive() && unit.carriedBy === null) {
-      blocked.add(`${unit.q},${unit.r}`);
+      blocked.add(posKey(unit.q, unit.r));
     }
   }
   return blocked;
@@ -76,7 +83,7 @@ export function minPathDistanceToPositions(
   let minDist = Infinity;
   for (const pos of positions) {
     // Remove the target from blocked set - we want to path TO it, not through it
-    const targetKey = `${pos.q},${pos.r}`;
+    const targetKey = posKey(pos.q, pos.r);
     let blockedForPath = blocked;
     if (blocked.has(targetKey)) {
       blockedForPath = new Set(blocked);
