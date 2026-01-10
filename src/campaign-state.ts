@@ -76,14 +76,18 @@ export function createInitialCampaignState(grid: CampaignGrid, seed: number): Ca
 }
 
 /**
- * Get the neighbors of a cell in the grid (orthogonal adjacency)
+ * Get the neighbors of a cell in the grid (orthogonal + diagonal adjacency)
  */
 function getNeighborPositions(row: number, col: number): Array<{ row: number; col: number }> {
   return [
-    { row: row - 1, col },  // above
-    { row: row + 1, col },  // below
-    { row, col: col - 1 },  // left
-    { row, col: col + 1 },  // right
+    { row: row - 1, col },      // above
+    { row: row + 1, col },      // below
+    { row, col: col - 1 },      // left
+    { row, col: col + 1 },      // right
+    { row: row - 1, col: col - 1 },  // above-left
+    { row: row - 1, col: col + 1 },  // above-right
+    { row: row + 1, col: col - 1 },  // below-left
+    { row: row + 1, col: col + 1 },  // below-right
   ];
 }
 
@@ -238,7 +242,7 @@ export function isCellRevealed(
 }
 
 /**
- * Get the perimeter positions around a 2x2 fortress
+ * Get the perimeter positions around a 2x2 fortress (including diagonal corners)
  */
 function getFortressPerimeter(fortress: CampaignCell): Array<{ row: number; col: number }> {
   const positions: Array<{ row: number; col: number }> = [];
@@ -264,6 +268,12 @@ function getFortressPerimeter(fortress: CampaignCell): Array<{ row: number; col:
   for (let c = fortress.col; c < fortress.col + width; c++) {
     positions.push({ row: fortress.row + height, col: c });
   }
+
+  // Diagonal corners
+  positions.push({ row: fortress.row - 1, col: fortress.col - 1 });           // bottom-left
+  positions.push({ row: fortress.row - 1, col: fortress.col + width });       // bottom-right
+  positions.push({ row: fortress.row + height, col: fortress.col - 1 });      // top-left
+  positions.push({ row: fortress.row + height, col: fortress.col + width });  // top-right
 
   return positions;
 }
@@ -438,12 +448,13 @@ export function isCampaignOver(state: CampaignState): boolean {
 /**
  * Get the furthest row reached in the campaign (highest row number with a completed cell)
  */
-export function getFurthestRow(state: CampaignState): number {
+export function getFurthestRow(state: CampaignState, grid: CampaignGrid): number {
   let maxRow = 0;
   for (const cellId of state.completedCells) {
-    const [rowStr] = cellId.split(',');
-    const row = parseInt(rowStr!, 10);
-    if (row > maxRow) maxRow = row;
+    const cell = grid.cells.find(c => c.id === cellId);
+    if (cell && cell.row > maxRow) {
+      maxRow = cell.row;
+    }
   }
   return maxRow;
 }

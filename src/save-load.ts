@@ -25,7 +25,12 @@ export function loadGlobalStats(): GlobalStats {
   if (!raw) {
     return { highScore: 0, furthestRow: 0 };
   }
-  return JSON.parse(raw);
+  const parsed = JSON.parse(raw);
+  // Handle corrupted/missing data with defaults
+  return {
+    highScore: typeof parsed.highScore === 'number' && !isNaN(parsed.highScore) ? parsed.highScore : 0,
+    furthestRow: typeof parsed.furthestRow === 'number' && !isNaN(parsed.furthestRow) ? parsed.furthestRow : 0,
+  };
 }
 
 /**

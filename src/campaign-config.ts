@@ -24,8 +24,8 @@ import { STACKING_UPGRADES, POWERS } from './upgrades.js';
 
 // Unit unlocks by tier - 3 tiers mapping cleanly to 3 sections
 // Each section uses exactly one tier, enemies get cumulative access
-export const TIER_1_UNITS = ['mech', 'recon', 'apc', 'artillery', 'antiAir'];
-export const TIER_2_UNITS = ['rockets', 'mediumTank', 'copter', 'transportCopter'];
+export const TIER_1_UNITS = ['recon', 'artillery', 'antiAir', 'transportCopter'];
+export const TIER_2_UNITS = ['rockets', 'mediumTank', 'copter'];
 export const TIER_3_UNITS = ['heavyTank', 'bomber', 'fighter', 'missiles'];
 
 // All upgrade IDs from the registry
@@ -193,12 +193,15 @@ function createCampaignCells(seed: number): CampaignCell[] {
   const fortress3Col = rng.pick([0, 1, 2]);
 
   // Row 0 (bottom - starting row)
-  // Only 2 cells in starting row: Infantry at col 1, Tank at col 2
-  // Cols 0 and 3 are left empty (they'd be instantly locked anyway)
-  cells.push(makeUnitCell(0, 1, 'infantry'));
-  cells.push(makeUnitCell(0, 2, 'tank'));
+  // 4 starting cells across full width: Infantry, Tank, Mech, APC
+  cells.push(makeUnitCell(0, 0, 'infantry'));
+  cells.push(makeUnitCell(0, 1, 'tank'));
+  cells.push(makeUnitCell(0, 2, 'mech'));
+  cells.push(makeUnitCell(0, 3, 'apc'));
   usedUnits.add('infantry');
   usedUnits.add('tank');
+  usedUnits.add('mech');
+  usedUnits.add('apc');
 
   // Section 1: Rows 1-5 - TIER_1 units only
   cells.push(...generateRow(1, rng, TIER_1_UNITS, usedUpgrades, usedPowers, usedUnits));
@@ -242,15 +245,15 @@ function createCampaignCells(seed: number): CampaignCell[] {
 export function createCampaignGrid(seed: number): CampaignGrid {
   const cells = createCampaignCells(seed);
 
-  // Find the starting cells (row 0, cols 1-2 - Infantry and Tank)
+  // Find the starting cells (row 0, all 4 columns)
   const startingCells = cells
-    .filter(c => c.row === 0 && (c.col === 1 || c.col === 2))
+    .filter(c => c.row === 0)
     .map(c => c.id);
 
   return {
     cells,
     startingCells,
-    startingUnits: ['infantry', 'tank'],
+    startingUnits: ['infantry', 'tank', 'mech', 'apc'],
     startingReinforcements: 3,
   };
 }

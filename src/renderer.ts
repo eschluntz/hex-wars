@@ -103,7 +103,7 @@ export class Renderer {
   animatingUnitId: string | null = null;  // Unit currently being animated
   animationProgress: number = 0;  // Progress along animation path (0 to 1)
   activeToast: { q: number; r: number; text: string; progress: number } | null = null;
-  turnAnnouncement: { text: string; progress: number } | null = null;
+  turnAnnouncement: { text: string; subtitle?: string; progress: number } | null = null;
   activeUnits: number = 0;
   totalUnits: number = 0;
   resources: TeamResources = { funds: 0 };
@@ -558,7 +558,7 @@ export class Renderer {
     drawBuildingIcon(this.ctx as any, cx, cy, building, size, { zoom, hasUnit });
   }
 
-  private drawTurnAnnouncement(announcement: { text: string; progress: number }): void {
+  private drawTurnAnnouncement(announcement: { text: string; subtitle?: string; progress: number }): void {
     const ctx = this.ctx;
 
     // Center of screen
@@ -573,12 +573,20 @@ export class Renderer {
         : 1;
     const alpha = Math.max(0, Math.min(1, fadeProgress));
 
-    // Measure text
+    // Measure main text
     ctx.font = 'bold 48px Arial';
     const textWidth = ctx.measureText(announcement.text).width;
+
+    // Measure subtitle if present
+    let subtitleWidth = 0;
+    if (announcement.subtitle) {
+      ctx.font = '20px Arial';
+      subtitleWidth = ctx.measureText(announcement.subtitle).width;
+    }
+
     const padding = 32;
-    const pillWidth = textWidth + padding * 2;
-    const pillHeight = 72;
+    const pillWidth = Math.max(textWidth, subtitleWidth) + padding * 2;
+    const pillHeight = announcement.subtitle ? 100 : 72;
 
     // Draw rounded pill background
     ctx.globalAlpha = alpha * 0.85;
@@ -598,12 +606,21 @@ export class Renderer {
     ctx.lineWidth = 3;
     ctx.stroke();
 
-    // Draw text
+    // Draw main text
     ctx.globalAlpha = alpha;
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(announcement.text, centerX, centerY);
+    ctx.font = 'bold 48px Arial';
+    const mainTextY = announcement.subtitle ? centerY - 14 : centerY;
+    ctx.fillText(announcement.text, centerX, mainTextY);
+
+    // Draw subtitle if present
+    if (announcement.subtitle) {
+      ctx.font = '20px Arial';
+      ctx.fillStyle = '#aaaaaa';
+      ctx.fillText(announcement.subtitle, centerX, centerY + 26);
+    }
 
     ctx.globalAlpha = 1;
   }

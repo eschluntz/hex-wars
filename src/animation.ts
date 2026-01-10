@@ -176,4 +176,35 @@ export class AnimationController {
       requestAnimationFrame(animate);
     });
   }
+
+  async playGameOverAnnouncement(isVictory: boolean, reason: string): Promise<void> {
+    const FAST_DURATION = 200;
+    const GAME_OVER_DURATION = 1500; // Longer duration for game over
+
+    this.renderer.turnAnnouncement = {
+      text: isVictory ? 'Victory!' : 'Defeat',
+      subtitle: reason,
+      progress: 0
+    };
+
+    const startTime = performance.now();
+
+    await new Promise<void>(resolve => {
+      const animate = () => {
+        const elapsed = performance.now() - startTime;
+        const duration = this.isSpacebarHeld() ? FAST_DURATION : GAME_OVER_DURATION;
+        const progress = Math.min(elapsed / duration, 1);
+
+        this.renderer.turnAnnouncement!.progress = progress;
+
+        if (progress >= 1) {
+          this.renderer.turnAnnouncement = null;
+          resolve();
+        } else {
+          requestAnimationFrame(animate);
+        }
+      };
+      requestAnimationFrame(animate);
+    });
+  }
 }

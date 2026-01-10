@@ -428,12 +428,19 @@ The tests automatically start the dev server (`npm run watch`) before running. R
   - [x] Animated end-battle breakdown
   - [x] Campaign score accumulation
 - [x] Campaign save/load (auto-save after battles, Continue button)
-
-### Upcoming
-- [ ] Better AI
-    - [ ] Can use transports
+- [x] Better AI
     - [x] Reactive unit composition
     - [x] trains of units going to same target
-- [ ] play testing!
+- [x] play testing!
+
+### Upcoming
+- [x] starting units feel too restrictive and slow. let's start with infantry, tank, mech, and APC, starting with a green row of 4 squares along the bottom. Let's also pull T-copter in to the tier-1 units, so that it can be unlocked sooner, now that there are two fewer unlock units in tier 1.
+- [x] the game should end if a player has no units, and no factories that are open (i.e. not blocked by an enemy unit sitting on top of them)
+- [ ] Make some maps "pre-deployed" with no factories on the map, and a bunch of random available units that add up to the same "budget"
+- [ ] mobile friendly
+- [ ] sounds
+
+### Maye
+- [ ] AI can use transports
 - [ ] Fog of war (maybe)
 - [ ] Story elements (end campaign screen, winning campaign screen)

@@ -204,10 +204,10 @@ function getCellBonuses(cell: CampaignCell): {
   enemyPowerSlotBonus: number;
 } {
   if (cell.type === 'fortress') {
-    return { playerClusters: 1, enemyClusters: 2, enemyPowerSlotBonus: 1 };
+    return { playerClusters: 2, enemyClusters: 2, enemyPowerSlotBonus: 1 };
   }
   if (cell.type === 'boss') {
-    return { playerClusters: 2, enemyClusters: 4, enemyPowerSlotBonus: 1 };
+    return { playerClusters: 3, enemyClusters: 4, enemyPowerSlotBonus: 1 };
   }
   return { playerClusters: 1, enemyClusters: 1, enemyPowerSlotBonus: 0 };
 }

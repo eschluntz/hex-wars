@@ -495,10 +495,12 @@ class Game {
     return blocked;
   }
 
-  private getOccupiedPositions(excludeUnit: Unit): Set<string> {
+  private getOccupiedPositions(excludeUnit: Unit, allowJoinTargets = false): Set<string> {
     const occupied = new Set<string>();
     for (const unit of this.units) {
       if (unit !== excludeUnit && unit.isAlive() && unit.carriedBy === null) {
+        // If allowing join targets, skip units we can join with
+        if (allowJoinTargets && excludeUnit.canJoinWith(unit)) continue;
         occupied.add(`${unit.q},${unit.r}`);
       }
     }
@@ -723,10 +725,10 @@ class Game {
     this.recordTurnStats(this.currentTeam);
 
     // Check for game over before switching
-    const loser = this.checkGameOver();
-    if (loser) {
-      const winner = loser === TEAMS.PLAYER ? TEAMS.ENEMY : TEAMS.PLAYER;
-      this.triggerGameOver(winner, loser);
+    const result = this.checkGameOver();
+    if (result) {
+      const winner = result.loser === TEAMS.PLAYER ? TEAMS.ENEMY : TEAMS.PLAYER;
+      this.triggerGameOver(winner, result.loser, result.reason);
       return;
     }
 
@@ -784,31 +786,50 @@ class Game {
     );
   }
 
-  private checkGameOver(): string | null {
+  private checkGameOver(): { loser: string; reason: string } | null {
     for (const team of [TEAMS.PLAYER, TEAMS.ENEMY]) {
       // Check if capital was captured (team no longer owns a capital)
       if (!this.map.getCapital(team)) {
-        return team; // Lost - capital captured
+        return { loser: team, reason: 'Capital captured' };
+      }
+
+      // Check if team has no units and no open factories
+      const teamUnits = this.units.filter(u => u.team === team && u.isAlive() && u.carriedBy === null);
+      if (teamUnits.length === 0) {
+        // Check for open factories (not blocked by enemy unit)
+        const factories = this.map.getAllBuildings().filter(b => b.type === 'factory' && b.owner === team);
+        const hasOpenFactory = factories.some(f => {
+          const unitOnFactory = this.getUnitAt(f.q, f.r);
+          return !unitOnFactory || unitOnFactory.team === team;
+        });
+        if (!hasOpenFactory) {
+          return { loser: team, reason: 'All units destroyed' };
+        }
       }
     }
     return null;
   }
 
   private checkAndTriggerGameOver(): void {
-    const loser = this.checkGameOver();
-    if (loser) {
-      const winner = loser === TEAMS.PLAYER ? TEAMS.ENEMY : TEAMS.PLAYER;
-      this.triggerGameOver(winner, loser);
+    const result = this.checkGameOver();
+    if (result) {
+      const winner = result.loser === TEAMS.PLAYER ? TEAMS.ENEMY : TEAMS.PLAYER;
+      this.triggerGameOver(winner, result.loser, result.reason);
     }
   }
 
-  private triggerGameOver(winner: string, loser: string): void {
+  private async triggerGameOver(winner: string, loser: string, reason: string = 'Capital captured'): Promise<void> {
     // Record final stats for both teams
     this.recordTurnStats(TEAMS.PLAYER);
     this.recordTurnStats(TEAMS.ENEMY);
 
     const playerWon = winner === TEAMS.PLAYER;
     const isCampaign = !!this.activeCampaignCell;
+
+    console.log(`Game Over! ${winner.toUpperCase()} wins in ${this.turnNumber} turns!`);
+
+    // Show victory/defeat announcement before transitioning to game over screen
+    await this.animationController.playGameOverAnnouncement(playerWon, reason);
 
     // Calculate battle score for campaign battles
     let scoreBreakdown: BattleScoreBreakdown | null = null;
@@ -853,8 +874,6 @@ class Game {
     if (infoEl) infoEl.style.display = 'none';
     if (hudEl) hudEl.style.display = 'none';
     this.showDebugControls(false);
-
-    console.log(`Game Over! ${winner.toUpperCase()} wins in ${this.turnNumber} turns!`);
 
     // Get reward for display
     let reward: string | null = null;
@@ -1104,7 +1123,7 @@ class Game {
       console.log(`Cell ${this.activeCampaignCell.name} completed!`);
 
       // Update global stats (furthest row and high score)
-      const furthestRow = getFurthestRow(this.campaignState);
+      const furthestRow = getFurthestRow(this.campaignState, this.campaignGrid!);
       updateGlobalStats(this.campaignState.totalScore, furthestRow);
     } else if (!playerWon) {
       // Lose a reinforcement
@@ -1116,7 +1135,7 @@ class Game {
     if (isCampaignOver(this.campaignState)) {
       console.log('Campaign over - no reinforcements left!');
       // Final update to global stats before deleting save
-      const furthestRow = getFurthestRow(this.campaignState);
+      const furthestRow = getFurthestRow(this.campaignState, this.campaignGrid!);
       updateGlobalStats(this.campaignState.totalScore, furthestRow);
       deleteSavedCampaign();
       this.returnToMainMenu();
@@ -1343,6 +1362,9 @@ class Game {
         } else if (clickedUnit && clickedUnit.team === this.currentTeam && clickedUnit.canLoadUnit(unit)) {
           // Clicked a carrier that can load this unit - try to load
           await this.tryMove(unit, hex);
+        } else if (clickedUnit && clickedUnit.team === this.currentTeam && unit.canJoinWith(clickedUnit)) {
+          // Clicked a unit we can join with - try to join
+          await this.tryJoin(unit, clickedUnit);
         } else if (clickedUnit && clickedUnit.team === this.currentTeam && !clickedUnit.hasActed) {
           // Clicked another friendly unmoved unit - select it instead
           this.setState({ type: 'selected', unit: clickedUnit });
@@ -1552,6 +1574,59 @@ class Game {
     console.log('No valid path to destination');
   }
 
+  private async tryJoin(unit: Unit, target: Unit): Promise<void> {
+    const blocked = this.getBlockedPositions(unit.team);
+
+    const result = this.pathfinder.findPath(
+      unit.q, unit.r,
+      target.q, target.r,
+      unit.terrainCosts,
+      blocked
+    );
+
+    if (!result) {
+      console.log('No path to join target');
+      return;
+    }
+
+    // Check if target is within movement range
+    if (this.getPathCost(result.path, unit.terrainCosts) > unit.speed) {
+      console.log('Join target out of movement range');
+      return;
+    }
+
+    // Reset any capture progress when unit moves
+    this.map.resetCaptureByUnit(unit.id);
+
+    // Animate movement to target position
+    this.renderer.pathPreview = null;
+    this.isAnimating = true;
+    await this.animationController.play({
+      type: 'move',
+      hexQ: unit.q,
+      hexR: unit.r,
+      path: result.path,
+      unitId: unit.id,
+      skipCameraPan: true
+    });
+    this.isAnimating = false;
+
+    // Merge health: target absorbs source unit's health (capped at 10)
+    const oldHealth = target.health;
+    target.health = Math.min(10, target.health + unit.health);
+    const healthGained = target.health - oldHealth;
+
+    console.log(`${unit.id} joined ${target.id}: +${healthGained} HP (now ${target.health})`);
+
+    // Remove source unit from the game
+    unit.health = 0;
+
+    // Mark target as having acted
+    target.hasActed = true;
+
+    this.setState({ type: 'idle' });
+  }
+
   private handleUnitDeath(deadUnit: Unit, killerTeam: string): void {
     this.gameStats.recordUnitKilled(killerTeam, deadUnit.team);
     this.map.resetCaptureByUnit(deadUnit.id);
@@ -1747,15 +1822,17 @@ class Game {
       return;
     }
 
-    const occupied = this.getOccupiedPositions(unit);
+    const occupied = this.getOccupiedPositions(unit, true); // Allow join targets
     let reachableIndex = unit.getReachableIndex(result.path, this.map, occupied);
 
-    // Check if destination is a carrier that can load this unit
+    // Check if destination is a carrier that can load this unit or a join target
     const destUnit = this.getUnitAt(hoveredHex.q, hoveredHex.r);
-    if (destUnit && destUnit.canLoadUnit(unit)) {
-      // If within movement range, show full path as reachable
+    if (destUnit) {
+      // If within movement range, show full path as reachable for load or join
       if (this.getPathCost(result.path, unit.terrainCosts) <= unit.speed) {
-        reachableIndex = result.path.length - 1;
+        if (destUnit.canLoadUnit(unit) || unit.canJoinWith(destUnit)) {
+          reachableIndex = result.path.length - 1;
+        }
       }
     }
 

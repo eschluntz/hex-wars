@@ -161,4 +161,22 @@ export class Unit {
     this.speed += moveBonus;
     this.range += rangeBonus;
   }
+
+  /**
+   * Check if this unit can join with another unit (Advance Wars "join" mechanic).
+   * The source unit (this) merges into the target, combining health (capped at 10).
+   */
+  canJoinWith(other: Unit): boolean {
+    // Must be same team
+    if (this.team !== other.team) return false;
+    // Must be same unit type
+    if (this.templateId !== other.templateId) return false;
+    // Both units must be damaged to join
+    if (this.health >= 10 || other.health >= 10) return false;
+    // Cannot join if either is being carried
+    if (this.carriedBy !== null || other.carriedBy !== null) return false;
+    // Cannot join if either has cargo
+    if (this.cargo.length > 0 || other.cargo.length > 0) return false;
+    return true;
+  }
 }

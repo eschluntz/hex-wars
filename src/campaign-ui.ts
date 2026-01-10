@@ -135,7 +135,8 @@ export class CampaignUI {
   private renderGlobalStats(): void {
     const stats = loadGlobalStats();
     this.highScoreEl.textContent = stats.highScore.toLocaleString();
-    this.furthestRowEl.textContent = `Row ${stats.furthestRow}`;
+    // Display 1-indexed row number (Row 1 = starting row)
+    this.furthestRowEl.textContent = `Row ${stats.furthestRow + 1}`;
   }
 
   private renderPowersPanel(state: CampaignState): void {
