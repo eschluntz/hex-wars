@@ -363,6 +363,33 @@
       font-family: 'Courier New', monospace;
     }
 
+    .campaign-records {
+      display: flex;
+      gap: 1.5rem;
+      margin-top: 0.5rem;
+      justify-content: center;
+    }
+    .campaign-records .record-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.85rem;
+    }
+    .campaign-records .record-label {
+      color: var(--text-dim);
+    }
+    .campaign-records .record-value {
+      color: var(--text-muted);
+      font-family: 'Courier New', monospace;
+    }
+    .campaign-records .high-score {
+      color: var(--yellow);
+    }
+    .campaign-records .record-icon {
+      color: var(--yellow);
+      font-size: 0.9rem;
+    }
+
     .campaign-grid-container {
       position: relative;
       padding: 2rem;
@@ -1583,6 +1610,17 @@
         <div class="campaign-score">
           <span class="score-icon">★</span>
           <span class="score-value">0</span>
+        </div>
+      </div>
+      <div class="campaign-records">
+        <div class="record-item">
+          <span class="record-label">Best:</span>
+          <span class="record-icon">★</span>
+          <span class="record-value high-score">0</span>
+        </div>
+        <div class="record-item">
+          <span class="record-label">Furthest:</span>
+          <span class="record-value furthest-row">Row 0</span>
         </div>
       </div>
     </header>

@@ -22,6 +22,7 @@ import {
 // ============================================================================
 
 import { type TileType, type Tile } from '../src/core.js';
+import { type GameMap } from '../src/game-map.js';
 
 export class TestMap {
   private width: number;
@@ -306,4 +307,141 @@ export async function runUntilGameOver(
     }
   }
   return null;
+}
+
+// ============================================================================
+// Benchmark Game - Uses real GameMap for AI benchmarking
+// ============================================================================
+
+export class BenchmarkGame {
+  map: GameMap;
+  units: Unit[] = [];
+  resources: ResourceManager;
+  pathfinder: Pathfinder;
+  teams: string[];
+  currentTeamIndex: number = 0;
+  turn: number = 1;
+  private nextUnitId: number = 1;
+
+  private constructor(teams: string[], map: GameMap) {
+    this.teams = teams;
+    this.map = map;
+    this.pathfinder = new Pathfinder(map);
+    this.resources = new ResourceManager(teams);
+
+    for (const team of teams) {
+      initTeamUnits(team);
+    }
+  }
+
+  static fromGameMap(teams: string[], map: GameMap): BenchmarkGame {
+    return new BenchmarkGame(teams, map);
+  }
+
+  get currentTeam(): string {
+    return this.teams[this.currentTeamIndex]!;
+  }
+
+  addUnit(team: string, q: number, r: number, templateId: string = 'infantry'): Unit {
+    const unit = new Unit(`${templateId}_${this.nextUnitId++}`, team, q, r, templateId);
+    this.units.push(unit);
+    return unit;
+  }
+
+  createAIContext(): { ctx: AIContext; actions: AIAction[] } {
+    const team = this.currentTeam;
+    const actions: AIAction[] = [];
+
+    const ctx: AIContext = {
+      team,
+      getUnits: () => this.units,
+      getBuildings: () => this.map.getAllBuildings(),
+      getFunds: () => this.resources.getResources(team).funds,
+      getTemplates: () => getTeamTemplates(team),
+      getPathfinder: () => this.pathfinder,
+      doAction: async (action: AIAction) => {
+        actions.push(action);
+        this.executeAction(action);
+      },
+    };
+
+    return { ctx, actions };
+  }
+
+  executeAction(action: AIAction): void {
+    switch (action.type) {
+      case 'move': {
+        const unit = this.units.find(u => u.id === action.unitId && u.isAlive());
+        if (unit) {
+          unit.q = action.targetQ;
+          unit.r = action.targetR;
+        }
+        break;
+      }
+
+      case 'attack': {
+        const unit = this.units.find(u => u.id === action.unitId && u.isAlive());
+        const target = this.units.find(u => u.q === action.targetQ && u.r === action.targetR && u.isAlive());
+        if (unit && target) {
+          Combat.execute(unit, target);
+          unit.hasActed = true;
+        }
+        break;
+      }
+
+      case 'capture': {
+        const unit = this.units.find(u => u.id === action.unitId && u.isAlive());
+        if (unit) {
+          this.map.setBuildingOwner(unit.q, unit.r, unit.team);
+          unit.hasActed = true;
+        }
+        break;
+      }
+
+      case 'wait': {
+        const unit = this.units.find(u => u.id === action.unitId && u.isAlive());
+        if (unit) {
+          unit.hasActed = true;
+        }
+        break;
+      }
+
+      case 'build': {
+        const template = getTeamTemplate(this.currentTeam, action.templateId);
+        if (template && this.resources.canAfford(this.currentTeam, template.cost)) {
+          this.resources.spendFunds(this.currentTeam, template.cost);
+          const unit = this.addUnit(this.currentTeam, action.factoryQ, action.factoryR, action.templateId);
+          unit.hasActed = true;
+        }
+        break;
+      }
+
+      case 'endTurn':
+        break;
+    }
+  }
+
+  checkGameOver(): string | null {
+    for (const team of this.teams) {
+      const hasUnits = this.units.some(u => u.team === team && u.isAlive());
+      const hasBuildings = this.map.getBuildingsByOwner(team).length > 0;
+      if (!hasUnits && !hasBuildings) {
+        return team;
+      }
+    }
+    return null;
+  }
+
+  endTurn(): void {
+    for (const unit of this.units) {
+      if (unit.team === this.currentTeam && unit.isAlive()) {
+        unit.hasActed = false;
+      }
+    }
+
+    this.currentTeamIndex = (this.currentTeamIndex + 1) % this.teams.length;
+    if (this.currentTeamIndex === 0) {
+      this.turn++;
+    }
+  }
 }

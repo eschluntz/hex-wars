@@ -435,6 +435,19 @@ export function isCampaignOver(state: CampaignState): boolean {
   return state.reinforcements <= 0;
 }
 
+/**
+ * Get the furthest row reached in the campaign (highest row number with a completed cell)
+ */
+export function getFurthestRow(state: CampaignState): number {
+  let maxRow = 0;
+  for (const cellId of state.completedCells) {
+    const [rowStr] = cellId.split(',');
+    const row = parseInt(rowStr!, 10);
+    if (row > maxRow) maxRow = row;
+  }
+  return maxRow;
+}
+
 // ============================================================================
 // SEED AND PRESET DERIVATION
 // ============================================================================

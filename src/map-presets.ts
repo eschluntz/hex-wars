@@ -26,7 +26,7 @@ export const MAP_PRESETS: Record<string, MapPreset> = {
     description: 'Blitz battle - minimal map, very fast',
     width: 10,
     height: 8,
-    parTurns: 10,
+    parTurns: 7,
     terrain: {
       altitudeScale: 0.15,
       altitudeOctaves: 2,
@@ -53,7 +53,7 @@ export const MAP_PRESETS: Record<string, MapPreset> = {
     description: 'Balanced terrain, medium battle',
     width: 20,
     height: 16,
-    parTurns: 15,
+    parTurns: 10,
     terrain: {
       altitudeScale: 0.1,
       altitudeOctaves: 3,
@@ -80,7 +80,7 @@ export const MAP_PRESETS: Record<string, MapPreset> = {
     description: 'Island chains separated by water',
     width: 20,
     height: 16,
-    parTurns: 18,
+    parTurns: 12,
     terrain: {
       altitudeScale: 0.1,
       altitudeOctaves: 4,
@@ -110,7 +110,7 @@ export const MAP_PRESETS: Record<string, MapPreset> = {
     description: 'Scattered mountain peaks',
     width: 20,
     height: 16,
-    parTurns: 16,
+    parTurns: 11,
     terrain: {
       altitudeScale: 0.18,
       altitudeOctaves: 3,
@@ -137,7 +137,7 @@ export const MAP_PRESETS: Record<string, MapPreset> = {
     description: 'Dense woodland terrain',
     width: 20,
     height: 16,
-    parTurns: 14,
+    parTurns: 9,
     terrain: {
       altitudeScale: 0.1,
       altitudeOctaves: 3,
@@ -164,7 +164,7 @@ export const MAP_PRESETS: Record<string, MapPreset> = {
     description: 'Long narrow battlefield',
     width: 30,
     height: 10,
-    parTurns: 20,
+    parTurns: 13,
     terrain: {
       altitudeScale: 0.1,
       altitudeOctaves: 3,
@@ -191,7 +191,7 @@ export const MAP_PRESETS: Record<string, MapPreset> = {
     description: 'Vertical battlefield',
     width: 10,
     height: 30,
-    parTurns: 20,
+    parTurns: 13,
     terrain: {
       altitudeScale: 0.1,
       altitudeOctaves: 3,
@@ -218,7 +218,7 @@ export const MAP_PRESETS: Record<string, MapPreset> = {
     description: 'Large square map, many buildings',
     width: 40,
     height: 40,
-    parTurns: 35,
+    parTurns: 23,
     terrain: {
       altitudeScale: 0.08,
       altitudeOctaves: 4,
@@ -245,7 +245,7 @@ export const MAP_PRESETS: Record<string, MapPreset> = {
     description: 'Full size epic battle',
     width: 50,
     height: 40,
-    parTurns: 40,
+    parTurns: 27,
     terrain: {
       altitudeScale: 0.08,
       altitudeOctaves: 4,

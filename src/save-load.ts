@@ -6,6 +6,63 @@ import { type CampaignState } from './campaign-state.js';
 
 const SAVE_VERSION = 1;
 const SAVE_KEY = 'hex_dominion_campaign_save';
+const GLOBAL_STATS_KEY = 'hex_dominion_global_stats';
+
+// ============================================================================
+// GLOBAL STATS (persists across all campaigns)
+// ============================================================================
+
+export interface GlobalStats {
+  highScore: number;
+  furthestRow: number;
+}
+
+/**
+ * Load global stats from localStorage
+ */
+export function loadGlobalStats(): GlobalStats {
+  const raw = localStorage.getItem(GLOBAL_STATS_KEY);
+  if (!raw) {
+    return { highScore: 0, furthestRow: 0 };
+  }
+  return JSON.parse(raw);
+}
+
+/**
+ * Save global stats to localStorage
+ */
+export function saveGlobalStats(stats: GlobalStats): void {
+  localStorage.setItem(GLOBAL_STATS_KEY, JSON.stringify(stats));
+}
+
+/**
+ * Update global stats if new records are achieved
+ * Returns true if any record was broken
+ */
+export function updateGlobalStats(score: number, furthestRow: number): boolean {
+  const current = loadGlobalStats();
+  let updated = false;
+
+  if (score > current.highScore) {
+    current.highScore = score;
+    updated = true;
+  }
+
+  if (furthestRow > current.furthestRow) {
+    current.furthestRow = furthestRow;
+    updated = true;
+  }
+
+  if (updated) {
+    saveGlobalStats(current);
+  }
+
+  return updated;
+}
+
+// ============================================================================
+// CAMPAIGN SAVE/LOAD
+// ============================================================================
 
 interface SaveData {
   version: number;

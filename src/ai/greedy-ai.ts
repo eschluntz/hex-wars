@@ -111,9 +111,27 @@ export class GreedyAI implements AIController {
       occupied
     );
 
-    // Priority 1.5: Move off friendly factory
+    // Priority 1.5: Move off friendly factory (MUST do this if possible)
     if (building && building.type === 'factory' && building.owner === ctx.team) {
-      const moveTarget = this.findMoveTarget(ctx, unit, reachable, claimedTargets);
+      // First try strategic move target
+      let moveTarget = this.findMoveTarget(ctx, unit, reachable, claimedTargets);
+
+      // If no strategic target, just move to any reachable hex that's not a friendly factory
+      if (!moveTarget || (moveTarget.q === unit.q && moveTarget.r === unit.r)) {
+        const friendlyFactories = new Set(
+          ctx.getBuildings()
+            .filter(b => b.type === 'factory' && b.owner === ctx.team)
+            .map(b => posKey(b.q, b.r))
+        );
+        for (const [key, pos] of reachable) {
+          if (key === posKey(unit.q, unit.r)) continue;
+          if (friendlyFactories.has(key)) continue;
+          if (isPositionOccupied(allUnits, pos.q, pos.r, unit.id)) continue;
+          moveTarget = pos;
+          break;
+        }
+      }
+
       if (moveTarget && (moveTarget.q !== unit.q || moveTarget.r !== unit.r)) {
         // Claim the building we're heading toward (even if we can't reach it this turn)
         if (unit.canCapture && moveTarget.targetBuilding) {
@@ -136,25 +154,7 @@ export class GreedyAI implements AIController {
       }
     }
 
-    // Priority 2: Move to capture a building
-    if (unit.canCapture) {
-      const captureTarget = this.findBestCaptureTarget(ctx, reachable, claimedTargets);
-      if (captureTarget) {
-        claimedTargets.add(posKey(captureTarget.q, captureTarget.r));
-        if (captureTarget.q !== unit.q || captureTarget.r !== unit.r) {
-          await ctx.doAction({
-            type: 'move',
-            unitId: unit.id,
-            targetQ: captureTarget.q,
-            targetR: captureTarget.r
-          });
-        }
-        await ctx.doAction({ type: 'capture', unitId: unit.id });
-        return;
-      }
-    }
-
-    // Priority 3: Attack with maximum damage
+    // Priority 2: Attack with maximum damage (before capturing - fight first!)
     const attackResult = this.findBestAttack(ctx, unit, reachable);
     if (attackResult) {
       if (attackResult.moveFirst) {
@@ -172,6 +172,24 @@ export class GreedyAI implements AIController {
         targetR: attackResult.targetR
       });
       return;
+    }
+
+    // Priority 3: Move to capture a building (only if no attack available)
+    if (unit.canCapture) {
+      const captureTarget = this.findBestCaptureTarget(ctx, reachable, claimedTargets);
+      if (captureTarget) {
+        claimedTargets.add(posKey(captureTarget.q, captureTarget.r));
+        if (captureTarget.q !== unit.q || captureTarget.r !== unit.r) {
+          await ctx.doAction({
+            type: 'move',
+            unitId: unit.id,
+            targetQ: captureTarget.q,
+            targetR: captureTarget.r
+          });
+        }
+        await ctx.doAction({ type: 'capture', unitId: unit.id });
+        return;
+      }
     }
 
     // Priority 4: Move toward objective
@@ -240,8 +258,11 @@ export class GreedyAI implements AIController {
       // Decide what to build: 30% random, 70% strategic
       let template: UnitTemplate;
       if (Math.random() < 0.3) {
-        // Random unit for variety
-        template = affordableTemplates[Math.floor(Math.random() * affordableTemplates.length)]!;
+        // Random unit for variety (exclude transports - AI doesn't use them well)
+        const randomPool = affordableTemplates.filter(t => t.id !== 'apc' && t.id !== 'transportCopter');
+        template = randomPool.length > 0
+          ? randomPool[Math.floor(Math.random() * randomPool.length)]!
+          : affordableTemplates[0]!;
       } else if (uncapturedBuildings.length > 0) {
         // There are unclaimed buildings - check if we should capture or defend
         const closestBuildingDist = minDistanceToPositions(factory.q, factory.r, uncapturedBuildings);
@@ -271,12 +292,17 @@ export class GreedyAI implements AIController {
 
   /**
    * Find the affordable unit that deals the most damage to the target type.
+   * Excludes indirect fire units (minRange > 0) since they're harder to use effectively.
    */
   private findBestCounter(affordableTemplates: UnitTemplate[], targetType: string): UnitTemplate {
-    let bestTemplate = affordableTemplates[0]!;
+    // Filter out indirect fire units - let random builds handle those
+    const directFireTemplates = affordableTemplates.filter(t => t.minRange === 0);
+    const candidates = directFireTemplates.length > 0 ? directFireTemplates : affordableTemplates;
+
+    let bestTemplate = candidates[0]!;
     let bestDamage = 0;
 
-    for (const template of affordableTemplates) {
+    for (const template of candidates) {
       const damage = getBaseDamage(template.id, targetType);
       if (damage > bestDamage) {
         bestDamage = damage;
@@ -323,7 +349,7 @@ export class GreedyAI implements AIController {
     const enemies = ctx.getUnits().filter(u => u.team !== ctx.team && u.isAlive() && u.carriedBy === null);
     const buildings = ctx.getBuildings();
     let bestResult: { moveFirst: boolean; moveQ: number; moveR: number; targetQ: number; targetR: number } | null = null;
-    let bestDamage = 0;
+    let bestDamage = -1; // Start at -1 so even 0-damage attacks are considered (luck might help)
 
     // Helper to get defense stars
     const getDefenseStars = (q: number, r: number): number => {
@@ -409,10 +435,18 @@ export class GreedyAI implements AIController {
     const allTargets = [...enemyTargets, ...buildingTargets];
     if (allTargets.length === 0) return null;
 
+    // Never end turn on a friendly factory - collect them for avoidance
+    const friendlyFactories = new Set(
+      buildings
+        .filter(b => b.type === 'factory' && b.owner === ctx.team)
+        .map(b => posKey(b.q, b.r))
+    );
+
     // For indirect fire units (minRange > 0), find optimal attack position
     if (unit.minRange > 0 && enemyTargets.length > 0) {
       // First: find a reachable position already in attack range
-      for (const [, pos] of reachable) {
+      for (const [key, pos] of reachable) {
+        if (friendlyFactories.has(key)) continue;
         if (isPositionOccupied(units, pos.q, pos.r, unit.id)) continue;
 
         for (const target of enemyTargets) {
@@ -428,7 +462,8 @@ export class GreedyAI implements AIController {
       let bestPos: { q: number; r: number } | null = null;
       let bestScore = -Infinity;
 
-      for (const [, pos] of reachable) {
+      for (const [key, pos] of reachable) {
+        if (friendlyFactories.has(key)) continue;
         if (isPositionOccupied(units, pos.q, pos.r, unit.id)) continue;
 
         for (const target of enemyTargets) {
@@ -457,7 +492,8 @@ export class GreedyAI implements AIController {
     let bestDistance = Infinity;
     let bestTargetBuilding: { q: number; r: number } | undefined = undefined;
 
-    for (const [, pos] of reachable) {
+    for (const [key, pos] of reachable) {
+      if (friendlyFactories.has(key)) continue;
       if (isPositionOccupied(units, pos.q, pos.r, unit.id)) continue;
 
       // Check each target individually to track which building we're heading toward

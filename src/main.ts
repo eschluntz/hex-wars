@@ -38,6 +38,7 @@ import {
   completeCell,
   loseReinforcement,
   isCampaignOver,
+  getFurthestRow,
   getCampaignBattleSeed,
   getCampaignCellPreset,
   getCampaignModifiers,
@@ -63,7 +64,7 @@ import { validateMap } from './map-validation.js';
 import { calculateBattleScore, type BattleScoreBreakdown } from './score.js';
 import { GameOverUI, type GameOverDisplayData } from './game-over-ui.js';
 import { getMapName } from './battle-info-modal.js';
-import { saveCampaign, loadCampaign, deleteSavedCampaign, hasSavedCampaign } from './save-load.js';
+import { saveCampaign, loadCampaign, deleteSavedCampaign, hasSavedCampaign, updateGlobalStats, loadGlobalStats } from './save-load.js';
 
 const TEAMS = {
   PLAYER: 'player',
@@ -1101,6 +1102,10 @@ class Game {
         this.campaignGrid
       );
       console.log(`Cell ${this.activeCampaignCell.name} completed!`);
+
+      // Update global stats (furthest row and high score)
+      const furthestRow = getFurthestRow(this.campaignState);
+      updateGlobalStats(this.campaignState.totalScore, furthestRow);
     } else if (!playerWon) {
       // Lose a reinforcement
       this.campaignState = loseReinforcement(this.campaignState);
@@ -1110,6 +1115,9 @@ class Game {
     // Check if campaign is over
     if (isCampaignOver(this.campaignState)) {
       console.log('Campaign over - no reinforcements left!');
+      // Final update to global stats before deleting save
+      const furthestRow = getFurthestRow(this.campaignState);
+      updateGlobalStats(this.campaignState.totalScore, furthestRow);
       deleteSavedCampaign();
       this.returnToMainMenu();
       return;

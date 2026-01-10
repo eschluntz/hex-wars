@@ -6,6 +6,7 @@ import type { CampaignCell, CampaignGrid, CampaignState } from './campaign-state
 import { isCellAvailable, isCellRevealed, isRowMaxed } from './campaign-state.js';
 import { POWERS, STACKING_UPGRADES } from './upgrades.js';
 import { BattleInfoModal } from './battle-info-modal.js';
+import { loadGlobalStats } from './save-load.js';
 
 const ICONS: Record<string, string> = {
   unit: '⬡',
@@ -36,6 +37,8 @@ export class CampaignUI {
   private campaignGrid: CampaignGrid | null = null;
   private callbacks: CampaignUICallbacks;
   private scoreValueEl: HTMLElement;
+  private highScoreEl: HTMLElement;
+  private furthestRowEl: HTMLElement;
 
   constructor(callbacks: CampaignUICallbacks) {
     this.callbacks = callbacks;
@@ -43,6 +46,8 @@ export class CampaignUI {
     this.gridContainer = document.getElementById('campaign-grid')!;
     this.heartsContainer = this.overlay.querySelector('.campaign-hearts')!;
     this.scoreValueEl = this.overlay.querySelector('.campaign-score .score-value')!;
+    this.highScoreEl = this.overlay.querySelector('.campaign-records .high-score')!;
+    this.furthestRowEl = this.overlay.querySelector('.campaign-records .furthest-row')!;
     this.backBtn = document.getElementById('campaign-back-btn')!;
     this.battleModal = new BattleInfoModal();
 
@@ -117,6 +122,7 @@ export class CampaignUI {
     this.campaignGrid = grid;
     this.renderHearts(state.reinforcements);
     this.renderScore(state.totalScore);
+    this.renderGlobalStats();
     this.renderGrid(grid, state);
     this.renderPowersPanel(state);
     this.renderUpgradesPanel(state);
@@ -124,6 +130,12 @@ export class CampaignUI {
 
   private renderScore(score: number): void {
     this.scoreValueEl.textContent = score.toLocaleString();
+  }
+
+  private renderGlobalStats(): void {
+    const stats = loadGlobalStats();
+    this.highScoreEl.textContent = stats.highScore.toLocaleString();
+    this.furthestRowEl.textContent = `Row ${stats.furthestRow}`;
   }
 
   private renderPowersPanel(state: CampaignState): void {
