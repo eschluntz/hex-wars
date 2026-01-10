@@ -432,7 +432,8 @@ The tests automatically start the dev server (`npm run watch`) before running. R
 ### Upcoming
 - [ ] Better AI
     - [ ] Can use transports
-    - [ ] Reactive unit composition
-    - [ ] Something better than greedy algo?
+    - [x] Reactive unit composition
+    - [x] trains of units going to same target
+- [ ] play testing!
 - [ ] Fog of war (maybe)
 - [ ] Story elements (end campaign screen, winning campaign screen)

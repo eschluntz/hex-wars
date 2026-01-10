@@ -115,6 +115,10 @@ export class GreedyAI implements AIController {
     if (building && building.type === 'factory' && building.owner === ctx.team) {
       const moveTarget = this.findMoveTarget(ctx, unit, reachable, claimedTargets);
       if (moveTarget && (moveTarget.q !== unit.q || moveTarget.r !== unit.r)) {
+        // Claim the building we're heading toward (even if we can't reach it this turn)
+        if (unit.canCapture && moveTarget.targetBuilding) {
+          claimedTargets.add(posKey(moveTarget.targetBuilding.q, moveTarget.targetBuilding.r));
+        }
         await ctx.doAction({
           type: 'move',
           unitId: unit.id,
@@ -124,7 +128,6 @@ export class GreedyAI implements AIController {
         // Check if we can capture at new position
         const newBuilding = ctx.getBuildings().find(b => b.q === moveTarget.q && b.r === moveTarget.r);
         if (newBuilding && newBuilding.owner !== ctx.team && unit.canCapture) {
-          claimedTargets.add(posKey(newBuilding.q, newBuilding.r));
           await ctx.doAction({ type: 'capture', unitId: unit.id });
         } else {
           await ctx.doAction({ type: 'wait', unitId: unit.id });
@@ -174,12 +177,9 @@ export class GreedyAI implements AIController {
     // Priority 4: Move toward objective
     const moveTarget = this.findMoveTarget(ctx, unit, reachable, claimedTargets);
     if (moveTarget && (moveTarget.q !== unit.q || moveTarget.r !== unit.r)) {
-      // If moving toward a building to capture, claim it
-      if (unit.canCapture) {
-        const targetBuilding = buildings.find(b => b.q === moveTarget.q && b.r === moveTarget.r && b.owner !== ctx.team);
-        if (targetBuilding) {
-          claimedTargets.add(posKey(targetBuilding.q, targetBuilding.r));
-        }
+      // Claim the building we're heading toward (even if we can't reach it this turn)
+      if (unit.canCapture && moveTarget.targetBuilding) {
+        claimedTargets.add(posKey(moveTarget.targetBuilding.q, moveTarget.targetBuilding.r));
       }
       await ctx.doAction({
         type: 'move',
@@ -226,9 +226,6 @@ export class GreedyAI implements AIController {
       const affordableTemplates = templates.filter(t => t.cost <= funds);
       if (affordableTemplates.length === 0) continue;
 
-      // Find closest uncaptured building
-      const closestBuildingDist = minDistanceToPositions(factory.q, factory.r, uncapturedBuildings);
-
       // Find closest enemy unit and its type
       let closestEnemyDist = Infinity;
       let closestEnemyType: string | null = null;
@@ -240,13 +237,24 @@ export class GreedyAI implements AIController {
         }
       }
 
+      // Decide what to build based on unclaimed buildings vs enemy threats
       let template: UnitTemplate;
-      if (closestBuildingDist <= closestEnemyDist) {
-        // Building is closer (or equal) - build infantry to capture
-        template = affordableTemplates.find(t => t.id === 'infantry') ?? affordableTemplates[0]!;
+      if (uncapturedBuildings.length > 0) {
+        // There are unclaimed buildings - check if we should capture or defend
+        const closestBuildingDist = minDistanceToPositions(factory.q, factory.r, uncapturedBuildings);
+        if (closestBuildingDist <= closestEnemyDist) {
+          // Building is closer (or equal) - build infantry to capture
+          template = affordableTemplates.find(t => t.id === 'infantry') ?? affordableTemplates[0]!;
+        } else {
+          // Enemy is closer - build counter unit
+          template = this.findBestCounter(affordableTemplates, closestEnemyType!);
+        }
+      } else if (closestEnemyType) {
+        // No unclaimed buildings, but enemies exist - build counter unit
+        template = this.findBestCounter(affordableTemplates, closestEnemyType);
       } else {
-        // Enemy is closer - build best counter
-        template = this.findBestCounter(affordableTemplates, closestEnemyType!);
+        // No unclaimed buildings, no enemies - build default combat unit
+        template = affordableTemplates.find(t => t.id === 'tank') ?? affordableTemplates[0]!;
       }
 
       await ctx.doAction({
@@ -372,7 +380,7 @@ export class GreedyAI implements AIController {
     unit: Unit,
     reachable: Map<string, { q: number; r: number; cost: number }>,
     claimedTargets: Set<string>
-  ): { q: number; r: number } | null {
+  ): { q: number; r: number; targetBuilding?: { q: number; r: number } } | null {
     const pathfinder = ctx.getPathfinder();
     const units = ctx.getUnits();
     const buildings = ctx.getBuildings();
@@ -444,23 +452,36 @@ export class GreedyAI implements AIController {
     const blocked = getBlockedPositions({ units, buildings }, ctx.team);
     let bestPos: { q: number; r: number } | null = null;
     let bestDistance = Infinity;
+    let bestTargetBuilding: { q: number; r: number } | undefined = undefined;
 
     for (const [, pos] of reachable) {
       if (isPositionOccupied(units, pos.q, pos.r, unit.id)) continue;
 
-      const distToNearestTarget = minPathDistanceToPositions(
-        pathfinder,
-        pos.q, pos.r,
-        allTargets,
-        unit.terrainCosts,
-        blocked
-      );
-      if (distToNearestTarget < bestDistance) {
-        bestDistance = distToNearestTarget;
-        bestPos = { q: pos.q, r: pos.r };
+      // Check each target individually to track which building we're heading toward
+      for (const target of allTargets) {
+        // Remove target from blocked set for pathfinding (we want to path TO it)
+        const targetKey = posKey(target.q, target.r);
+        const blockedForPath = blocked.has(targetKey)
+          ? new Set([...blocked].filter(k => k !== targetKey))
+          : blocked;
+
+        const pathResult = pathfinder.findPath(
+          pos.q, pos.r,
+          target.q, target.r,
+          unit.terrainCosts,
+          blockedForPath
+        );
+        const dist = pathResult?.totalCost ?? Infinity;
+        if (dist < bestDistance) {
+          bestDistance = dist;
+          bestPos = { q: pos.q, r: pos.r };
+          // Check if this target is a building
+          const isBuilding = buildingTargets.some(b => b.q === target.q && b.r === target.r);
+          bestTargetBuilding = isBuilding ? { q: target.q, r: target.r } : undefined;
+        }
       }
     }
 
-    return bestPos;
+    return bestPos ? { ...bestPos, targetBuilding: bestTargetBuilding } : null;
   }
 }
