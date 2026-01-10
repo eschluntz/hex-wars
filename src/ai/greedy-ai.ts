@@ -237,9 +237,12 @@ export class GreedyAI implements AIController {
         }
       }
 
-      // Decide what to build based on unclaimed buildings vs enemy threats
+      // Decide what to build: 30% random, 70% strategic
       let template: UnitTemplate;
-      if (uncapturedBuildings.length > 0) {
+      if (Math.random() < 0.3) {
+        // Random unit for variety
+        template = affordableTemplates[Math.floor(Math.random() * affordableTemplates.length)]!;
+      } else if (uncapturedBuildings.length > 0) {
         // There are unclaimed buildings - check if we should capture or defend
         const closestBuildingDist = minDistanceToPositions(factory.q, factory.r, uncapturedBuildings);
         if (closestBuildingDist <= closestEnemyDist) {
