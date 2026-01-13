@@ -33,6 +33,46 @@ export class GreedyAI implements AIController {
   readonly id = 'greedy';
   readonly name = 'Greedy AI';
 
+  /**
+   * Try to attack the best target from the given position.
+   * Returns true if an attack was executed, false otherwise.
+   */
+  private async tryAttackFromPosition(
+    ctx: AIContext,
+    unit: Unit,
+    fromQ: number,
+    fromR: number
+  ): Promise<boolean> {
+    if (!unit.canMoveAndAttack) return false;
+
+    const enemies = ctx.getUnits().filter(u => u.team !== ctx.team && u.isAlive() && u.carriedBy === null);
+    let bestTarget: { q: number; r: number } | null = null;
+    let bestDamage = -1;
+
+    for (const enemy of enemies) {
+      if (!Combat.canTarget(unit, enemy)) continue;
+      const dist = HexUtil.distance(fromQ, fromR, enemy.q, enemy.r);
+      if (dist >= unit.minRange && dist <= unit.range) {
+        const damage = Combat.calculateExpectedDamage(unit, enemy, 0);
+        if (damage > bestDamage) {
+          bestDamage = damage;
+          bestTarget = { q: enemy.q, r: enemy.r };
+        }
+      }
+    }
+
+    if (bestTarget) {
+      await ctx.doAction({
+        type: 'attack',
+        unitId: unit.id,
+        targetQ: bestTarget.q,
+        targetR: bestTarget.r
+      });
+      return true;
+    }
+    return false;
+  }
+
   async planTurn(ctx: AIContext): Promise<void> {
     // Track buildings already targeted by capturing units
     const claimedTargets = new Set<string>();
@@ -147,7 +187,7 @@ export class GreedyAI implements AIController {
         const newBuilding = ctx.getBuildings().find(b => b.q === moveTarget.q && b.r === moveTarget.r);
         if (newBuilding && newBuilding.owner !== ctx.team && unit.canCapture) {
           await ctx.doAction({ type: 'capture', unitId: unit.id });
-        } else {
+        } else if (!await this.tryAttackFromPosition(ctx, unit, moveTarget.q, moveTarget.r)) {
           await ctx.doAction({ type: 'wait', unitId: unit.id });
         }
         return;
@@ -205,6 +245,11 @@ export class GreedyAI implements AIController {
         targetQ: moveTarget.q,
         targetR: moveTarget.r
       });
+
+      // After moving, check if we can now attack (fixes bug where move+attack was missed)
+      if (await this.tryAttackFromPosition(ctx, unit, moveTarget.q, moveTarget.r)) {
+        return;
+      }
     }
 
     // Priority 5: Wait

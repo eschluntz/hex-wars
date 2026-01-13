@@ -436,6 +436,7 @@ The tests automatically start the dev server (`npm run watch`) before running. R
 ### Upcoming
 - [x] starting units feel too restrictive and slow. let's start with infantry, tank, mech, and APC, starting with a green row of 4 squares along the bottom. Let's also pull T-copter in to the tier-1 units, so that it can be unlocked sooner, now that there are two fewer unlock units in tier 1.
 - [x] the game should end if a player has no units, and no factories that are open (i.e. not blocked by an enemy unit sitting on top of them)
+- [ ] bug where enemy units are moving to me, but not attacking
 - [ ] Make some maps "pre-deployed" with no factories on the map, and a bunch of random available units that add up to the same "budget"
 - [ ] mobile friendly
 - [ ] sounds
