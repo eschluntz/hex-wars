@@ -7,6 +7,7 @@ import { isCellAvailable, isCellRevealed, isRowMaxed } from './campaign-state.js
 import { POWERS, STACKING_UPGRADES } from './upgrades.js';
 import { BattleInfoModal } from './battle-info-modal.js';
 import { loadGlobalStats } from './save-load.js';
+import { audioManager } from './audio-manager.js';
 
 const ICONS: Record<string, string> = {
   unit: '⬡',
@@ -51,7 +52,10 @@ export class CampaignUI {
     this.backBtn = document.getElementById('campaign-back-btn')!;
     this.battleModal = new BattleInfoModal();
 
-    this.backBtn.addEventListener('click', () => this.callbacks.onBackClick());
+    this.backBtn.addEventListener('click', () => {
+      audioManager.playSfx('cancel');
+      this.callbacks.onBackClick();
+    });
 
     // Create panels (will be filled on render)
     this.createPowersPanelContainer();
@@ -87,6 +91,7 @@ export class CampaignUI {
 
   private showBattleInfoModal(cell: CampaignCell): void {
     if (!this.campaignState || !this.campaignGrid) return;
+    audioManager.playSfx('click');
     this.battleModal.show(
       cell,
       this.campaignSeed,
@@ -171,6 +176,7 @@ export class CampaignUI {
         slot.addEventListener('mouseenter', () => this.setInfoText(`<strong>${power.name}</strong>: ${power.description}`));
         slot.addEventListener('mouseleave', () => this.clearInfoText());
         slot.addEventListener('click', () => {
+          audioManager.playSfx('click');
           this.callbacks.onUnequipPower?.(powerId);
         });
       } else {
@@ -207,6 +213,7 @@ export class CampaignUI {
         if (state.activePowers.length < state.powerSlots) {
           card.classList.add('can-equip');
           card.addEventListener('click', () => {
+            audioManager.playSfx('confirm');
             this.callbacks.onEquipPower?.(powerId);
           });
         }

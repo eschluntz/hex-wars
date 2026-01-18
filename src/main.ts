@@ -65,6 +65,8 @@ import { calculateBattleScore, type BattleScoreBreakdown } from './score.js';
 import { GameOverUI, type GameOverDisplayData } from './game-over-ui.js';
 import { getMapName } from './battle-info-modal.js';
 import { saveCampaign, loadCampaign, deleteSavedCampaign, hasSavedCampaign, updateGlobalStats, loadGlobalStats } from './save-load.js';
+import { audioManager } from './audio-manager.js';
+import { AudioUI } from './audio-ui.js';
 
 const TEAMS = {
   PLAYER: 'player',
@@ -124,6 +126,10 @@ class Game {
   // Map Lab
   private mapLabController: MapLabController | null = null;
 
+  // Audio
+  private audioUI: AudioUI | null = null;
+  private audioInitialized = false;
+
   constructor() {
     this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
     this.ctx = this.canvas.getContext('2d')!;
@@ -168,7 +174,27 @@ class Game {
       this.initMapLab();
     }
 
+    // Initialize audio UI
+    this.audioUI = new AudioUI();
+
+    // Setup audio initialization on first user interaction
+    this.setupAudioInit();
+
     this.loop();
+  }
+
+  private setupAudioInit(): void {
+    const initAudio = async () => {
+      if (this.audioInitialized) return;
+      this.audioInitialized = true;
+      await audioManager.init();
+      // Start music after initialization (plays continuously across all phases)
+      audioManager.playMusic('menu');
+    };
+
+    // Initialize audio on first user interaction
+    document.addEventListener('click', initAudio, { once: true });
+    document.addEventListener('keydown', initAudio, { once: true });
   }
 
   private initMapLab(): void {
@@ -276,6 +302,9 @@ class Game {
     const mapConfig = MAP_CONFIGS[mapType]!;
     this.currentMapType = mapType;
 
+    // Switch to battle music
+    audioManager.playMusic('battle');
+
     this.initializeGame(mapConfig, playerConfigs);
 
     // Small map gets manual setup with test units
@@ -291,6 +320,9 @@ class Game {
    */
   private startNewGameWithConfig(config: MapConfig, playerConfigs?: PlayerConfig[], skipCenterViewport: boolean = false): void {
     this.currentMapType = 'custom';
+
+    // Switch to battle music
+    audioManager.playMusic('battle');
 
     this.initializeGame(config, playerConfigs);
     this.finalizeGameStart(config, skipCenterViewport);
@@ -444,6 +476,10 @@ class Game {
     }
     const income = this.resources.collectIncome(team, buildings, incomeMultiplier);
     if (income.funds > 0) {
+      // Play income sound only for player team
+      if (team === TEAMS.PLAYER) {
+        audioManager.playSfx('income');
+      }
       console.log(`${team} collected: $${income.funds} funds${incomeMultiplier > 1 ? ` (x${incomeMultiplier.toFixed(2)})` : ''}`);
     }
     // Record income in stats
@@ -619,8 +655,14 @@ class Game {
   // --- State transitions ---
 
   private setState(newState: GameState): void {
+    const previousState = this.state;
     this.state = newState;
     this.lastPreviewHex = null;
+
+    // Play sound when selecting a unit
+    if (newState.type === 'selected' && previousState.type !== 'selected') {
+      audioManager.playSfx('select');
+    }
 
     // Update renderer based on state
     if (newState.type === 'idle') {
@@ -718,6 +760,9 @@ class Game {
   }
 
   private endTurn(): void {
+    // Play turn end sound
+    audioManager.playSfx('turn-end');
+
     // Cancel any current action
     this.setState({ type: 'idle' });
 
@@ -826,6 +871,9 @@ class Game {
     const playerWon = winner === TEAMS.PLAYER;
     const isCampaign = !!this.activeCampaignCell;
 
+    // Play victory/defeat sound (music continues)
+    audioManager.playSfx(playerWon ? 'victory' : 'defeat');
+
     console.log(`Game Over! ${winner.toUpperCase()} wins in ${this.turnNumber} turns!`);
 
     // Show victory/defeat announcement before transitioning to game over screen
@@ -930,6 +978,9 @@ class Game {
     this.activeCampaignCell = null;
     this.gamePhase = 'campaign';
 
+    // Switch to menu music for campaign screen
+    audioManager.playMusic('menu');
+
     // Hide menu, show campaign UI
     this.htmlMenuController.hide();
     this.campaignUI.show();
@@ -948,6 +999,9 @@ class Game {
     this.campaignState = savedState;
     this.activeCampaignCell = null;
     this.gamePhase = 'campaign';
+
+    // Switch to menu music for campaign screen
+    audioManager.playMusic('menu');
 
     // Hide menu, show campaign UI
     this.htmlMenuController.hide();
@@ -1148,6 +1202,9 @@ class Game {
     this.gamePhase = 'campaign';
     this.showDebugControls(false);
 
+    // Switch back to menu music for campaign screen
+    audioManager.playMusic('menu');
+
     // Hide game UI
     const infoEl = document.getElementById('coords');
     const hudEl = document.getElementById('hud');
@@ -1183,6 +1240,9 @@ class Game {
     this.enemyActivePowers = [];
     this.campaignUI.hide();
     this.showDebugControls(false);
+
+    // Switch to menu music
+    audioManager.playMusic('menu');
   }
 
   private handleEquipPower(powerId: string): void {
@@ -1463,6 +1523,9 @@ class Game {
       this.units.push(unit);
       this.gameStats.recordUnitDeployed(this.currentTeam);
 
+      // Play build sound
+      audioManager.playSfx('build');
+
       console.log(`Built ${template.name} at (${factory.q}, ${factory.r}) for $${cost}`);
       this.setState({ type: 'idle' });
     }
@@ -1612,11 +1675,11 @@ class Game {
     this.isAnimating = false;
 
     // Merge health: target absorbs source unit's health (capped at 10)
-    const oldHealth = target.health;
-    target.health = Math.min(10, target.health + unit.health);
-    const healthGained = target.health - oldHealth;
+    const sourceHealth = unit.health;
+    const targetHealth = target.health;
+    target.health = Math.min(10, targetHealth + sourceHealth);
 
-    console.log(`${unit.id} joined ${target.id}: +${healthGained} HP (now ${target.health})`);
+    console.log(`${unit.id} (HP:${sourceHealth}) joined ${target.id} (HP:${targetHealth}) → ${target.health} HP`);
 
     // Remove source unit from the game
     unit.health = 0;
@@ -1714,6 +1777,13 @@ class Game {
       }
     }
 
+    // Play combat sounds
+    audioManager.playSfx('attack');
+    if (result.attackerDamage > 0) {
+      // Delay hit sound slightly to sync with animation
+      setTimeout(() => audioManager.playSfx('hit'), 150);
+    }
+
     // Log combat results
     console.log(`${attacker.id} attacks ${defender.id}!`);
     console.log(`  ${attacker.id} deals ${result.attackerDamage} damage`);
@@ -1722,11 +1792,14 @@ class Game {
     if (result.defenderDied) {
       console.log(`  ${defender.id} destroyed!`);
       this.handleUnitDeath(defender, attacker.team);
+      // Delay death sound to sync with death animation
+      setTimeout(() => audioManager.playSfx('death'), 300);
     } else if (result.counterAttackAttempted) {
       console.log(`  ${defender.id} counter-attacks for ${result.defenderDamage} damage`);
       if (result.attackerDied) {
         console.log(`  ${attacker.id} destroyed!`);
         this.handleUnitDeath(attacker, defender.team);
+        setTimeout(() => audioManager.playSfx('death'), 600);
       }
     }
 
@@ -1771,6 +1844,8 @@ class Game {
       const previousOwner = building.owner ?? 'neutral';
       this.map.setBuildingOwner(unit.q, unit.r, unit.team);
       this.gameStats.recordBuildingCaptured(unit.team);
+      // Play capture sound
+      audioManager.playSfx('capture');
       console.log(`${logPrefix}${unit.id} captured ${building.type} from ${previousOwner}!`);
     } else {
       console.log(`${logPrefix}${unit.id} capturing ${building.type}... (${building.captureResistance} resistance remaining)`);

@@ -11,6 +11,7 @@ import { GameMap } from './game-map.js';
 import { HexUtil } from './core.js';
 import { getUnitTexture } from './textures.js';
 import { getEnemyBattleConfig, type EnemyBattleConfig } from './enemy-difficulty.js';
+import { audioManager } from './audio-manager.js';
 
 const ICONS: Record<string, string> = {
   unit: '⬡',
@@ -55,6 +56,7 @@ export class BattleInfoModal {
       if (e.key === 'Escape' && this.element.style.display === 'flex') {
         e.stopPropagation();
         e.preventDefault();
+        audioManager.playSfx('cancel');
         this.hide();
       }
     });
@@ -176,8 +178,12 @@ export class BattleInfoModal {
     const cancelBtn = this.element.querySelector('.battle-modal-btn.cancel');
     const attackBtn = this.element.querySelector('.battle-modal-btn.attack');
 
-    cancelBtn?.addEventListener('click', () => this.hide());
+    cancelBtn?.addEventListener('click', () => {
+      audioManager.playSfx('cancel');
+      this.hide();
+    });
     attackBtn?.addEventListener('click', () => {
+      audioManager.playSfx('confirm');
       const callback = this.onAttackCallback;
       const targetCell = cell;
       this.hide();
@@ -187,6 +193,7 @@ export class BattleInfoModal {
     // Close on backdrop click
     this.element.addEventListener('click', (e) => {
       if (e.target === this.element) {
+        audioManager.playSfx('cancel');
         this.hide();
       }
     });

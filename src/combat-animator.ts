@@ -290,6 +290,12 @@ export class CombatAnimator {
     const display = this.healthDisplays.get(unitId);
     if (!display) return actualHealth;
 
+    // If actual health differs from target (e.g., unit was healed/joined), clear the animation
+    if (display.target !== actualHealth) {
+      this.healthDisplays.delete(unitId);
+      return actualHealth;
+    }
+
     const elapsed = this.currentTime - display.startTime;
     // Clamp progress: 0 before start, 1 after complete
     const progress = Math.max(0, Math.min(elapsed / HEALTH_DRAIN_DURATION, 1));

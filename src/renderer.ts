@@ -1210,7 +1210,7 @@ export class Renderer {
     }
 
     // Unload mode hint
-    if (this.unloadTargets) {
+    if (this.unloadTargets && this.unloadTargets.cargoToUnload) {
       lines.push('');
       lines.push(`Select hex to unload ${this.unloadTargets.cargoToUnload.id} (ESC to cancel)`);
     }

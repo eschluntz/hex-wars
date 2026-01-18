@@ -17,7 +17,7 @@ export interface Building {
 
 export const BUILDING_INCOME: Record<BuildingType, { funds: number }> = {
   city: { funds: 1000 },
-  factory: { funds: 0 },
+  factory: { funds: 1000 },
   capital: { funds: 2000 }
 };
 

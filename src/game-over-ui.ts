@@ -6,6 +6,7 @@ import { type TeamStats } from './stats.js';
 import { TEAM_COLORS } from './core.js';
 import { type BattleScoreBreakdown } from './score.js';
 import { type CellType } from './campaign-state.js';
+import { audioManager } from './audio-manager.js';
 
 const REWARD_ICONS: Record<CellType, string> = {
   unit: '⬡',
@@ -60,6 +61,7 @@ export class GameOverUI {
 
     this.continueBtn.addEventListener('click', () => {
       if (this.isAnimating) return;
+      audioManager.playSfx('confirm');
       this.hide();
       this.callbacks.onContinue();
     });
@@ -75,11 +77,13 @@ export class GameOverUI {
         if (this.isAnimating) {
           this.skipRequested = true;
         } else {
+          audioManager.playSfx('confirm');
           this.hide();
           this.callbacks.onContinue();
         }
       } else if (e.key === 'Escape') {
         if (!this.isAnimating) {
+          audioManager.playSfx('confirm');
           this.hide();
           this.callbacks.onContinue();
         }

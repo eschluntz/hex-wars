@@ -5,6 +5,7 @@
 import { HexUtil, type AxialCoord } from './core.js';
 import { CONFIG } from './config.js';
 import { type Viewport } from './viewport.js';
+import { audioManager } from './audio-manager.js';
 
 export interface InputCallbacks {
   // Menu phase handlers
@@ -63,6 +64,7 @@ export class InputHandler {
     this.canvas.addEventListener('contextmenu', e => {
       e.preventDefault();
       if (this.callbacks.getPhase() === 'playing') {
+        audioManager.playSfx('cancel');
         this.callbacks.onCancel();
       }
     });
@@ -137,6 +139,7 @@ export class InputHandler {
 
     // Playing phase
     if (e.key === 'Escape') {
+      audioManager.playSfx('cancel');
       this.callbacks.onCancel();
       return;
     }
@@ -175,6 +178,7 @@ export class InputHandler {
     // Number keys 1-9
     if (e.key >= '1' && e.key <= '9') {
       const index = parseInt(e.key) - 1;
+      audioManager.playSfx('confirm');
       this.callbacks.onMenuSelect(index);
       return;
     }
@@ -182,9 +186,11 @@ export class InputHandler {
     // Arrow keys
     if (e.key === 'ArrowUp') {
       e.preventDefault();
+      audioManager.playSfx('click');
       this.callbacks.onMenuNavigate('up');
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
+      audioManager.playSfx('click');
       this.callbacks.onMenuNavigate('down');
     } else if (e.code === 'Space') {
       // Ignore spacebar when typing in an input field
@@ -194,6 +200,7 @@ export class InputHandler {
       if (isTyping) return;
 
       e.preventDefault();
+      audioManager.playSfx('confirm');
       this.callbacks.onMenuSelect(-1); // -1 = use current highlight
     }
   }

@@ -167,6 +167,8 @@ export class Unit {
    * The source unit (this) merges into the target, combining health (capped at 10).
    */
   canJoinWith(other: Unit): boolean {
+    // Cannot join with self
+    if (this === other) return false;
     // Must be same team
     if (this.team !== other.team) return false;
     // Must be same unit type

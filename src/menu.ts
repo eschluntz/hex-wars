@@ -5,6 +5,7 @@
 import { type TeamStats } from './stats.js';
 import { getAIMetadata } from './ai/registry.js';
 import { type PlayerConfig } from './player.js';
+import { audioManager } from './audio-manager.js';
 
 export type GamePhase = 'main_menu' | 'campaign' | 'playing' | 'game_over';
 
@@ -212,11 +213,26 @@ export class HTMLMenuController {
   }
 
   private setupEventListeners(): void {
-    this.btnSmall.addEventListener('click', () => this.startGame('small'));
-    this.btnNormal.addEventListener('click', () => this.startGame('normal'));
-    this.btnCampaign.addEventListener('click', () => this.callbacks.onStartCampaign());
-    this.btnContinue.addEventListener('click', () => this.callbacks.onContinueCampaign());
-    this.btnReroll.addEventListener('click', () => this.rerollSeed());
+    this.btnSmall.addEventListener('click', () => {
+      audioManager.playSfx('confirm');
+      this.startGame('small');
+    });
+    this.btnNormal.addEventListener('click', () => {
+      audioManager.playSfx('confirm');
+      this.startGame('normal');
+    });
+    this.btnCampaign.addEventListener('click', () => {
+      audioManager.playSfx('confirm');
+      this.callbacks.onStartCampaign();
+    });
+    this.btnContinue.addEventListener('click', () => {
+      audioManager.playSfx('confirm');
+      this.callbacks.onContinueCampaign();
+    });
+    this.btnReroll.addEventListener('click', () => {
+      audioManager.playSfx('click');
+      this.rerollSeed();
+    });
   }
 
   private rerollSeed(): void {

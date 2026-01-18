@@ -84,7 +84,7 @@ Presets can specify **validation constraints** (e.g., minimum water percentage f
 
 ### Buildings
 - **Cities** (🏙️): Generate $1000 funds per turn
-- **Factories** (🏭): Produce new units
+- **Factories** (🏭): Produce new units, generate $1000 funds per turn
 - **Capital** (🏰): Generate $2000 funds; lose it = instant defeat
 
 ### Win Condition
